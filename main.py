@@ -57,12 +57,20 @@ how can we approximate function F(x)?
 
 lemma: 
 spaces inbetween vector V are uncountably infinite and continous.
-if we take the idea of integration, taking the input space of vector V
 
 prop:
 we apply the same matrix of weights (function on the basis) to a new starting point(training batches),
-and widen the search net of the training samples until the whole input space is covered
-this is additive fourier transforms of trained weights
+and widen the search net of the training samples until the whole sample space is covered
+
+idea: backpropagation is a specific case of convolution
+
+prop: 
+as the neural network is like function approximator 
+it's matrix is like a conversion table between the input and output
+each layer a coefficient in an unknown polynomial F(x).
+
+lem: Backpropagation is convolution of two polynomials with the same coefficients.
+
 
 
 ideas:
