@@ -2,6 +2,8 @@ from manim import (Tex, Scene,
                     VGroup, Write,
                     FadeIn, FadeOut)
 
+import onnx 
+
 """
 script start
 
@@ -59,6 +61,10 @@ lemma:
 spaces inbetween vector V are uncountably infinite and continous.
 
 prop:
+rearrange Feedfoward into product polynomial format:
+track variables there with products
+
+prop:
 we apply the same matrix of weights (function on the basis) to a new starting point(training batches),
 and widen the search net of the training samples until the whole sample space is covered
 
@@ -71,7 +77,25 @@ each layer a coefficient in an unknown polynomial F(x).
 
 lem: Backpropagation is convolution of two polynomials with the same coefficients.
 
+idea: polynomial approaches a taylor series, we can recover a function from this 
 
+prop: 
+smooth matrix polynomials which have finite terms,
+this works to our benefit as we can descretly caculate the laplace,
+with the bounds as going to infinity.
+
+lem: using an descrete inverse laplace transform 
+we can recover the function.
+
+proof: https://www.youtube.com/watch?v=zvbdoSeGAgI
+
+Idea: Now make it _fast_
+
+prop:
+change the bounds of neural networks from 0 to 1 this is already true.
+if the bounds are this we can use inverse foruier transform.
+
+qed: inverse fourier transforms recover the function of a neural network.
 
 ideas:
 infinite weights => function local minima
