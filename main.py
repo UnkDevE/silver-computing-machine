@@ -62,6 +62,8 @@ spaces inbetween vector V are uncountably infinite and continous.
 
 prop:
 rearrange Feedfoward into product polynomial format:
+https://en.wikipedia.org/wiki/Recurrence_relation#Linear_homogeneous_recurrence_relations_with_constant_coefficients
+https://en.wikipedia.org/wiki/Linear_recurrence_with_constant_coefficients#Solution_using_generating_functions
 track variables there with products
 
 prop:
