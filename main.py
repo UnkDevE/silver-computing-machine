@@ -2,7 +2,12 @@ from manim import (Tex, Scene,
                     VGroup, Write,
                     FadeIn, FadeOut)
 
-import onnx 
+
+import tensorflow as tf
+from tensorflow import keras
+import numpy as np
+import scipy as sp
+import sympy as syp
 
 """
 script start
@@ -66,6 +71,7 @@ https://en.wikipedia.org/wiki/Recurrence_relation#Linear_homogeneous_recurrence_
 https://en.wikipedia.org/wiki/Linear_recurrence_with_constant_coefficients#Solution_using_generating_functions
 track variables there with products
 
+PROBLEM: sigmoid function - relu and such uses 
 prop:
 we apply the same matrix of weights (function on the basis) to a new starting point(training batches),
 and widen the search net of the training samples until the whole sample space is covered
@@ -91,13 +97,17 @@ we can recover the function.
 
 proof: https://www.youtube.com/watch?v=zvbdoSeGAgI
 
-Idea: Now make it _fast_
+Idea: Now make it within bounds
 
 prop:
 change the bounds of neural networks from 0 to 1 this is already true.
 if the bounds are this we can use inverse foruier transform.
 
 qed: inverse fourier transforms recover the function of a neural network.
+
+Idea: mutlidim fourier transforms
+
+prop: product sum each weight vector as inputs along each layer.
 
 ideas:
 infinite weights => function local minima
@@ -121,6 +131,44 @@ find if convergable first?
 
 """
 
+def get_poly_eqs(layers_total):
+    # setup symbols for computation
+    weight= syp.Symbol("x")
+    activation = syp.Symbol("a")
+    bias = syp.Symbol("b")
+    sigmoid = syp.Function("sig")
+
+    # create neruonal activation equations
+    staring_eq = syp.Eq(sigmoid((weight * activation) + bias))
+    eq_system = [staring_eq]
+
+    # summate equations to get output
+    for i in range(0, layers_total):
+        eq_system.append(sigmoid((activation * eq_system[-1]) + bias) + eq_system[-1])
+    
+    return eq_system
+
+def subst_eq_with_weights(poly_eq, w_vecs, b_vecs):
+    
+
+
+def model_create_equation(model_dir):
+    model = keras.models.load_model(model_dir);
+    
+    # lets get the frequencies to create
+    # a polynomial matrix
+    from scipy import fft as fft
+    fft_layers = []
+    for layer in model.layers:
+        w_layer = fft.ifft(layer.get_weights())
+
+        if not(fft_layers.empty()):
+            # product rule for multidimensional ffts applies here
+            fft_layer *= fft_layers[-1]
+        fft_layers.append(fft_layer)
+
+
+
 class Ideas(Scene):
     def construct(self):
         # intro
@@ -132,4 +180,6 @@ class Ideas(Scene):
         self.wait()
         self.play(FadeIn(prequesites), FadeOut(title))
         self.wait()
+
+
 
