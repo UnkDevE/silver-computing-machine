@@ -133,9 +133,9 @@ find if convergable first?
 
 def get_poly_eqs(layers_total):
     # setup symbols for computation
-    weight= syp.Symbol("x")
+    weight= syp.Symbol("w_0")
     activation = syp.Symbol("a")
-    bias = syp.Symbol("b")
+    bias = syp.Symbol("b_0")
     sigmoid = syp.Function("sig")
 
     # create neruonal activation equations
@@ -143,29 +143,58 @@ def get_poly_eqs(layers_total):
     eq_system = [staring_eq]
 
     # summate equations to get output
-    for i in range(0, layers_total):
-        eq_system.append(sigmoid((activation * eq_system[-1]) + bias) + eq_system[-1])
+    for i in range(1, layers_total):
+        eq_system.append(sigmoid(syp.Symbol("w_" + str(i)) * eq_system[-1]) + 
+                         syp.Symbol("b_" + str(i)) + eq_system[-1])
     
     return eq_system
 
-def subst_eq_with_weights(poly_eq, w_vecs, b_vecs):
+def subst_into_system(fft_layers, eq_system):
+    for i in range(0, fft_layers.len()):
+        weight_symbol = syp.Symbol("w_" + str(i))
+        bias_symbol = syp.Symbol("b_" + str(i))
+
+        # fft_layers[n][0] is weights whilst 1 is baises
+        eq_system.subst(weight_symbol, fft_layers[i][0])
+        eq_system.subst(bias_symbol, fft_layers[i][1])
     
+    return eq_system
 
 
 def model_create_equation(model_dir):
-    model = keras.models.load_model(model_dir);
+    # create prequesties
+    model = keras.models.load_model(model_dir)
+    peq_system = get_poly_eqs(model.layers.len())
     
-    # lets get the frequencies to create
-    # a polynomial matrix
+    # calculate fft
     from scipy import fft as fft
     fft_layers = []
     for layer in model.layers:
-        w_layer = fft.ifft(layer.get_weights())
-
+        # inverse fft for interpolation or finding the polynomial
+        w_layer = fft.ifft(layer.get_weights()[0])
+        b_layer = fft.ifft(layer.get_weights()[1])
+        
+        fft_layer = (w_layer, b_layer)
         if not(fft_layers.empty()):
             # product rule for multidimensional ffts applies here
-            fft_layer *= fft_layers[-1]
+            # use mutliplication seperately so tuple works
+            fft_layer[0] *= fft_layers[-1][0]
+            fft_layer[1] *= fft_layers[-1][1]
         fft_layers.append(fft_layer)
+    
+    # calculate subsitute into system
+    # PROBLEM: the multiplicant can interact with the addition 
+    # we don't want this because that'll reduce the equation without
+    # the input. 
+    # use units of the power circle
+    out_poly = 0
+    for layer in fft_layers:
+        weight_layer
+
+    peq_system = subst_into_system(fft_layers, peq_system)
+
+
+    
 
 
 
