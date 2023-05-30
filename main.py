@@ -18,8 +18,7 @@ We can extract the function the neural net is approximating
 
 Math statements
 
-A matrix is transformation of a vector
-A matrix of directions transforming a vector is a function
+A matrix is transformation of a vector A matrix of directions transforming a vector is a function
 This works in any dimensions of matrix and vector
 if a vector is an input space N then a matrix of NxN is a eigenfunction that defines it
 if a function is one to one it corresponds to these matricies
@@ -86,14 +85,13 @@ each layer a coefficient in an unknown polynomial F(x).
 lem: Backpropagation is convolution of two polynomials with the same coefficients.
 
 idea: polynomial approaches a taylor series, we can recover a function from this 
+lem: use the 
 
 prop: 
-smooth matrix polynomials which have finite terms,
-this works to our benefit as we can descretly caculate the laplace,
-with the bounds as going to infinity.
+smooth matrix polynomials which have finite terms
+an infinite polynomial will be able to be recovered with a transform
 
-lem: using an descrete inverse laplace transform 
-we can recover the function.
+
 
 proof: https://www.youtube.com/watch?v=zvbdoSeGAgI
 
@@ -101,7 +99,8 @@ Idea: Now make it within bounds
 
 prop:
 change the bounds of neural networks from 0 to 1 this is already true.
-if the bounds are this we can use inverse foruier transform.
+if the bounds are this we can use foruier transform.
+which is an inverse laplace
 
 qed: inverse fourier transforms recover the function of a neural network.
 
@@ -109,15 +108,19 @@ Idea: mutlidim fourier transforms
 
 prop: product sum each weight vector as inputs along each layer.
 
+
+
+
 ideas:
 infinite weights => function local minima
+BIG UPDATE - polynomial is a cauchy sequence.
 matrix exponents
 divergence and curl for functions => Discrete matrix transforms
 borsuk ulam theorem?
 e^Mt = transform / rotation
 meta-networks => deriving the function from networks and then inverse fourier 
 to create genralized function. Same idea as finding the transform for training batches.
-
+IS FOURIER TRANSFORM A RED HERRING?
 eigenstates for input matricies
 foruier transforms => to create human readable functions
 quanta + tunneling to find absoloute minima =>
@@ -168,33 +171,19 @@ def model_create_equation(model_dir):
     
     # calculate fft
     from scipy import fft as fft
-    fft_layers = []
+    layers = []
     for layer in model.layers:
-        # inverse fft for interpolation or finding the polynomial
-        w_layer = fft.ifft(layer.get_weights()[0])
-        b_layer = fft.ifft(layer.get_weights()[1])
+        # fft for interpolation or finding the polynomial
+        # fft == inverse laplace.
+        w_layer = layer.get_weights()[0]
+        b_layer = layer.get_weights()[1]
         
-        fft_layer = (w_layer, b_layer)
-        if not(fft_layers.empty()):
-            # product rule for multidimensional ffts applies here
-            # use mutliplication seperately so tuple works
-            fft_layer[0] *= fft_layers[-1][0]
-            fft_layer[1] *= fft_layers[-1][1]
+        layer = (w_layer, b_layer)
         fft_layers.append(fft_layer)
     
     # calculate subsitute into system
-    # PROBLEM: the multiplicant can interact with the addition 
-    # we don't want this because that'll reduce the equation without
-    # the input. 
-    # use units of the power circle
-    out_poly = 0
-    for layer in fft_layers:
-        weight_layer
-
-    peq_system = subst_into_system(fft_layers, peq_system)
-
-
-    
+    # use units of the power circle?
+    #peq_system = subst_into_system(fft_layers, peq_system)
 
 
 
@@ -209,6 +198,4 @@ class Ideas(Scene):
         self.wait()
         self.play(FadeIn(prequesites), FadeOut(title))
         self.wait()
-
-
 
