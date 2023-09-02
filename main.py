@@ -70,7 +70,12 @@ https://en.wikipedia.org/wiki/Recurrence_relation#Linear_homogeneous_recurrence_
 https://en.wikipedia.org/wiki/Linear_recurrence_with_constant_coefficients#Solution_using_generating_functions
 track variables there with products
 
-PROBLEM: sigmoid function - relu and such uses 
+PROBLEM: activation function - relu and such uses 
+how can we take this into our function
+
+idea: the activation function cancels terms by creating a signularity
+this is most notable with relu
+
 prop:
 we apply the same matrix of weights (function on the basis) to a new starting point(training batches),
 and widen the search net of the training samples until the whole sample space is covered
@@ -112,6 +117,7 @@ prop: product sum each weight vector as inputs along each layer.
 
 
 ideas:
+trajectoids
 infinite weights => function local minima
 BIG UPDATE - polynomial is a cauchy sequence.
 matrix exponents
