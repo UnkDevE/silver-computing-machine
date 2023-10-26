@@ -110,7 +110,7 @@ prop: product sum each weight vector as inputs along each layer.
 
 ideas:
 the universe is a closed space on a higher dim, a number line must be the same.
-trajectoids
+trajectoids -> a to find seperate functions in the space it took not the most efficient way of find the function but the actual path the nerual network took <- BIG LEAD
 infinite weights => function local minima
 BIG UPDATE - polynomial is a cauchy sequence.
 matrix exponents
