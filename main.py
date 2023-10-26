@@ -1,8 +1,3 @@
-from manim import (Tex, Scene, 
-                    VGroup, Write,
-                    FadeIn, FadeOut)
-
-
 import tensorflow as tf
 from tensorflow import keras
 import numpy as np
@@ -76,6 +71,8 @@ how can we take this into our function
 idea: the activation function cancels terms by creating a signularity
 this is most notable with relu
 
+sol: we cancel out previous terms that the activation function cancels out, and keep a record of them
+so we when we Feedfoward things will be fine
 prop:
 we apply the same matrix of weights (function on the basis) to a new starting point(training batches),
 and widen the search net of the training samples until the whole sample space is covered
@@ -96,8 +93,6 @@ prop:
 smooth matrix polynomials which have finite terms
 an infinite polynomial will be able to be recovered with a transform
 
-
-
 proof: https://www.youtube.com/watch?v=zvbdoSeGAgI
 
 Idea: Now make it within bounds
@@ -113,10 +108,8 @@ Idea: mutlidim fourier transforms
 
 prop: product sum each weight vector as inputs along each layer.
 
-
-
-
 ideas:
+the universe is a closed space on a higher dim, a number line must be the same.
 trajectoids
 infinite weights => function local minima
 BIG UPDATE - polynomial is a cauchy sequence.
@@ -145,10 +138,10 @@ def get_poly_eqs(layers_total):
     weight= syp.Symbol("w_0")
     activation = syp.Symbol("a")
     bias = syp.Symbol("b_0")
-    sigmoid = syp.Function("sig")
+    activation_fn = syp.Function("sigma")
 
     # create neruonal activation equations
-    staring_eq = syp.Eq(sigmoid((weight * activation) + bias))
+    staring_eq = syp.Eq(activation_fn(((weight * activation) + bias)))
     eq_system = [staring_eq]
 
     # summate equations to get output
@@ -192,16 +185,4 @@ def model_create_equation(model_dir):
     #peq_system = subst_into_system(fft_layers, peq_system)
 
 
-
-class Ideas(Scene):
-    def construct(self):
-        # intro
-        title = Tex(r"A mathematical journey into Deep neural networks")
-        prequesites = Tex(r"Prequesite ideas")
-        VGroup(title,prequesites)
-
-        self.play(Write(title))
-        self.wait()
-        self.play(FadeIn(prequesites), FadeOut(title))
-        self.wait()
 
