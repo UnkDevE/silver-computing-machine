@@ -1,0 +1,32 @@
+Conj:
+Given a small enough change in a n dimensional unit,
+any nonlinear function which is smooth and differentiable can be mapped
+into it's linear counterparts transformed at angle theta.
+
+**Basically my proof is:**
+1) Given a function space over closed smooth topology T
+2) And it stands that both input spaces and output spaces are linear
+3) Either the function space converges to topology T or something in T 
+       For the Topology T to be smooth.
+
+**For open Topologies:**
+1) Given a function space over smooth topology T
+2) as it stands the input and output spaces are linear
+
+Inductive steps:
+3) If the function space extends boundaries of T (B) then
+4) T is a manifold and is not the global space or topology of the function
+5) repeat until T is a global function space.
+
+6) If global space T is smooth then T is closed. 
+7) go to closed proof.
+
+**Proof that functions over open smooth topologies are functions over space** 
+1) Given a function that takes a open smooth topology T
+2) Input and output spaces are linear i.e. the same space type
+3) For the space to be fully linear topology the transform of the function Y must within that space type
+4) Therefore within a linear space there must be a linear transform X that causes T to transform to Y.
+
+phew!
+
+
