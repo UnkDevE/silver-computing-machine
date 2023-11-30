@@ -3,7 +3,7 @@ Given a small enough change in a n dimensional unit,
 any nonlinear function which is smooth and differentiable can be mapped
 into it's linear counterparts transformed at angle theta.
 
-**Basically my proof is:**
+**Base case:**
   1) Given a function space over closed smooth topology T
   2) And it stands that both input spaces and output spaces are linear
   3) Either the function space converges to topology T or something in T 
@@ -66,8 +66,7 @@ into it's linear counterparts transformed at angle theta.
                     out of the bounds of the functions image. 
                   3) convergence <-> folding one to one 
                       if the space has an inverse space transformation, not nessearly function,
-                      that doesn't exist then -> contradiction 
-                          # also check if you're function is a function!
+                      that doesn't exist then -> contradiction # function is not continous therefore not smooth.
                         ==> explaination: so long as both spaces exist that has a
                               function and a inverse transform (mutliple answers to one input)
                               the data can be seen as a logical OR between the mutiple answers and that input.
@@ -77,9 +76,9 @@ into it's linear counterparts transformed at angle theta.
     Therfore:
       If the domain and image of function F is smooth and linear then any 
           non linear function will have a linear transform counterpart.
-      
-**For nonlinear Toplogy Y in linear Toplogy T**
-Take Toplogy Y ...
+
+(copyright) Ethan Riley.
+    
       
 
 
