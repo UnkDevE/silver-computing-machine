@@ -102,10 +102,11 @@ change the bounds of neural networks from 0 to 1 this is already true.
 if the bounds are this we can use foruier transform.
 which is an inverse laplace
 
-qed: inverse fourier transforms recover the function of a neural network.
+qed: inverse laplace transforms recover the function of a neural network.
 
-Idea: mutlidim fourier transforms
 
+Idea: mutlidim inverse fourier transforms
+as all of the weights are on the real number line
 prop: product sum each weight vector as inputs along each layer.
 
 ideas:
@@ -133,25 +134,25 @@ find if convergable first?
 
 """
 
-def get_poly_eqs(layers_total):
-    # setup symbols for computation
-    weight= syp.Symbol("w_0")
-    activation = syp.Symbol("a")
-    bias = syp.Symbol("b_0")
-    activation_fn = syp.Function("sigma")
+# setup symbols for computation
+weight= syp.Symbol("w_0")
+activation = syp.Symbol("a")
+bias = syp.Symbol("b_0")
+activation_fn = syp.Function("sigma")
 
+def get_poly_eqs(layers_total):
     # create neruonal activation equations
-    staring_eq = syp.Eq(activation_fn(((weight * activation) + bias)))
+    staring_eq = syp.Eq(activation_fn((weight * activation) + bias))
     eq_system = [staring_eq]
 
     # summate equations to get output
     for i in range(1, layers_total):
-        eq_system.append(sigmoid(syp.Symbol("w_" + str(i)) * eq_system[-1]) + 
-                         syp.Symbol("b_" + str(i)) + eq_system[-1])
-    
+        eq_system.append(syp.Eq(activation_fn(syp.Symbol("w_" + str(i)) * eq_system[-1]) + bias))
+
     return eq_system
 
-def subst_into_system(fft_layers, eq_system):
+
+def subst_into_system(fft_layers, eq_system, def_activ_fn):
     for i in range(0, fft_layers.len()):
         weight_symbol = syp.Symbol("w_" + str(i))
         bias_symbol = syp.Symbol("b_" + str(i))
@@ -159,30 +160,38 @@ def subst_into_system(fft_layers, eq_system):
         # fft_layers[n][0] is weights whilst 1 is baises
         eq_system.subst(weight_symbol, fft_layers[i][0])
         eq_system.subst(bias_symbol, fft_layers[i][1])
+        eq_system.subst(activation_fn, def_activ_fn)
     
-    return eq_system
+    return np.array(eq_system)
+
+# evaluate irfftn using cauchy residue theorem
+def evaluate_system(eq_system):
+   feedfoward_system = eq_system.sum()
+   from sympy import inverse_fourier_transform 
+   try:
+       inverse_fourier_transform(feedfoward_system, weight, bias).doit()
 
 
 def model_create_equation(model_dir):
     # create prequesties
-    model = keras.models.load_model(model_dir)
-    peq_system = get_poly_eqs(model.layers.len())
-    
-    # calculate fft
-    from scipy import fft as fft
-    layers = []
-    for layer in model.layers:
-        # fft for interpolation or finding the polynomial
-        # fft == inverse laplace.
-        w_layer = layer.get_weights()[0]
-        b_layer = layer.get_weights()[1]
+    model = tf.keras.models.load_model(model_dir)
+    if model not None:
+        peq_system = get_poly_eqs(model.layers.len())
         
-        layer = (w_layer, b_layer)
-        fft_layers.append(fft_layer)
-    
-    # calculate subsitute into system
-    # use units of the power circle?
-    #peq_system = subst_into_system(fft_layers, peq_system)
+        # calculate fft
+        from scipy import fft as fft
+        from scipy import laplace as lap
+        layers = []
+        for layer in model.layers:
+            # fft for interpolation or finding the polynomial
+            # fft == inverse laplace.
+            w_layer = layer.get_weights()[0]
+            b_layer = layer.get_weights()[1]
+            
+            layer = (w_layer, b_layer)
+        peq_system = subst_into_system(fft_layers, peq_system)
+        result = evaluate_system(eq_system)
 
-
+if __name__=="__main__":
+    pass
 
