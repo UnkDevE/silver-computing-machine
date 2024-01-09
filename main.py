@@ -4,6 +4,8 @@ import numpy as np
 import scipy as sp
 import sympy as syp
 
+import sys
+
 """
 script start
 
@@ -167,10 +169,16 @@ def subst_into_system(fft_layers, eq_system, def_activ_fn):
 # evaluate irfftn using cauchy residue theorem
 def evaluate_system(eq_system):
    feedfoward_system = eq_system.sum()
+   result = None
    from sympy import inverse_fourier_transform 
    try:
-       inverse_fourier_transform(feedfoward_system, weight, bias).doit()
-
+       result = inverse_fourier_transform(feedfoward_system, weight, bias).doit()
+   except IntergralTransformError:
+       print("could not be evaluated switching to scipy")
+   print("eq evaluated")
+   from sympy import latex
+   latex(result)
+   return result
 
 def model_create_equation(model_dir):
     # create prequesties
@@ -193,5 +201,7 @@ def model_create_equation(model_dir):
         result = evaluate_system(eq_system)
 
 if __name__=="__main__":
-    pass
-
+    try:
+        model_create_equation(argv[2])
+    except:
+        print("please provide model dir as command line argument")
