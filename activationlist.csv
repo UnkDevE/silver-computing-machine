@@ -1,0 +1,7 @@
+linear; f=x;
+step;f=Piecewise((0, x < 0), (1, x >= 1));
+logistic;f=1/(1+e^-x);
+tanh;f=e^x - e^-x/e^x+e^-x;
+smht;f=e^ax - e^-bx/e^cx + e^-dx;
+ReLU;f=Piecewise((0, x <= 0), (x, x> 0);
+softplus; f=ln(1+e^x)

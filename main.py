@@ -28,9 +28,7 @@ def get_poly_eqs(layers_total):
 
 
 def activation_fn_lookup(activ_obj):
-    obj = inspect(getsource(activ_obj))
-    expression = sympy.sympify(ast.unparse(obj).)
-
+    sourcestr = inspect.getsource(activ_obj)
     return expression
 
 def subst_into_system(fft_layers, eq_system):
