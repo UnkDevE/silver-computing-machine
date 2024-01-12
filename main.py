@@ -3,6 +3,7 @@ from tensorflow import keras
 import numpy as np
 import sympy as syp
 import sympy
+import pandas
 
 import sys
 import os
@@ -26,10 +27,15 @@ def get_poly_eqs(layers_total):
 
     return eq_system
 
+def act_lookup_read(activ_file):
+    csv = pandas.read_csv(activ_file, delimiter=';')
+    csv[0] 
+    pass
 
 def activation_fn_lookup(activ_obj):
     sourcestr = inspect.getsource(activ_obj)
-    return expression
+    
+    pass
 
 def subst_into_system(fft_layers, eq_system):
     # skip input
@@ -54,16 +60,24 @@ def evaluate_system(eq_system, fft_inverse, tex_save):
    # inverse of fourier transform is anaglogous to convergence of fourier series
    from sympy import fourier_series, solve, latex
    series = fourier_series(feedfoward_system, limits=(weight, 0, 1), finite=True).doit(deep=True)
+
+   # normalize sum
+   equation = syp.Eq(series, fft_inverse.sum() / len(fft_inverse))
    print("eq evaluated")
 
    file = open(tex_save, "xt")
-   file.write(latex(solve(result)))
+   file.write(latex(solve(equation)))
    file.close()
 
    print("eq solved")
    return result
 
-def model_create_equation(model_dir, tex_save):
+def model_create_equation(model_dir, tex_save, csv):
+    # check optional args
+    if csv == None:
+        path = os.path.dirname(__file__)
+        csv = os.path.join(path, "./activationlist.csv")
+
     # create prequesties
     model = tf.keras.models.load_model(model_dir)
     if model != None:
@@ -95,12 +109,15 @@ if __name__=="__main__":
         path = os.path.dirname(__file__)
         try:
             model = os.path.join(path, sys.argv[1])
-            print(str(model))
-            model_create_equation(os.path.abspath(model), sys.argv[2])
+            if len(sys.argv) > 3:
+                model_create_equation(os.path.abspath(model), sys.argv[2], sys.argv[3])
+            else:
+                model_create_equation(os.path.abspath(model), sys.argv[2], None)
         except FileNotFoundError:
             print("""file not found, 
 please give filename of model to extract equation from""")
     else:
         print("""not enough commands, please give a filename of a model to extract, 
-and output for a tex file""")
+output for a tex file, and a csv file containing each type of acitvation used delimitered by ; (optional)""")
+
 

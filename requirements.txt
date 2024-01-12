@@ -2,3 +2,4 @@ sympy
 numpy
 tensorflow
 scipy
+pandas
