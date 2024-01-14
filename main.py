@@ -2,7 +2,6 @@ import tensorflow as tf
 from tensorflow import keras
 import numpy as np
 import sympy as syp
-import sympy
 import pandas
 
 import sys
@@ -27,17 +26,16 @@ def get_poly_eqs(layers_total):
 
     return eq_system
 
-def act_lookup_read(activ_file):
-    csv = pandas.read_csv(activ_file, delimiter=';')
-    csv[0] 
-    pass
+def activation_fn_lookup(activ_src, csv):
+    sourcestr = inspect.getsource(activ_src)
+    for (i, acc) in enumerate(csv['activation']):
+        if acc in sourcestr:
+            return csv['function'][i]
+        else:
+            pass
+    return None
 
-def activation_fn_lookup(activ_obj):
-    sourcestr = inspect.getsource(activ_obj)
-    
-    pass
-
-def subst_into_system(fft_layers, eq_system):
+def subst_into_system(fft_layers, eq_system, activ_obj):
     # skip input
     for i in range(0, len(fft_layers)):
         for wb in range(0, len(fft_layers[i][0])):
@@ -49,7 +47,8 @@ def subst_into_system(fft_layers, eq_system):
                 # fft_layers[n][0] is weights whilst 1 is baises
                 system.subs(weight_symbol, fft_layers[i][0][0][0][wb])
                 system.subs(bias_symbol, fft_layers[i][0][1][wb])
-                system.subs(activation_fn, activation_fn_lookup(fft_layers[i][1]))
+                system.subs(activation_fn, activation_fn_lookup(fft_layers[i][1],
+                                                                 activ_obj))
     
     return np.array(eq_system)
 
@@ -78,6 +77,8 @@ def model_create_equation(model_dir, tex_save, csv):
         path = os.path.dirname(__file__)
         csv = os.path.join(path, "./activationlist.csv")
 
+    activ_obj = pandas.read_csv(csv, delimiter=';')
+
     # create prequesties
     model = tf.keras.models.load_model(model_dir)
     if model != None:
@@ -100,7 +101,7 @@ def model_create_equation(model_dir, tex_save, csv):
             else: 
                 fft_layers.append([wb_layer, parse_expr("x=x")])
 
-        peq_system = subst_into_system(fft_layers, peq_system)
+        peq_system = subst_into_system(fft_layers, peq_system, activ_obj)
         fft_inverse = fft.irfftn(np.array(nparr))
         result = evaluate_system(peq_system, fft_inverse, tex_save)
 
