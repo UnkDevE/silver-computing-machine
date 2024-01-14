@@ -1,5 +1,4 @@
-sympy
+tf-nightly
 numpy
-tensorflow
-scipy
+sympy
 pandas

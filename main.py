@@ -1,5 +1,6 @@
 import tensorflow as tf
 from tensorflow import keras
+import tensorflow.experimental.numpy as tnp
 import numpy as np
 import sympy as syp
 import pandas
@@ -7,6 +8,9 @@ import pandas
 import sys
 import os
 import inspect
+
+# load numpy and tensorflow interop
+tnp.experimental_enable_numpy_behavior(dtype_conversion_mode="all")
 
 # setup symbols for computation
 weight= syp.Symbol("w_0")
@@ -70,7 +74,9 @@ def evaluate_system(eq_system, fft_inverse, tex_save):
 
    print("eq solved")
    return result
-
+   
+def output_aggregator(model, fft_layers, data):
+    
 def model_create_equation(model_dir, tex_save, csv):
     # check optional args
     if csv == None:
@@ -85,25 +91,23 @@ def model_create_equation(model_dir, tex_save, csv):
         peq_system = get_poly_eqs(len(model.layers))
         
         # calculate fft
-        from scipy import fft as fft
         from keras import backend as K
         from sympy import parse_expr
         fft_layers = []
-        nparr = []
         for [wb_layer, act] in [
                 ([layer.weights[0], layer.weights[1]], layer.activation)
                           for layer in model.layers if len(layer.weights) > 1]:
             # fft for interpolation or finding the polynomial
             # fft == inverse laplace.
-            nparr.append(wb_layer)
-            if act != None:
-                fft_layers.append([wb_layer, act])
-            else: 
-                fft_layers.append([wb_layer, parse_expr("x=x")])
+            
+            # if no activation assume linear
+            if act == None:
+                act = parse_expr("x=x") 
+            fft_layers.append([wb_layer, act])
 
+        inv_layers = output_aggregator(model, fft_layers, training_data)
         peq_system = subst_into_system(fft_layers, peq_system, activ_obj)
-        fft_inverse = fft.irfftn(np.array(nparr))
-        result = evaluate_system(peq_system, fft_inverse, tex_save)
+        result = evaluate_system(peq_system, inv_layers, tex_save)
 
 if __name__=="__main__":
     if len(sys.argv) > 2:
