@@ -1,6 +1,9 @@
 import tensorflow as tf
 from tensorflow import keras
 import tensorflow.experimental.numpy as tnp
+import tensorflow.compat.v1 as tf1
+import tensorflow_datasets as tdfs
+
 import numpy as np
 import sympy as syp
 import pandas
@@ -76,8 +79,28 @@ def evaluate_system(eq_system, fft_inverse, tex_save):
    return result
    
 def output_aggregator(model, fft_layers, data):
+    from functools import reduce
+    # load and get unique features
+    [dataset, test] = tdfs.load(data, download=False, split=['train', 'test'])
+    unbatch_ds = dataset.unbatch()
     
-def model_create_equation(model_dir, tex_save, csv):
+    # get feature labels
+    labels = list(dict.fromkeys([labels for _, labels in unbatch_ds]))
+    # reconstruct featuresets from testset
+    feature_sets = [test.filter(lambda l: l == l) for l in labels]
+    
+    sumtensor = np.array() 
+    # for each label sample and feedfoward
+    for feature in feature_sets:
+        sample = tf.data.Dataset.sample_from_data(feature)
+        # convert into numpy so we can manipulate array
+        sumtensor += model.predict(sample).asarray()
+    
+    #normalize sumtensor
+    sumtensor /= len(feature_sets)
+    return np.fft.ifftn(sumtensor, sumtensor.shape())
+    
+def model_create_equation(model_dir, tex_save, training_data, csv):
     # check optional args
     if csv == None:
         path = os.path.dirname(__file__)
@@ -114,15 +137,15 @@ if __name__=="__main__":
         path = os.path.dirname(__file__)
         try:
             model = os.path.join(path, sys.argv[1])
-            if len(sys.argv) > 3:
-                model_create_equation(os.path.abspath(model), sys.argv[2], sys.argv[3])
+            if len(sys.argv) > 4:
+                model_create_equation(os.path.abspath(model), sys.argv[3], sys.argv[2], sys.argv[4])
             else:
-                model_create_equation(os.path.abspath(model), sys.argv[2], None)
+                model_create_equation(os.path.abspath(model), sys.argv[3], sys.argv[2], None)
         except FileNotFoundError:
             print("""file not found, 
 please give filename of model to extract equation from""")
     else:
-        print("""not enough commands, please give a filename of a model to extract, 
+        print("""not enough commands, please give a filename of a model to extract, it's training dataset (which may be altered at future date)
 output for a tex file, and a csv file containing each type of acitvation used delimitered by ; (optional)""")
 
 

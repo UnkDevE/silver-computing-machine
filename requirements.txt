@@ -1,4 +1,6 @@
 tf-nightly
+tensorflow_datasets
+scipy
 numpy
 sympy
 pandas

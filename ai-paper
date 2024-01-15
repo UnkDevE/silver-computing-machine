@@ -104,6 +104,8 @@ Idea: mutlidim inverse fourier transforms
 as all of the weights are on the real number line
 prop: product sum each weight vector as inputs along each layer.
 
+Idea: how get inverse transform for each weights
+
 ideas:
 the universe is a closed space on a higher dim, a number line must be the same.
 trajectoids -> a to find seperate functions in the space it took not the most efficient way of find the function but the actual path the nerual network took <- BIG LEAD
