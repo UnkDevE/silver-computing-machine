@@ -82,22 +82,26 @@ def output_aggregator(model, fft_layers, data):
     from functools import reduce
     # load and get unique features
     [dataset, test] = tdfs.load(data, download=False, split=['train', 'test'])
-    unbatch_ds = dataset.unbatch()
+    # unbatch_ds = dataset.unbatch()
     
-    # get feature labels
-    labels = list(dict.fromkeys([labels for _, labels in unbatch_ds]))
+    # get label and value
+    value, *features = list(list(dataset.take(1).as_numpy_iterator())[0].keys())
+    
+    # get types of labels
     # reconstruct featuresets from testset
-    feature_sets = [test.filter(lambda l: l == l) for l in labels]
+    feature_sets = dataset.scan(initial_state=dataset, scan_func=lambda state, elem:
+        state.filter(lambda f: [f[l] == elem[l] for l in features]))
+
     
-    sumtensor = np.array() 
-    # for each label sample and feedfoward
-    for feature in feature_sets:
-        sample = tf.data.Dataset.sample_from_data(feature)
-        # convert into numpy so we can manipulate array
-        sumtensor += model.predict(sample).asarray()
-    
+    sumtensors = [] 
+    # for each label sample in dataset, take 1 each from sample
+    samples = tf.data.Dataset.sample_from_datasets(feature_sets).batch(1)
+    # convert into numpy so we can manipulate array
+    for sample in samples:
+        sumtensors.append(model.predict(sample[value]))
+
     #normalize sumtensor
-    sumtensor /= len(feature_sets)
+    sumtensor = sum(sumtensors) / len(feature_sets)
     return np.fft.ifftn(sumtensor, sumtensor.shape())
     
 def model_create_equation(model_dir, tex_save, training_data, csv):
@@ -120,14 +124,12 @@ def model_create_equation(model_dir, tex_save, training_data, csv):
         for [wb_layer, act] in [
                 ([layer.weights[0], layer.weights[1]], layer.activation)
                           for layer in model.layers if len(layer.weights) > 1]:
-            # fft for interpolation or finding the polynomial
-            # fft == inverse laplace.
-            
             # if no activation assume linear
             if act == None:
                 act = parse_expr("x=x") 
             fft_layers.append([wb_layer, act])
 
+        # fft calculation goes through here
         inv_layers = output_aggregator(model, fft_layers, training_data)
         peq_system = subst_into_system(fft_layers, peq_system, activ_obj)
         result = evaluate_system(peq_system, inv_layers, tex_save)
