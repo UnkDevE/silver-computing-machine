@@ -77,7 +77,14 @@ def evaluate_system(eq_system, fft_inverse, tex_save):
 
    print("eq solved")
    return result
-   
+
+#naughty monoid hack
+def condense_bool_list(list):
+    for x in list:
+        if x is False:
+            return False
+    return True
+
 def output_aggregator(model, fft_layers, data):
     from functools import reduce
     # load and get unique features
@@ -89,8 +96,11 @@ def output_aggregator(model, fft_layers, data):
     
     # get types of labels
     # reconstruct featuresets from testset
-    feature_sets = dataset.scan(initial_state=dataset, scan_func=lambda state, elem:
-        state.filter(lambda f: [f[l] == elem[l] for l in features]))
+    # don't forget returns tuple of state and filter
+    feature_sets = dataset.map(lambda elem: 
+        dataset.filter(lambda f:
+            condense_bool_list(
+                [not tf.math.equal(f[l], elem[l]) for l in features])))
 
     
     sumtensors = [] 
