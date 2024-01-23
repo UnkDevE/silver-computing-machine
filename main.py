@@ -1,7 +1,5 @@
 import tensorflow as tf
 from tensorflow import keras
-import tensorflow.experimental.numpy as tnp
-import tensorflow.compat.v1 as tf1
 import tensorflow_datasets as tdfs
 
 import numpy as np
@@ -11,9 +9,6 @@ import pandas
 import sys
 import os
 import inspect
-
-# load numpy and tensorflow interop
-tnp.experimental_enable_numpy_behavior(dtype_conversion_mode="all")
 
 # setup symbols for computation
 weight= syp.Symbol("w_0")
@@ -78,12 +73,6 @@ def evaluate_system(eq_system, fft_inverse, tex_save):
    print("eq solved")
    return result
 
-#naughty monoid hack
-def condense_bool_list(list):
-    for x in list:
-        if x is False:
-            return False
-    return True
 
 def output_aggregator(model, fft_layers, data):
     from functools import reduce
@@ -93,21 +82,34 @@ def output_aggregator(model, fft_layers, data):
     
     # get label and value
     value, *features = list(list(dataset.take(1).as_numpy_iterator())[0].keys())
-    
+ 
     # get types of labels
-    # reconstruct featuresets from testset
-    # don't forget returns tuple of state and filter
-    feature_sets = dataset.map(lambda elem: 
-        dataset.filter(lambda f:
-            condense_bool_list(
-                [not tf.math.equal(f[l], elem[l]) for l in features])))
+    # dataset.unique() doesn't work with uint8
+    num_ds = dataset.enumerate()
 
+    def vs(d, k):
+        v = d.pop(k,None), 
+        return d
     
-    sumtensors = [] 
+    def condense(v):
+        for i in v:
+            if i is False:
+                return False
+        return True 
+
+    # filter through to find duplicates
+    values_removed = num_ds.map(lambda i: vs(i, value))
+    # call unqiue on features
+    feature_labels = values_removed.unique() 
+    feature_sets = feature_labels.map(
+        lambda label: 
+            values.filter(lambda i: 
+                condense([i[feature] == label[feature] for feature in features])))
+    
     # for each label sample in dataset, take 1 each from sample
-    samples = tf.data.Dataset.sample_from_datasets(feature_sets).batch(1)
+    samples = tf.data.Dataset.sample_from_datasets(feature_sets)
     # convert into numpy so we can manipulate array
-    for sample in samples:
+    for sample in samples.take(len(feature_labels)):
         sumtensors.append(model.predict(sample[value]))
 
     #normalize sumtensor
