@@ -85,10 +85,10 @@ def output_aggregator(model, fft_layers, data):
  
     # get types of labels
     # dataset.unique() doesn't work with uint8
-    num_ds = dataset.enumerate()
 
-    def vs(d, k):
-        v = d.pop(k,None), 
+    def rm_val(d) :
+        if value in d:
+            del d[value]
         return d
     
     def condense(v):
@@ -98,18 +98,22 @@ def output_aggregator(model, fft_layers, data):
         return True 
 
     # filter through to find duplicates
-    values_removed = num_ds.map(lambda i: vs(i, value))
+    values_removed = dataset.map(lambda i: rm_val(i))
+
     # call unqiue on features
     feature_labels = values_removed.unique() 
     feature_sets = feature_labels.map(
         lambda label: 
-            values.filter(lambda i: 
+            dataset.filter(lambda i: 
                 condense([i[feature] == label[feature] for feature in features])))
+    
+    print(feature_sets.cardinality())
     
     # for each label sample in dataset, take 1 each from sample
     samples = tf.data.Dataset.sample_from_datasets(feature_sets)
+
     # convert into numpy so we can manipulate array
-    for sample in samples.take(len(feature_labels)):
+    for sample in samples.take(len(list(feature_sets))):
         sumtensors.append(model.predict(sample[value]))
 
     #normalize sumtensor
