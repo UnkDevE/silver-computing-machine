@@ -102,21 +102,40 @@ def output_aggregator(model, fft_layers, data):
 
     # call unqiue on features
     feature_labels = values_removed.unique() 
+    # have to update cardinality each time
+    feature_length = feature_labels.reduce(np.int64(0), lambda x, _: x + 1).numpy()
+    feature_labels.apply(
+        tf.data.experimental.assert_cardinality(feature_length))
+
+    # bucketize each feature in each label, return complete datapoints 
     feature_sets = feature_labels.map(
         lambda label: 
             dataset.filter(lambda i: 
                 condense([i[feature] == label[feature] for feature in features])))
+
+    feature_sets.apply(tf.data.experimental.assert_cardinality(feature_length))
+
+    # assert length of features 
+    feature_set_len = feature_sets.map(lambda ds:
+        ds.reduce(np.int64(0), lambda x, _: x + 1))
+    enum_set = feature_set_len.numpy()
+         
+    # set the new length of the dataset to the reduced tensor
+    feature_sets.apply(tf.data.experimental.assert_cardinality(enum_set))
     
-    print(feature_sets.cardinality())
-    
+    # feature_set_len.apply(tf.data.experimental.assert_cardinality())
     # for each label sample in dataset, take 1 each from sample
-    samples = tf.data.Dataset.sample_from_datasets(feature_sets)
+    samples = tf.data.Dataset.sample_from_datasets(feature_set_len)
 
     # convert into numpy so we can manipulate array
-    for sample in samples.take(len(list(feature_sets))):
-        sumtensors.append(model.predict(sample[value]))
+    for sample in samples.take(1):
+        # batch into equal parts
+        sample.batch(feature_length)
+        # remember sample is a dataset
+        for values in sample:
+            sumtensors.append(model.predict(sample[value]))
 
-    #normalize sumtensor
+    # normalize sumtensor
     sumtensor = sum(sumtensors) / len(feature_sets)
     return np.fft.ifftn(sumtensor, sumtensor.shape())
     
