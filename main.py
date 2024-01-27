@@ -10,6 +10,7 @@ import sys
 import os
 import inspect
 
+
 # setup symbols for computation
 weight= syp.Symbol("w_0")
 activation = syp.Symbol("a")
@@ -78,65 +79,81 @@ def output_aggregator(model, fft_layers, data):
     from functools import reduce
     # load and get unique features
     [dataset, test] = tdfs.load(data, download=False, split=['train', 'test'])
-    # unbatch_ds = dataset.unbatch()
     
     # get label and value
     value, *features = list(list(dataset.take(1).as_numpy_iterator())[0].keys())
  
     # get types of labels
     # dataset.unique() doesn't work with uint8
-
+    # so we remove the offending key and use it
     def rm_val(d) :
         if value in d:
             del d[value]
         return d
     
+    @tf.function
     def condense(v):
+        b = False
         for i in v:
-            if i is False:
-                return False
-        return True 
+            if not tf.math.equal(v, False):
+                b = True
+        return b 
 
     # filter through to find duplicates
     values_removed = dataset.map(lambda i: rm_val(i))
 
     # call unqiue on features
-    feature_labels = values_removed.unique() 
+    labels = values_removed.unique() 
     # have to update cardinality each time
-    feature_length = feature_labels.reduce(np.int64(0), lambda x, _: x + 1).numpy()
-    feature_labels.apply(
-        tf.data.experimental.assert_cardinality(feature_length))
+    length = labels.reduce(np.int64(0), lambda x, _: x + 1).numpy()
+    labels.apply(
+        tf.data.experimental.assert_cardinality(length))
 
     # bucketize each feature in each label, return complete datapoints 
-    feature_sets = feature_labels.map(
-        lambda label: 
-            dataset.filter(lambda i: 
-                condense([i[feature] == label[feature] for feature in features])))
-
-    feature_sets.apply(tf.data.experimental.assert_cardinality(feature_length))
+    sets = labels.map(lambda label: 
+        dataset.filter(lambda i: 
+            condense([i[feature] == label[feature] for feature in features])),
+            num_parallel_calls=tf.data.AUTOTUNE) # deterministic = True
 
     # assert length of features 
-    feature_set_len = feature_sets.map(lambda ds:
+    len_db = sets.map(lambda ds:
         ds.reduce(np.int64(0), lambda x, _: x + 1))
-    enum_set = feature_set_len.numpy()
-         
+        
+    # this should convert the array into a single batch 
+    # if not that's an error outright
+    # hot call so AUTOTUNE
+    set_len = len_db.batch(length, 
+        num_parallel_calls=tf.data.AUTOTUNE, deterministic=False).get_single_element()
+
     # set the new length of the dataset to the reduced tensor
-    feature_sets.apply(tf.data.experimental.assert_cardinality(enum_set))
+    enum_feat = sets.enumerate()
+    ds_set_parts = enum_feat.map(lambda i, f_set: f_set.apply(
+            tf.data.experimental.assert_cardinality(
+                set_len[i])), num_parallel_calls=tf.data.AUTOTUNE, 
+                deterministic=False)
+
     
-    # feature_set_len.apply(tf.data.experimental.assert_cardinality())
-    # for each label sample in dataset, take 1 each from sample
-    samples = tf.data.Dataset.sample_from_datasets(feature_set_len)
+    # set the outer as length
+    ds_set = ds_set_parts.apply(tf.data.experimental.assert_cardinality(length))
+
+    #enumerate over sets, get lengths
+    sumtensors = []
+    ds_set = ds_set.enumerate()
+    set_len_np = set_len.numpy()
 
     # convert into numpy so we can manipulate array
-    for sample in samples.take(1):
-        # batch into equal parts
-        sample.batch(feature_length)
-        # remember sample is a dataset
-        for values in sample:
-            sumtensors.append(model.predict(sample[value]))
+    def ds_set_predictions(i, sample):
+        # batch into equal parts, int div here
+        # TODO: i is a 0 rank tensor -> convert to numpy
+        sample.batch(set_len_np[i] / length)
+        for batches in sample:
+            sumtensors.append(model.predict(batches[value]))
+    
+    ds_set.map(lambda i, ds: ds_set_predictions(i, ds))
 
-    # normalize sumtensor
-    sumtensor = sum(sumtensors) / len(feature_sets)
+    # normalize sumtensor, use whole training data so len(dataset)
+    sumtensor = np.sum(sumtensors) / len(dataset)
+
     return np.fft.ifftn(sumtensor, sumtensor.shape())
     
 def model_create_equation(model_dir, tex_save, training_data, csv):
