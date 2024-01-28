@@ -11,6 +11,8 @@ import os
 import inspect
 
 
+tf.config.run_functions_eagerly(True)
+
 # setup symbols for computation
 weight= syp.Symbol("w_0")
 activation = syp.Symbol("a")
@@ -86,28 +88,30 @@ def output_aggregator(model, fft_layers, data):
     # get types of labels
     # dataset.unique() doesn't work with uint8
     # so we remove the offending key and use it
-    def rm_val(d) :
-        if value in d:
-            del d[value]
+    def rm_val(d, val) :
+        for v in val:
+            if v in d:
+                del d[v]
         return d
     
     @tf.function
     def condense(v):
         b = False
         for i in v:
-            if not tf.math.equal(v, False):
+            if not v: 
                 b = True
         return b 
 
     # filter through to find duplicates
-    values_removed = dataset.map(lambda i: rm_val(i))
+    values_removed = dataset.map(lambda i: rm_val(i, [value]))
 
     # call unqiue on features
     labels = values_removed.unique() 
     # have to update cardinality each time
-    length = labels.reduce(np.int64(0), lambda x, _: x + 1).numpy()
+    length = labels.reduce(np.int64(0), lambda x, _: x + 1)
+    length_np = length.numpy()
     labels.apply(
-        tf.data.experimental.assert_cardinality(length))
+        tf.data.experimental.assert_cardinality(length_np))
 
     # bucketize each feature in each label, return complete datapoints 
     sets = labels.map(lambda label: 
@@ -137,19 +141,15 @@ def output_aggregator(model, fft_layers, data):
     ds_set = ds_set_parts.apply(tf.data.experimental.assert_cardinality(length))
 
     #enumerate over sets, get lengths
-    sumtensors = []
-    ds_set = ds_set.enumerate()
-    set_len_np = set_len.numpy()
+    ds_set = ds_set.enumerate() 
 
-    # convert into numpy so we can manipulate array
-    def ds_set_predictions(i, sample):
-        # batch into equal parts, int div here
-        # TODO: i is a 0 rank tensor -> convert to numpy
-        sample.batch(set_len_np[i] / length)
-        for batches in sample:
-            sumtensors.append(model.predict(batches[value]))
-    
-    ds_set.map(lambda i, ds: ds_set_predictions(i, ds))
+    # do predictions so can create sample array
+    @tf.function
+    samples = ds_set.map(lambda i, ds: 
+        ds.batch(tf.truncatediv(length, set_len[i])))
+
+    # numpy array of predictions
+    sumtensor = model.predict(samples)
 
     # normalize sumtensor, use whole training data so len(dataset)
     sumtensor = np.sum(sumtensors) / len(dataset)
