@@ -12,6 +12,7 @@ import inspect
 
 
 tf.config.run_functions_eagerly(True)
+tf.data.experimental.enable_debug_mode()
 
 # setup symbols for computation
 weight= syp.Symbol("w_0")
@@ -120,6 +121,7 @@ def output_aggregator(model, fft_layers, data):
             num_parallel_calls=tf.data.AUTOTUNE) # deterministic = True
 
     # assert length of features 
+    # TODO: this throws error -> fix!
     len_db = sets.map(lambda ds:
         ds.reduce(np.int64(0), lambda x, _: x + 1))
         
@@ -138,18 +140,13 @@ def output_aggregator(model, fft_layers, data):
 
     
     # set the outer as length
+    sum_len = set_len.reduce(np.int64(0), lambda x, i: x + i.numpy())
+    
     ds_set = ds_set_parts.apply(tf.data.experimental.assert_cardinality(length))
 
-    #enumerate over sets, get lengths
-    ds_set = ds_set.enumerate() 
-
-    # do predictions so can create sample array
-    @tf.function
-    samples = ds_set.map(lambda i, ds: 
-        ds.batch(tf.truncatediv(length, set_len[i])))
-
     # numpy array of predictions
-    sumtensor = model.predict(samples)
+    samples = ds_set.batch(sum_len / length)
+    sumtensors = model.predict(samples)
 
     # normalize sumtensor, use whole training data so len(dataset)
     sumtensor = np.sum(sumtensors) / len(dataset)
