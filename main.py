@@ -122,15 +122,18 @@ def output_aggregator(model, fft_layers, data):
 
     # assert length of features 
     # TODO: this throws error -> fix!
-    len_db = sets.map(lambda ds:
-        ds.reduce(np.int64(0), lambda x, _: x + 1))
-        
+    @tf.function
+    def ds_reduce(ds):
+        return ds.reduce(np.int64(0), lambda x, _: x + 1)
+
+    len_db = sets.map(ds_reduce)
     # this should convert the array into a single batch 
     # if not that's an error outright
     # hot call so AUTOTUNE
-    set_len = len_db.batch(length, 
-        num_parallel_calls=tf.data.AUTOTUNE, deterministic=False).get_single_element()
-
+    set_len = len_db.batch(length_np, 
+        num_parallel_calls=tf.data.AUTOTUNE, deterministic=False).get_single_element() 
+    
+        
     # set the new length of the dataset to the reduced tensor
     enum_feat = sets.enumerate()
     ds_set_parts = enum_feat.map(lambda i, f_set: f_set.apply(
@@ -140,12 +143,14 @@ def output_aggregator(model, fft_layers, data):
 
     
     # set the outer as length
-    sum_len = set_len.reduce(np.int64(0), lambda x, i: x + i.numpy())
+    # convert to np float32 (single) using .numpy causes int32 - not good
+    sum_len = tf.cast(np.single, tf.reduce_sum(set_len))
     
     ds_set = ds_set_parts.apply(tf.data.experimental.assert_cardinality(length))
 
     # numpy array of predictions
-    samples = ds_set.batch(sum_len / length)
+    # sum_len fraction
+    samples = ds_set.batch(length_np / sum_len)
     sumtensors = model.predict(samples)
 
     # normalize sumtensor, use whole training data so len(dataset)
