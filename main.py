@@ -104,13 +104,23 @@ def output_aggregator(model, fft_layers, data):
         return b 
 
     # filter through to find duplicates
-    values_removed = dataset.map(lambda i: rm_val(i, [value]))
+    values_removed = dataset.map(lambda i: rm_val(i, [value]),
+        num_parallel_calls=tf.data.AUTOTUNE, deterministic=False)
 
     # call unqiue on features
     labels = values_removed.unique() 
     # have to update cardinality each time
-    length = labels.reduce(np.int64(0), lambda x, _: x + 1)
-    length_np = length.numpy()
+       
+    # this is our optimized len fn
+    @tf.function
+    def len_ds(ds):
+        length_np = 0
+        for _ in labels.map(lambda x: 1):
+            length_np += 1
+        return length_np
+     
+    length_np = len_ds(labels)
+
     labels.apply(
         tf.data.experimental.assert_cardinality(length_np))
 
@@ -118,7 +128,7 @@ def output_aggregator(model, fft_layers, data):
     sets = labels.map(lambda label: 
         dataset.filter(lambda i: 
             condense([i[feature] == label[feature] for feature in features])),
-            num_parallel_calls=tf.data.AUTOTUNE) # deterministic = True
+            num_parallel_calls=tf.data.AUTOTUNE, deterministic=True) # deterministic = True
 
     # assert length of features 
     # TODO: this throws error -> fix!
@@ -126,12 +136,10 @@ def output_aggregator(model, fft_layers, data):
     def ds_reduce(ds):
         return ds.reduce(np.int64(0), lambda x, _: x + 1)
 
-    len_db = sets.map(ds_reduce)
+    len_db = sets.map(ds_reduce, num_parallel_calls=tf.data.AUTOTUNE, deterministic=False)
     # this should convert the array into a single batch 
     # if not that's an error outright
-    # hot call so AUTOTUNE
-    set_len = len_db.batch(length_np, 
-        num_parallel_calls=tf.data.AUTOTUNE, deterministic=False).get_single_element() 
+    set_len = len_db.batch(length_np).get_single_element() 
     
         
     # set the new length of the dataset to the reduced tensor
@@ -144,9 +152,9 @@ def output_aggregator(model, fft_layers, data):
     
     # set the outer as length
     # convert to np float32 (single) using .numpy causes int32 - not good
-    sum_len = tf.cast(np.single, tf.reduce_sum(set_len))
+    sum_len = np.single(tf.reduce_sum(set_len))
     
-    ds_set = ds_set_parts.apply(tf.data.experimental.assert_cardinality(length))
+    ds_set = ds_set_parts.apply(tf.data.experimental.assert_cardinality(length_np))
 
     # numpy array of predictions
     # sum_len fraction
