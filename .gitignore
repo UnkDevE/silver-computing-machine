@@ -38,3 +38,4 @@ include
 lib64
 pyvenv.cfg
 share
+stats*
