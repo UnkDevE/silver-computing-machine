@@ -11,7 +11,7 @@ import os
 import inspect
 
 
-tf.config.run_functions_eagerly(True)
+# tf.config.run_functions_eagerly(True)
 tf.data.experimental.enable_debug_mode()
 
 # setup symbols for computation
@@ -113,19 +113,21 @@ def output_aggregator(model, fft_layers, data):
     # have to update cardinality each time
        
     # this is our optimized len fn
+    # but it throws away our ds in practice
     @tf.function
-    def len_ds_auto(ds):
+    def len_ds(ds):
         length_np = 0
         for _ in ds.map(lambda x: 1, 
                 num_parallel_calls=tf.data.AUTOTUNE, deterministic=False):
             length_np += 1
-        return length_np
+        return tf.cast(length_np, tf.int64)
 
-    
-    length_np = len_ds_auto(labels)
+    len_ds_auto = tf.autograph.to_graph(len_ds.python_function)
+
+    length = len_ds_auto(values_removed.unique())
 
     labels.apply(
-        tf.data.experimental.assert_cardinality(length_np))
+        tf.data.experimental.assert_cardinality(length))
 
     # bucketize each feature in each label, return complete datapoints 
     sets = labels.map(lambda label: 
@@ -135,10 +137,11 @@ def output_aggregator(model, fft_layers, data):
 
     # assert length of features 
     # TODO: this throws error -> fix!
-    len_db = sets.map(ds_len_auto, num_parallel_calls=tf.data.AUTOTUNE, deterministic=False)
+    len_db = sets.map(len_ds_auto, num_parallel_calls=tf.data.AUTOTUNE, deterministic=False)
     # this should convert the array into a single batch 
     # if not that's an error outright
-    set_len = len_db.batch(length_np).get_single_element() 
+    set_lens = len_db.batch(length.numpy())
+    set_len = set_lens.get_single_element()
     
         
     # set the new length of the dataset to the reduced tensor
@@ -153,7 +156,7 @@ def output_aggregator(model, fft_layers, data):
     # convert to np float32 (single) using .numpy causes int32 - not good
     sum_len = np.single(tf.reduce_sum(set_len))
     
-    ds_set = ds_set_parts.apply(tf.data.experimental.assert_cardinality(length_np))
+    ds_set = ds_set_parts.apply(tf.data.experimental.assert_cardinality(length))
 
     # numpy array of predictions
     # sum_len fraction

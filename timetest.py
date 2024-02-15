@@ -48,7 +48,10 @@ def len_ds3_auto(ds):
         num_parallel_calls=tf.data.AUTOTUNE, deterministic=False).as_numpy_iterator(), np.int64))
 
 
-train, test = tdfs.load('mnist', download=False, split=['train', 'test'])
+[train, test] = tdfs.load('mnist', download=False, split=['train', 'test'])
+
+# obfuscate length so it has to calculate
+train = train.filter(lambda x: x == x)
 
 function_ptrs = [len_ds, len_ds_auto, len_ds1, len_ds2, len_ds2_auto, len_ds3, len_ds3_auto]
 
