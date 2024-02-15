@@ -85,7 +85,8 @@ def output_aggregator(model, fft_layers, data):
     
     # get label and value
     value, *features = list(list(dataset.take(1).as_numpy_iterator())[0].keys())
- 
+
+
     # get types of labels
     # dataset.unique() doesn't work with uint8
     # so we remove the offending key and use it
@@ -113,13 +114,15 @@ def output_aggregator(model, fft_layers, data):
        
     # this is our optimized len fn
     @tf.function
-    def len_ds(ds):
+    def len_ds_auto(ds):
         length_np = 0
-        for _ in labels.map(lambda x: 1):
+        for _ in ds.map(lambda x: 1, 
+                num_parallel_calls=tf.data.AUTOTUNE, deterministic=False):
             length_np += 1
         return length_np
-     
-    length_np = len_ds(labels)
+
+    
+    length_np = len_ds_auto(labels)
 
     labels.apply(
         tf.data.experimental.assert_cardinality(length_np))
@@ -132,11 +135,7 @@ def output_aggregator(model, fft_layers, data):
 
     # assert length of features 
     # TODO: this throws error -> fix!
-    @tf.function
-    def ds_reduce(ds):
-        return ds.reduce(np.int64(0), lambda x, _: x + 1)
-
-    len_db = sets.map(ds_reduce, num_parallel_calls=tf.data.AUTOTUNE, deterministic=False)
+    len_db = sets.map(ds_len_auto, num_parallel_calls=tf.data.AUTOTUNE, deterministic=False)
     # this should convert the array into a single batch 
     # if not that's an error outright
     set_len = len_db.batch(length_np).get_single_element() 
