@@ -159,6 +159,7 @@ def output_aggregator(model, fft_layers, data):
     # sum_len fraction
     sumtensors = []
     for (d_len, dataset) in zip(len_db, sets):
+        # get the images
         samples = dataset.batch(tf.cast(d_len / length, tf.int64))
         sumtensors = model.predict(samples)
 
