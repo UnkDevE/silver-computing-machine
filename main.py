@@ -11,7 +11,7 @@ import os
 import inspect
 
 
-# tf.config.run_functions_eagerly(True)
+tf.config.run_functions_eagerly(True)
 tf.data.experimental.enable_debug_mode()
 
 # setup symbols for computation
@@ -86,6 +86,18 @@ def output_aggregator(model, fft_layers, data):
     # get label and value
     value, *features = list(list(dataset.take(1).as_numpy_iterator())[0].keys())
 
+    # this is our optimized len fn
+    @tf.function
+    def len_ds(ds):
+        length_np = 0
+        for _ in ds.map(lambda x: 1, 
+                num_parallel_calls=tf.data.AUTOTUNE, deterministic=False):
+            length_np += 1
+        return tf.cast(length_np, tf.int64)
+    
+    len_ds_auto = tf.autograph.to_graph(len_ds.python_function)
+
+    db_len = len(dataset)
 
     # get types of labels
     # dataset.unique() doesn't work with uint8
@@ -96,76 +108,62 @@ def output_aggregator(model, fft_layers, data):
                 del d[v]
         return d
     
-    @tf.function
-    def condense(v):
-        b = False
-        for i in v:
-            if not v: 
-                b = True
-        return b 
-
     # filter through to find duplicates
     values_removed = dataset.map(lambda i: rm_val(i, [value]),
         num_parallel_calls=tf.data.AUTOTUNE, deterministic=False)
 
     # call unqiue on features
-    labels = values_removed.unique() 
-    # have to update cardinality each time
-       
-    # this is our optimized len fn
-    # but it throws away our ds in practice
+    need_extract = values_removed.unique() 
+
     @tf.function
-    def len_ds(ds):
-        length_np = 0
-        for _ in ds.map(lambda x: 1, 
-                num_parallel_calls=tf.data.AUTOTUNE, deterministic=False):
-            length_np += 1
-        return tf.cast(length_np, tf.int64)
+    def label_extract(label_extract):
+        labels = []
+        for label in label_extract: 
+            if hasattr(label['label'], 'numpy') and callable(
+                getattr(label['label'], 'numpy')):
+                    labels.append(label["label"])
+        return labels
+    
+    extract_auto = tf.autograph.to_graph(label_extract.python_function)
+    labels = extract_auto(need_extract)
 
-    len_ds_auto = tf.autograph.to_graph(len_ds.python_function)
+    # have to update cardinality each time
+    # remember labels is a list due to extract
+    length = len(labels)
 
-    length = len_ds_auto(values_removed.unique())
-
-    labels.apply(
-        tf.data.experimental.assert_cardinality(length))
+    @tf.function
+    def condense(v):
+        b = False
+        for i in v:
+            if not i: 
+                b = True
+        return b
+    
+    # condense doesn't work as complains about python bool 
+    auto_condense = tf.autograph.to_graph(condense.python_function)
 
     # bucketize each feature in each label, return complete datapoints 
-    sets = labels.map(lambda label: 
-        dataset.filter(lambda i: 
-            condense([i[feature] == label[feature] for feature in features])),
-            num_parallel_calls=tf.data.AUTOTUNE, deterministic=True) # deterministic = True
+    sets = [dataset.filter(lambda i: 
+            auto_condense([i[feature] == label for feature in features])) 
+            for label in labels]
+
 
     # assert length of features 
     # TODO: this throws error -> fix!
-    len_db = sets.map(len_ds_auto, num_parallel_calls=tf.data.AUTOTUNE, deterministic=False)
-    # this should convert the array into a single batch 
-    # if not that's an error outright
-    set_lens = len_db.batch(length.numpy())
-    set_len = set_lens.get_single_element()
-    
-        
-    # set the new length of the dataset to the reduced tensor
-    enum_feat = sets.enumerate()
-    ds_set_parts = enum_feat.map(lambda i, f_set: f_set.apply(
-            tf.data.experimental.assert_cardinality(
-                set_len[i])), num_parallel_calls=tf.data.AUTOTUNE, 
-                deterministic=False)
-
-    
+    len_db = [len_ds_auto(data) for data in sets]
+     
     # set the outer as length
     # convert to np float32 (single) using .numpy causes int32 - not good
-    sum_len = np.single(tf.reduce_sum(set_len))
-    
-    ds_set = ds_set_parts.apply(tf.data.experimental.assert_cardinality(length))
 
     # numpy array of predictions
     # sum_len fraction
-    samples = ds_set.batch(length_np / sum_len)
-    sumtensors = model.predict(samples)
+    sumtensors = []
+    for (d_len, dataset) in zip(len_db, sets):
+        samples = dataset.batch(tf.cast(d_len / length, tf.int64))
+        sumtensors = model.predict(samples)
 
     # normalize sumtensor, use whole training data so len(dataset)
-    sumtensor = np.sum(sumtensors) / len(dataset)
-
+    sumtensor = np.sum(sumtensors) / db_len
     return np.fft.ifftn(sumtensor, sumtensor.shape())
     
 def model_create_equation(model_dir, tex_save, training_data, csv):
