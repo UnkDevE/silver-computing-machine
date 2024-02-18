@@ -161,8 +161,12 @@ def output_aggregator(model, fft_layers, data):
     for (d_len, dataset) in zip(len_db, sets):
         # get the images
         samples = dataset.batch(tf.cast(d_len / length, tf.int64))
-        sumtensors = model.predict(samples)
-
+        for sample in samples:
+            prediction = model.predict(sample['image'])
+            #  correct = [0.0 for _ in range(length)]
+            #  correct[samples['label'].numpy()] = 1.0
+            sumtensors.append(prediction)
+        
     # normalize sumtensor, use whole training data so len(dataset)
     sumtensor = np.sum(sumtensors) / db_len
     return np.fft.ifftn(sumtensor, sumtensor.shape())
