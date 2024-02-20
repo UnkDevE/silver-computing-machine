@@ -10,8 +10,8 @@ import sys
 import os
 import inspect
 
-
 tf.config.run_functions_eagerly(True)
+# do not remove forces tf.data to run eagerly
 tf.data.experimental.enable_debug_mode()
 
 # setup symbols for computation
@@ -109,23 +109,23 @@ def output_aggregator(model, fft_layers, data):
         return d
     
     # filter through to find duplicates
-    values_removed = dataset.map(lambda i: rm_val(i, [value]),
-        num_parallel_calls=tf.data.AUTOTUNE, deterministic=False)
+    values_removed = dataset.map(lambda i: rm_val(i, [value]), deterministic=True)
 
     # call unqiue on features
     need_extract = values_removed.unique() 
 
     @tf.function
-    def label_extract(label_extract):
+    def label_extract(label_extract, features):
         labels = []
-        for label in label_extract: 
-            if hasattr(label['label'], 'numpy') and callable(
-                getattr(label['label'], 'numpy')):
-                    labels.append(label["label"])
+        for feature in features:
+            for label in label_extract: 
+                if hasattr(label[feature], 'numpy') and callable(
+                    getattr(label[feature], 'numpy')):
+                        labels.append(label[feature])
         return labels
     
     extract_auto = tf.autograph.to_graph(label_extract.python_function)
-    labels = extract_auto(need_extract)
+    labels = extract_auto(need_extract, features)
 
     # have to update cardinality each time
     # remember labels is a list due to extract
@@ -160,11 +160,9 @@ def output_aggregator(model, fft_layers, data):
     sumtensors = []
     for (d_len, dataset) in zip(len_db, sets):
         # get the images
-        samples = dataset.batch(tf.cast(d_len / length, tf.int64))
+        samples = dataset.batch(tf.divide(d_len,length, dtype=tf.int64))
         for sample in samples:
             prediction = model.predict(sample['image'])
-            #  correct = [0.0 for _ in range(length)]
-            #  correct[samples['label'].numpy()] = 1.0
             sumtensors.append(prediction)
         
     # normalize sumtensor, use whole training data so len(dataset)
