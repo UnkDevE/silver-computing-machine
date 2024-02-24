@@ -10,8 +10,6 @@ import sys
 import os
 import inspect
 
-U8_MAX = 255
-
 tf.config.run_functions_eagerly(True)
 # do not remove forces tf.data to run eagerly
 tf.data.experimental.enable_debug_mode()
@@ -157,16 +155,20 @@ def output_aggregator(model, fft_layers, data):
     # set the outer as length
     # convert to np float32 (single) using .numpy causes int32 - not good
 
+    # normalize function for images
+    @tf.function
+    def normalize_img(image):
+      return tf.cast(image, tf.float32) / 255.
+
     # numpy array of predictions
-    # sum_len fraction
     sumtensors = []
     for (d_len, dataset) in zip(len_db, sets):
         # get the images
         samples = dataset.batch(tf.truncatediv(d_len, length))
         # samples not normalized
-        normalized = samples.map(lambda x: tf.realdiv(x, U8_MAX)) 
-        for sample in normalized :
-            prediction = model.predict(sample['image'])
+        normalized = samples.map(lambda x: normalize_img(x['image']))
+        for sample in normalized:
+            prediction = model.predict(sample)
             sumtensors.append(prediction)
         
     # normalize sumtensor, use whole training data so len(dataset)
