@@ -63,11 +63,11 @@ def evaluate_system(eq_system, fft_inverse, tex_save):
    feedfoward_system = eq_system[len(eq_system) - 1] # last eq is the output
    result = None
    # inverse of fourier transform is anaglogous to convergence of fourier series
-   from sympy import fourier_series, solve, latex
+   from sympy import fourier_series, solve, latex, lambdify
    series = fourier_series(feedfoward_system, limits=(weight, 0, 1), finite=True).doit(deep=True)
-
-   # normalize sum
-   equation = syp.Eq(series, fft_inverse.sum() / len(fft_inverse))
+   
+   equation = lambdify(series)
+   equation(fft_inverse)
    print("eq evaluated")
 
    file = open(tex_save, "xt")
@@ -164,16 +164,18 @@ def output_aggregator(model, fft_layers, data):
     sumtensors = []
     for (d_len, dataset) in zip(len_db, sets):
         # get the images
-        samples = dataset.batch(tf.truncatediv(d_len, length))
+        batch_length = tf.truncatediv(d_len, length)
+        batch = dataset.padded_batch(batch_length, drop_remainder=True)
         # samples not normalized
-        normalized = samples.map(lambda x: normalize_img(x['image']))
+        normalized = batch.map(lambda x: normalize_img(x['image']))
         for sample in normalized:
             prediction = model.predict(sample)
             sumtensors.append(prediction)
         
     # normalize sumtensor, use whole training data so len(dataset)
-    sumtensor = np.sum(sumtensors) / db_len
-    return np.fft.ifftn(sumtensor, sumtensor.shape())
+    sumtensor = np.sum(sumtensors, axis=(1)) / db_len
+    # get only real counterpart (::2) because no complex parts here
+    return np.fft.ifftn(sumtensor)[::2]
     
 def model_create_equation(model_dir, tex_save, training_data, csv):
     # check optional args
