@@ -12,7 +12,7 @@ import inspect
 
 tf.config.run_functions_eagerly(True)
 # do not remove forces tf.data to run eagerly
-tf.data.experimental.enable_debug_mode()
+# tf.data.experimental.enable_debug_mode()
 
 # setup symbols for computation
 weight= syp.Symbol("w_0")
@@ -66,7 +66,8 @@ def evaluate_system(eq_system, fft_inverse, tex_save):
    from sympy import fourier_series, solve, latex, lambdify
    series = fourier_series(feedfoward_system, limits=(weight, 0, 1), finite=True).doit(deep=True)
    
-   equation = lambdify(series)
+   from sympy.abc import x
+   equation = lambdify(x, series)
    equation(fft_inverse)
    print("eq evaluated")
 
@@ -109,8 +110,8 @@ def output_aggregator(model, fft_layers, data):
         return d
     
     # filter through to find duplicates
-    values_removed = dataset.map(lambda i: rm_val(i, [value]), deterministic=True)
-
+    values_removed = dataset.map(lambda i: rm_val(i, [value]))
+                                 
     # call unqiue on features
     need_extract = values_removed.unique() 
 
@@ -124,8 +125,7 @@ def output_aggregator(model, fft_layers, data):
                         labels.append(label[feature])
         return labels
     
-    extract_auto = tf.autograph.to_graph(label_extract.python_function)
-    labels = extract_auto(need_extract, features)
+    labels = label_extract(need_extract, features)
 
     # have to update cardinality each time
     # remember labels is a list due to extract
@@ -165,7 +165,7 @@ def output_aggregator(model, fft_layers, data):
     for (d_len, dataset) in zip(len_db, sets):
         # get the images
         batch_length = tf.truncatediv(d_len, length)
-        batch = dataset.padded_batch(batch_length, drop_remainder=True)
+        batch = dataset.batch(batch_length, drop_remainder=True)
         # samples not normalized
         normalized = batch.map(lambda x: normalize_img(x['image']))
         for sample in normalized:
