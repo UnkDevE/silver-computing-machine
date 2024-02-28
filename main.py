@@ -10,6 +10,8 @@ import sys
 import os
 import inspect
 
+BATCH_SIZE = 128
+
 tf.config.run_functions_eagerly(True)
 # do not remove forces tf.data to run eagerly
 # tf.data.experimental.enable_debug_mode()
@@ -147,14 +149,6 @@ def output_aggregator(model, fft_layers, data):
             auto_condense([i[feature] == label for feature in features])) 
             for label in labels]
 
-
-    # assert length of features 
-    # TODO: this throws error -> fix!
-    len_db = [len_ds_auto(data) for data in sets]
-     
-    # set the outer as length
-    # convert to np float32 (single) using .numpy causes int32 - not good
-
     # normalize function for images
     @tf.function
     def normalize_img(image):
@@ -162,10 +156,9 @@ def output_aggregator(model, fft_layers, data):
 
     # numpy array of predictions
     sumtensors = []
-    for (d_len, dataset) in zip(len_db, sets):
+    for dataset in sets:
         # get the images
-        batch_length = tf.truncatediv(d_len, length)
-        batch = dataset.batch(batch_length, drop_remainder=True)
+        batch = dataset.padded_batch(128, drop_remainder=True)
         # samples not normalized
         normalized = batch.map(lambda x: normalize_img(x['image']))
         for sample in normalized:
@@ -173,7 +166,7 @@ def output_aggregator(model, fft_layers, data):
             sumtensors.append(prediction)
         
     # normalize sumtensor, use whole training data so len(dataset)
-    sumtensor = np.sum(sumtensors, axis=(1)) / db_len
+    sumtensor = np.sum(sumtensors, axis=(1)) / (db_len / 128)
     # get only real counterpart (::2) because no complex parts here
     return np.fft.ifftn(sumtensor)[::2]
     
