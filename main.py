@@ -51,6 +51,8 @@ def subst_into_system(fft_layers, eq_system, activ_obj):
             weight_symbol = syp.Symbol("w_" + str(wb))
             bias_symbol = syp.Symbol("b_" + str(wb))
 
+            # TODO: HEY THIS IS PROBLEMATIC, WEIGHTS ARE MATRIXES IN KERAS
+            # SO WE MUST ITERATE OVER THE MATRIX
             for system in eq_system:
                 # fft_layers[n][0] is weights whilst 1 is baises
                 system.subs(weight_symbol, fft_layers[i][0][0][0][wb])
@@ -62,23 +64,26 @@ def subst_into_system(fft_layers, eq_system, activ_obj):
 
 # evaluate irfftn using cauchy residue theorem
 def evaluate_system(eq_system, fft_inverse, tex_save):
-   feedfoward_system = eq_system[len(eq_system) - 1] # last eq is the output
-   result = None
    # inverse of fourier transform is anaglogous to convergence of fourier series
-   from sympy import fourier_series, solve, latex, lambdify
-   series = fourier_series(feedfoward_system, limits=(weight, 0, 1), finite=True).doit(deep=True)
+   from sympy import fourier_series, solve, latex, sympify 
    
-   from sympy.abc import x
-   equation = lambdify(x, series)
-   equation(fft_inverse)
-   print("eq evaluated")
-
+   # feed backwards the output
+   equations = []
+   # convert from numpy
+   inverse = sympify(fft_inverse)
+   # quick recursion hack
+   equate = inverse
+   for system in np.flip(eq_system):
+        # the equation is then solved backwards
+        equate = syp.Eq(system, equate)
+        solved = syp.solve(equate)
+        equations.append(solved)
+       
+   tex_save = latex(equations[-1])
    file = open(tex_save, "xt")
-   file.write(latex(solve(equation)))
    file.close()
 
    print("eq solved")
-   return result
 
 
 def output_aggregator(model, fft_layers, data):
@@ -198,7 +203,7 @@ def model_create_equation(model_dir, tex_save, training_data, csv):
         # fft calculation goes through here
         inv_layers = output_aggregator(model, fft_layers, training_data)
         peq_system = subst_into_system(fft_layers, peq_system, activ_obj)
-        result = evaluate_system(peq_system, inv_layers, tex_save)
+        evaluate_system(peq_system, inv_layers, tex_save)
 
 if __name__=="__main__":
     if len(sys.argv) > 2:

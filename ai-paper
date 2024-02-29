@@ -81,8 +81,7 @@ each layer a coefficient in an unknown polynomial F(x).
 
 lem: Backpropagation is convolution of two polynomials with the same coefficients.
 
-idea: polynomial approaches a taylor series, we can recover a function from this 
-lem: use the 
+idea: a taylor series approaches the polynomial, we can recover a function from this 
 
 prop: 
 smooth matrix polynomials which have finite terms
@@ -94,14 +93,14 @@ Idea: Now make it within bounds
 
 prop:
 change the bounds of neural networks from 0 to 1 this is already true.
-if the bounds are this we can use foruier transform.
-which is an inverse laplace
+if the bounds are this we can use inverse foruier transform.
+which is in this case the same as an inverse laplace
 
 qed: inverse laplace transforms recover the function of a neural network.
 
 
 Idea: mutlidim inverse fourier transforms
-as all of the weights are on the real number line
+as all of the weights are on the real number line between 0 and 1
 prop: product sum each weight vector as inputs along each layer.
 
 Idea: how get inverse transform for each weights
@@ -117,7 +116,6 @@ borsuk ulam theorem?
 e^Mt = transform / rotation
 meta-networks => deriving the function from networks and then inverse fourier 
 to create genralized function. Same idea as finding the transform for training batches.
-IS FOURIER TRANSFORM A RED HERRING?
 eigenstates for input matricies
 foruier transforms => to create human readable functions
 quanta + tunneling to find absoloute minima =>
