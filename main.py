@@ -10,7 +10,7 @@ import sys
 import os
 import inspect
 
-BATCH_SIZE = 128
+BATCH_SIZE = 1024
 
 tf.config.run_functions_eagerly(True)
 # do not remove forces tf.data to run eagerly
@@ -163,7 +163,7 @@ def output_aggregator(model, fft_layers, data):
     sumtensors = []
     for dataset in sets:
         # get the images
-        batch = dataset.padded_batch(128, drop_remainder=True)
+        batch = dataset.padded_batch(BATCH_SIZE, drop_remainder=True)
         # samples not normalized
         normalized = batch.map(lambda x: normalize_img(x['image']))
         for sample in normalized:
@@ -171,7 +171,7 @@ def output_aggregator(model, fft_layers, data):
             sumtensors.append(prediction)
         
     # normalize sumtensor, use whole training data so len(dataset)
-    sumtensor = np.sum(sumtensors, axis=(1)) / (db_len / 128)
+    sumtensor = np.sum(sumtensors, axis=(1)) / db_len 
     # get only real counterpart (::2) because no complex parts here
     return np.fft.ifftn(sumtensor)[::2]
     
