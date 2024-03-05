@@ -16,6 +16,19 @@ tf.config.run_functions_eagerly(True)
 # do not remove forces tf.data to run eagerly
 # tf.data.experimental.enable_debug_mode()
 
+# helper 
+def complete_bias(shapes):
+    shapes_new = []
+    for (i, shape) in enumerate(shapes):
+        shapes_new.append([shape[0]])
+        for j in range(1, len(shape)):
+            tup = shape[j]
+            if len(tup) < 2:
+                tup = (tup[0], 1)
+            shapes_new[i].append(tup)
+
+    return shapes_new
+
 # setup symbols for computation
 def get_poly_eqs(shapes):
     activation = syp.MatrixSymbol("x", shapes[0][0][0], shapes[0][0][1])
@@ -24,20 +37,6 @@ def get_poly_eqs(shapes):
     # create neruonal activation equations
     eq_system = [activation]
 
-    def complete_shape(shapes):
-        shapes_new = []
-        for (i, shape) in enumerate(shapes):
-            shapes_new.append([shape[0]])
-            for j in range(1, len(shape)):
-                tup = shape[j]
-                if len(tup) < 2:
-                    tup = (tup[0], 1)
-                shapes_new[i].append(tup)
-
-        return shapes_new
-    
-
-    shapes = complete_shape(shapes)
     # summate equations to get output
     from sympy.matrices import expressions
     from sympy.vector import matrix_to_vector
@@ -67,19 +66,26 @@ def activation_fn_lookup(activ_src, csv):
             pass
     return None
 
-def subst_into_system(fft_layers, eq_system, activ_obj):
-    for layer in range(0, len(fft_layers[0])):
-        # for each layer create seperate symbol
-        weight_symbol = syp.MatrixSymbol("w_" + str(layer))
-        bias_symbol = syp.MatrixSymbol("b_" + str(layer))
+def subst_into_system(fft_layers, eq_system, activ_obj, shapes):
+    input_symbol = syp.MatrixSymbol("x", shapes[0][0][0], shapes[0][0][1]) 
+    activation_fn = syp.Function("sigma")
 
-        for system in eq_system:
-            system.subs(weight_symbol, fft_layers[layer][0])
-            system.subs(bias_symbol, fft_layers[wb][1])
-            system.subs(activation_fn, activation_fn_lookup(fft_layers[layer][3],
+    for (i, layer) in enumerate(fft_layers):
+        shape = shapes[i]
+        # for each layer create seperate symbol
+        weight_symbol = syp.MatrixSymbol("w_" + str(i), 
+           shape[1][0], shape[1][1])
+        bias_symbol = syp.MatrixSymbol("b_" + str(i), 
+            shape[2][0], shape[2][1])
+
+        for system in eq_system[1:]:
+            system.subs(weight_symbol, syp.Matrix(layer[0]))
+            system.subs(bias_symbol, 
+                syp.Matrix(np.repeat(layer[1], repeats=shape[0][0], axis=0)))
+            system.subs(activation_fn, activation_fn_lookup(layer[2],
                                  activ_obj))
     
-    return np.array(eq_system)
+    return eq_system
 
 # evaluate irfftn using cauchy residue theorem
 def evaluate_system(eq_system, fft_inverse, tex_save):
@@ -89,17 +95,14 @@ def evaluate_system(eq_system, fft_inverse, tex_save):
    # feed backwards the output
    equations = []
    # convert from numpy
-   inverse = sympify(fft_inverse)
-   # quick recursion hack
-   equate = inverse
-   for system in np.flip(eq_system):
-        # the equation is then solved backwards
-        equate = syp.Eq(system, equate)
-        solved = syp.solve(equate)
-        equations.append(solved)
-       
-   tex_save = latex(equations[-1])
-   file = open(tex_save, "xt")
+   inverse = syp.Matrix(fft_inverse)
+   # the equation is then solved backwards
+   equate = syp.Eq(eq_system[-1], inverse)
+   solved = syp.solve(equate)
+
+   tex_save = latex(solved)
+   file = open("out.tex", "xt")
+   file.write(tex_save)
    file.close()
 
    print("eq solved")
@@ -221,10 +224,11 @@ def model_create_equation(model_dir, tex_save, training_data, csv):
             fft_layers.append([weights, baises, act])
             shapes.append([shape, weights.shape, baises.shape])
 
+        shapes = complete_bias(shapes) 
         peq_system = get_poly_eqs(shapes)
         # fft calculation goes through here
         inv_layers = output_aggregator(model, fft_layers, training_data)
-        peq_system = subst_into_system(fft_layers, peq_system, activ_obj)
+        peq_system = subst_into_system(fft_layers, peq_system, activ_obj, shapes)
         evaluate_system(peq_system, inv_layers, tex_save)
 
 if __name__=="__main__":
