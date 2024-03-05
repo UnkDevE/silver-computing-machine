@@ -17,20 +17,33 @@ tf.config.run_functions_eagerly(True)
 # tf.data.experimental.enable_debug_mode()
 
 # setup symbols for computation
-weight= syp.Symbol("w_0")
-activation = syp.Symbol("a")
-bias = syp.Symbol("b_0")
-output = syp.Symbol("y")
-activation_fn = syp.Function("sigma")
+def get_poly_eqs(shapes):
+    activation = syp.MatrixSymbol("x", shapes[0][0][0], shapes[0][0][1])
+    activation_fn = syp.Function("sigma")
 
-def get_poly_eqs(layers_total):
     # create neruonal activation equations
-    staring_eq = activation_fn((weight * activation) + bias)
-    eq_system = [staring_eq]
+    eq_system = [activation]
 
+    def complete_shape(shapes):
+        shapes_new = []
+        for (i, shape) in enumerate(shapes):
+            shapes_new.append([shape[0]])
+            for j in range(1, len(shape)):
+                tup = shape[j]
+                if len(tup) < 2:
+                    tup = (tup[0], 1)
+                shapes_new[i].append(tup)
+
+        return shapes_new
+
+    shapes = complete_shape(shapes)
     # summate equations to get output
-    for i in range(1, layers_total):
-        eq_system.append(activation_fn(syp.Symbol("w_" + str(i)) * eq_system[-1]) + bias)
+    for i in range(1, len(shapes)):
+        shape = shapes[i]
+        # use vector shape if bias shape is incorrect or sparse
+        bias = syp.MatrixSymbol("b_"+ str(i), shape[2][0], shape[2][1])
+        weight = syp.MatrixSymbol("w_" + str(i), shape[1][0], shape[1][1])
+        eq_system.append(activation_fn(weight * eq_system[-1] + bias))
 
     return eq_system
 
@@ -44,21 +57,16 @@ def activation_fn_lookup(activ_src, csv):
     return None
 
 def subst_into_system(fft_layers, eq_system, activ_obj):
-    # skip input
-    for i in range(0, len(fft_layers)):
-        for wb in range(0, len(fft_layers[i][0])):
-            print(fft_layers[i][0][wb])
-            weight_symbol = syp.Symbol("w_" + str(wb))
-            bias_symbol = syp.Symbol("b_" + str(wb))
+    for layer in range(0, len(fft_layers[0])):
+        # for each layer create seperate symbol
+        weight_symbol = syp.MatrixSymbol("w_" + str(layer))
+        bias_symbol = syp.MatrixSymbol("b_" + str(layer))
 
-            # TODO: HEY THIS IS PROBLEMATIC, WEIGHTS ARE MATRIXES IN KERAS
-            # SO WE MUST ITERATE OVER THE MATRIX
-            for system in eq_system:
-                # fft_layers[n][0] is weights whilst 1 is baises
-                system.subs(weight_symbol, fft_layers[i][0][0][0][wb])
-                system.subs(bias_symbol, fft_layers[i][0][1][wb])
-                system.subs(activation_fn, activation_fn_lookup(fft_layers[i][1],
-                                                                 activ_obj))
+        for system in eq_system:
+            system.subs(weight_symbol, fft_layers[layer][0])
+            system.subs(bias_symbol, fft_layers[wb][1])
+            system.subs(activation_fn, activation_fn_lookup(fft_layers[layer][3],
+                                 activ_obj))
     
     return np.array(eq_system)
 
@@ -186,20 +194,23 @@ def model_create_equation(model_dir, tex_save, training_data, csv):
     # create prequesties
     model = tf.keras.models.load_model(model_dir)
     if model != None:
-        peq_system = get_poly_eqs(len(model.layers))
-        
-        # calculate fft
+        # calculate fft + shape
         from keras import backend as K
         from sympy import parse_expr
+        shapes = []
         fft_layers = []
-        for [wb_layer, act] in [
-                ([layer.weights[0], layer.weights[1]], layer.activation)
+        for [weights, baises, act, shape] in [
+                (layer.weights[0].numpy(), 
+                    layer.weights[1].numpy(), 
+                        layer.activation, layer.kernel.shape)
                           for layer in model.layers if len(layer.weights) > 1]:
             # if no activation assume linear
             if act == None:
                 act = parse_expr("x=x") 
-            fft_layers.append([wb_layer, act])
+            fft_layers.append([weights, baises, act])
+            shapes.append([shape, weights.shape, baises.shape])
 
+        peq_system = get_poly_eqs(shapes)
         # fft calculation goes through here
         inv_layers = output_aggregator(model, fft_layers, training_data)
         peq_system = subst_into_system(fft_layers, peq_system, activ_obj)
