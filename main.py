@@ -38,12 +38,13 @@ def get_poly_eqs(shapes):
 
     shapes = complete_shape(shapes)
     # summate equations to get output
+    from sympy.matrices import expressions
     for i in range(1, len(shapes)):
         shape = shapes[i]
         # use vector shape if bias shape is incorrect or sparse
         bias = syp.MatrixSymbol("b_"+ str(i), shape[2][0], shape[2][1])
         weight = syp.MatrixSymbol("w_" + str(i), shape[1][0], shape[1][1])
-        eq_system.append(activation_fn(weight * eq_system[-1] + bias))
+        eq_system.append(activation_fn((eq_system[-1] * weight) + bias))
 
     return eq_system
 
