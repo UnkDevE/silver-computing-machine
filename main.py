@@ -58,10 +58,12 @@ def get_poly_eqs(shapes):
     return eq_system
 
 def activation_fn_lookup(activ_src, csv):
+    from sympy import Lambda
+    in_sym = syp.Symbol("x")
     sourcestr = inspect.getsource(activ_src)
     for (i, acc) in enumerate(csv['activation']):
         if acc in sourcestr:
-            return csv['function'][i]
+            return Lambda(in_sym, csv['function'][i])
         else:
             pass
     return None
@@ -92,13 +94,15 @@ def evaluate_system(eq_system, fft_inverse, tex_save):
    # inverse of fourier transform is anaglogous to convergence of fourier series
    from sympy import fourier_series, solve, latex, sympify 
    
-   # feed backwards the output
-   equations = []
-   # convert from numpy
-   inverse = syp.Matrix(fft_inverse)
-   # the equation is then solved backwards
-   equate = syp.Eq(eq_system[-1], inverse)
-   solved = syp.solve(equate)
+   # convert from numpy create series and then solve LU
+   # TODO: sigma function not being subsituted properly 
+   # needs looking at DOCS 
+   inverse_series = syp.Matrix(fft_inverse).LUsolve(eq_system[-1])
+   inverse_poly = inverse_series.as_poly()
+   eq_poly = eq_system[-1].as_poly()
+
+   equate = syp.Eq(eq_poly, inverse_poly).doit(deep=True)
+   solved = syp.solve(equate).doit(deep=True)
 
    tex_save = latex(solved)
    file = open("out.tex", "xt")
@@ -195,7 +199,7 @@ def output_aggregator(model, fft_layers, data):
     # normalize sumtensor, use whole training data so len(dataset)
     sumtensor = np.sum(sumtensors, axis=(1)) / db_len 
     # get only real counterpart (::2) because no complex parts here
-    return np.fft.ifftn(sumtensor)[::2]
+    return np.fft.ifftn(sumtensor)
     
 def model_create_equation(model_dir, tex_save, training_data, csv):
     # check optional args
