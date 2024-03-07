@@ -32,7 +32,7 @@ def complete_bias(shapes):
 # setup symbols for computation
 def get_poly_eqs(shapes):
     activation = syp.MatrixSymbol("x", shapes[0][0][0], shapes[0][0][1])
-    activation_fn = syp.Function("sigma")
+    activation_fn = syp.Function("s")
 
     # create neruonal activation equations
     eq_system = [activation]
@@ -70,7 +70,7 @@ def activation_fn_lookup(activ_src, csv):
 
 def subst_into_system(fft_layers, eq_system, activ_obj, shapes):
     input_symbol = syp.MatrixSymbol("x", shapes[0][0][0], shapes[0][0][1]) 
-    activation_fn = syp.Function("sigma")
+    activation_fn = syp.Function("s")
 
     for (i, layer) in enumerate(fft_layers):
         shape = shapes[i]
@@ -79,13 +79,15 @@ def subst_into_system(fft_layers, eq_system, activ_obj, shapes):
            shape[1][0], shape[1][1])
         bias_symbol = syp.MatrixSymbol("b_" + str(i), 
             shape[2][0], shape[2][1])
+        
+        from sympy.matrices.expressions import FunctionMatrix
 
         for system in eq_system[1:]:
             system.subs(weight_symbol, syp.Matrix(layer[0]))
             system.subs(bias_symbol, 
                 syp.Matrix(np.repeat(layer[1], repeats=shape[0][0], axis=0)))
-            system.subs(activation_fn, activation_fn_lookup(layer[2],
-                                 activ_obj))
+            system.subs(activation_fn, FunctionMatrix(shape[0][0], shape[1][0], 
+                  activation_fn_lookup(layer[2], activ_obj)))
     
     return eq_system
 

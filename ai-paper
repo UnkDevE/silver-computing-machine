@@ -65,8 +65,8 @@ how can we take this into our function
 
 idea: the activation function cancels terms by creating a signularity
 this is most notable with relu
-
 sol: we cancel out previous terms that the activation function cancels out, and keep a record of them
+
 so we when we Feedfoward things will be fine
 prop:
 we apply the same matrix of weights (function on the basis) to a new starting point(training batches),
