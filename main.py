@@ -53,7 +53,7 @@ def get_poly_eqs(shapes):
         biasmatrix = syp.Matrix(
             np.repeat(bias, repeats=alpha.rows, axis=1)).transpose()
 
-        eq_system.append(activation_fn(alpha + biasmatrix))
+        eq_system.append((alpha + biasmatrix).applyfunc(activation_fn))
 
     return eq_system
 
@@ -86,8 +86,7 @@ def subst_into_system(fft_layers, eq_system, activ_obj, shapes):
             system.subs(weight_symbol, syp.Matrix(layer[0]))
             system.subs(bias_symbol, 
                 syp.Matrix(np.repeat(layer[1], repeats=shape[0][0], axis=0)))
-            system.subs(activation_fn, FunctionMatrix(shape[0][0], shape[1][0], 
-                  activation_fn_lookup(layer[2], activ_obj)))
+            system.subs(activation_fn, activation_fn_lookup(layer[2], activ_obj))
     
     return eq_system
 
@@ -96,10 +95,7 @@ def evaluate_system(eq_system, fft_inverse, tex_save):
    # inverse of fourier transform is anaglogous to convergence of fourier series
    from sympy import fourier_series, solve, latex, sympify 
    
-   # convert from numpy create series and then solve LU
-   # TODO: sigma function not being subsituted properly 
-   # needs looking at DOCS 
-   inverse_series = syp.Matrix(fft_inverse).LUsolve(eq_system[-1])
+   # set as polynomials
    inverse_poly = inverse_series.as_poly()
    eq_poly = eq_system[-1].as_poly()
 
