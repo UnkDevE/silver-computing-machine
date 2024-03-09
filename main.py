@@ -3,6 +3,7 @@ from tensorflow import keras
 import tensorflow_datasets as tdfs
 
 import numpy as np
+import scipy as sci
 import sympy as syp
 import pandas
 
@@ -96,6 +97,8 @@ def evaluate_system(eq_system, fft_inverse, tex_save):
    from sympy import fourier_series, solve, latex, sympify 
    
    # set as polynomials
+   # needs to be the same 
+   inverse_series = syp.Matrix(fft_inverse)
    inverse_poly = inverse_series.as_poly()
    eq_poly = eq_system[-1].as_poly()
 
@@ -174,6 +177,7 @@ def output_aggregator(model, fft_layers, data):
     auto_condense = tf.autograph.to_graph(condense.python_function)
 
     # bucketize each feature in each label, return complete datapoints 
+    # bucketizing is failing at the moment because the labels are consumed
     sets = [dataset.filter(lambda i: 
             auto_condense([i[feature] == label for feature in features])) 
             for label in labels]
@@ -184,20 +188,21 @@ def output_aggregator(model, fft_layers, data):
       return tf.cast(image, tf.float32) / 255.
 
     # numpy array of predictions
-    sumtensors = []
-    for dataset in sets:
+    sumtensors = [[] for _ in range(len(sets))]
+    for (i, dataset) in enumerate(sets):
         # get the images
         batch = dataset.padded_batch(BATCH_SIZE, drop_remainder=True)
         # samples not normalized
         normalized = batch.map(lambda x: normalize_img(x['image']))
         for sample in normalized:
             prediction = model.predict(sample)
-            sumtensors.append(prediction)
+            sumtensors[i].append(prediction)
+
+        # normalize sumtensor, use whole batch size 
+        avgtensors = np.sum(np.array(sumtensors[i]), axis=1) / BATCH_SIZE
+        sumtensors[i] = sci.fft.ifftn(avgtensors)
         
-    # normalize sumtensor, use whole training data so len(dataset)
-    sumtensor = np.sum(sumtensors, axis=(1)) / db_len 
-    # get only real counterpart (::2) because no complex parts here
-    return np.fft.ifftn(sumtensor)
+    return sumtensors 
     
 def model_create_equation(model_dir, tex_save, training_data, csv):
     # check optional args
