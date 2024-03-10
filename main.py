@@ -51,8 +51,9 @@ def get_poly_eqs(shapes):
         # which is not useful here
         alpha = eq_system[-1] * weight
         # rows are default for each list so we have to transpose
+        # use numpy here it's quicker
         biasmatrix = syp.Matrix(
-            np.repeat(bias, repeats=alpha.rows, axis=1)).transpose()
+            np.repeat(bias, repeats=(alpha.rows), axis=1).transpose())
 
         eq_system.append((alpha + biasmatrix).applyfunc(activation_fn))
 
@@ -65,9 +66,7 @@ def activation_fn_lookup(activ_src, csv):
     for (i, acc) in enumerate(csv['activation']):
         if acc in sourcestr:
             return Lambda(in_sym, csv['function'][i])
-        else:
-            pass
-    return None
+    return Lambda(in_sym, "x=x") 
 
 def subst_into_system(fft_layers, eq_system, activ_obj, shapes):
     input_symbol = syp.MatrixSymbol("x", shapes[0][0][0], shapes[0][0][1]) 
@@ -81,8 +80,6 @@ def subst_into_system(fft_layers, eq_system, activ_obj, shapes):
         bias_symbol = syp.MatrixSymbol("b_" + str(i), 
             shape[2][0], shape[2][1])
         
-        from sympy.matrices.expressions import FunctionMatrix
-
         for system in eq_system[1:]:
             system.subs(weight_symbol, syp.Matrix(layer[0]))
             system.subs(bias_symbol, 
@@ -98,11 +95,11 @@ def evaluate_system(eq_system, fft_inverse, tex_save):
    
    # set as polynomials
    # needs to be the same 
-   inverse_series = syp.Matrix(fft_inverse)
-   inverse_poly = inverse_series.as_poly()
+   inverse_series = syp.Matrix(np.array(fft_inverse))
+   inverse_poly = inverse_series.charpoly()
    eq_poly = eq_system[-1].as_poly()
 
-   equate = syp.Eq(eq_poly, inverse_poly).doit(deep=True)
+   equate = syp.Eq(eq_poly, inverse_poly)
    solved = syp.solve(equate).doit(deep=True)
 
    tex_save = latex(solved)
@@ -156,7 +153,7 @@ def output_aggregator(model, fft_layers, data):
             for label in label_extract: 
                 if hasattr(label[feature], 'numpy') and callable(
                     getattr(label[feature], 'numpy')):
-                        labels.append(label[feature])
+                        labels.append(label[feature].numpy())
         return labels
     
     labels = label_extract(need_extract, features)
@@ -167,10 +164,10 @@ def output_aggregator(model, fft_layers, data):
 
     @tf.function
     def condense(v):
-        b = False
+        b = True 
         for i in v:
             if not i: 
-                b = True
+                b = False 
         return b
     
     # condense doesn't work as complains about python bool 
@@ -187,22 +184,44 @@ def output_aggregator(model, fft_layers, data):
     def normalize_img(image):
       return tf.cast(image, tf.float32) / 255.
 
+    len_db = [len_ds(data) for data in sets]  
+    
     # numpy array of predictions
     sumtensors = [[] for _ in range(len(sets))]
     for (i, dataset) in enumerate(sets):
+        tensor = []
         # get the images
         batch = dataset.padded_batch(BATCH_SIZE, drop_remainder=True)
         # samples not normalized
         normalized = batch.map(lambda x: normalize_img(x['image']))
         for sample in normalized:
             prediction = model.predict(sample)
-            sumtensors[i].append(prediction)
+            tensor.append(prediction)
 
         # normalize sumtensor, use whole batch size 
-        avgtensors = np.sum(np.array(sumtensors[i]), axis=1) / BATCH_SIZE
-        sumtensors[i] = sci.fft.ifftn(avgtensors)
+        # it seems to be between 0-10 not 0-1
+        avgtensors = np.sum(np.array(tensor), axis=(1,0)) / (len_db[i] * 10)
+        # this is good because it auto does 1/n here
+        sumtensors[i] = sci.fft.irfft(avgtensors.numpy(), n=len(avgtensors))
         
-    return sumtensors 
+    # What if we convolute all of the outputs together?
+    # hang fire with convolutions
+    def convolute(tensors):
+        convs = []
+        for (i, sumtensor) in enumerate(tensors):
+            target = tensors.pop(i)
+            conv = target
+
+            for tensor in tensors:
+                conv = sci.signal.convolve(target, tensor)
+        
+            # cleanup for next iter
+            tensors.insert(i, target)
+            convs.append(conv)
+        return convs
+    
+    return sumtensors
+
     
 def model_create_equation(model_dir, tex_save, training_data, csv):
     # check optional args
