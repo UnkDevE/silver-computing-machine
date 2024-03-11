@@ -1,6 +1,6 @@
 import tensorflow as tf
-from tensorflow import keras
-import tensorflow_datasets as tdfs
+from tensorflow import keras 
+import tensorflow_datasets as tdfs 
 
 import numpy as np
 import scipy as sci
@@ -17,22 +17,34 @@ tf.config.run_functions_eagerly(True)
 # do not remove forces tf.data to run eagerly
 # tf.data.experimental.enable_debug_mode()
 
+# hang fire with convolutions
+# helper might not use
+def convolute(tensors):
+    convs = []
+    for (i, sumtensor) in enumerate(tensors):
+        target = tensors.pop(i)
+        conv = target
+
+        for tensor in tensors:
+            conv = sci.signal.convolve(target, tensor)
+    
+        # cleanup for next iter
+        tensors.insert(i, target)
+        convs.append(conv)
+    return convs
+
 # helper 
 def complete_bias(shapes):
-    shapes_new = []
-    for (i, shape) in enumerate(shapes):
-        shapes_new.append([shape[0]])
-        for j in range(1, len(shape)):
-            tup = shape[j]
-            if len(tup) < 2:
-                tup = (tup[0], 1)
-            shapes_new[i].append(tup)
-
+    tup_fn = lambda tup: (tup[0], 1) if len(tup) < 2 else tup
+    shapes_new = [tup_fn(shape) for shape in shapes[:-1]]
+    # output is special
+    shapes_new.append(shapes[-1])
     return shapes_new
 
 # setup symbols for computation
 def get_poly_eqs(shapes):
-    activation = syp.MatrixSymbol("x", shapes[0][0][0], shapes[0][0][1])
+    # add start
+    activation = syp.MatrixSymbol("x", shapes[0][0], shapes[0][1])
     activation_fn = syp.Function("s")
 
     # create neruonal activation equations
@@ -40,24 +52,40 @@ def get_poly_eqs(shapes):
 
     # summate equations to get output
     from sympy.matrices import expressions
-    from sympy.vector import matrix_to_vector
     
-    for i in range(1, len(shapes)):
+    # vector multiplication because sympy doesn't do it
+    # with matricies is done by repeating the column in numpy  
+    # if not a vector it leaves it alone
+    def vecmul(vec_m, target):
+        inner = vec_m
+        if vec_m.shape[1] == 1:
+           inner = syp.Matrix(np.repeat(inner, repeats=target, axis=1))
+        return inner
+
+    from sympy.matrices.expressions import hadamard_product
+    for i in range(1, len(shapes) - 1):
         shape = shapes[i]
-        bias = syp.MatrixSymbol("b_"+ str(i), shape[2][0], shape[2][1])
-        weight = syp.MatrixSymbol("w_" + str(i), shape[1][0], shape[1][1])
+        bias = syp.MatrixSymbol("b_"+ str(i), shape[1][0], shape[1][1])
+        weight = syp.MatrixSymbol("w_" + str(i), shape[0][0], shape[0][1])
 
-        # expand vector to matrix cirumnavigating the vector module
-        # which is not useful here
-        alpha = eq_system[-1] * weight
-        # rows are default for each list so we have to transpose
-        # use numpy here it's quicker
-        biasmatrix = syp.Matrix(
-            np.repeat(bias, repeats=(alpha.rows), axis=1).transpose())
+        inner = vecmul(eq_system[-1], shape[0][1])
 
-        eq_system.append((alpha + biasmatrix).applyfunc(activation_fn))
+        # because we've made inner the same size dot doesn't work here
+        # use hadamard if same size
+        alpha = None
+        if inner.shape == weight.shape:
+            alpha = hadamard_product(inner, weight) 
+        else:
+            alpha = inner * weight 
+        bias_matrix = vecmul(bias, alpha.shape[1])              
 
-    return eq_system
+        eq_system.append((alpha + bias_matrix).applyfunc(activation_fn))
+    
+    # output shape equation
+    output = sum([column for column in eq_system[-1][i] for i in range(eq_system[-1].cols)])
+    # check if same shape as output in Keras
+    [None if x == y else throw("ShapeError") for x in output.shape for y in shape[-1]]
+    return output  
 
 def activation_fn_lookup(activ_src, csv):
     from sympy import Lambda
@@ -97,7 +125,7 @@ def evaluate_system(eq_system, fft_inverse, tex_save):
    # needs to be the same 
    inverse_series = syp.Matrix(np.array(fft_inverse))
    inverse_poly = inverse_series.charpoly()
-   eq_poly = eq_system[-1].as_poly()
+   eq_poly = eq_system[-1].as_explicit().charpoly()
 
    equate = syp.Eq(eq_poly, inverse_poly)
    solved = syp.solve(equate).doit(deep=True)
@@ -205,21 +233,7 @@ def output_aggregator(model, fft_layers, data):
         sumtensors[i] = sci.fft.irfft(avgtensors.numpy(), n=len(avgtensors))
         
     # What if we convolute all of the outputs together?
-    # hang fire with convolutions
-    def convolute(tensors):
-        convs = []
-        for (i, sumtensor) in enumerate(tensors):
-            target = tensors.pop(i)
-            conv = target
-
-            for tensor in tensors:
-                conv = sci.signal.convolve(target, tensor)
-        
-            # cleanup for next iter
-            tensors.insert(i, target)
-            convs.append(conv)
-        return convs
-    
+   
     return sumtensors
 
     
@@ -239,6 +253,17 @@ def model_create_equation(model_dir, tex_save, training_data, csv):
         from sympy import parse_expr
         shapes = []
         fft_layers = []
+        
+        def product(x):
+            out = 1
+            for y in x:
+                out *= y
+            return out 
+
+        # append input shape remove None type
+        shapes.append([product(model.input_shape[1:])])
+
+        # main wb extraction loop
         for [weights, baises, act, shape] in [
                 (layer.weights[0].numpy(), 
                     layer.weights[1].numpy(), 
@@ -249,6 +274,9 @@ def model_create_equation(model_dir, tex_save, training_data, csv):
                 act = parse_expr("x=x") 
             fft_layers.append([weights, baises, act])
             shapes.append([shape, weights.shape, baises.shape])
+
+        # append output shape
+        shapes.append([model.layers[-1].output.shape])
 
         shapes = complete_bias(shapes) 
         peq_system = get_poly_eqs(shapes)
