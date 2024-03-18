@@ -39,3 +39,4 @@ lib64
 pyvenv.cfg
 share
 stats*
+./SilverBullet/model-zoo

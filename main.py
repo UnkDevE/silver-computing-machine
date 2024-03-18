@@ -36,9 +36,11 @@ def convolute(tensors):
 # helper 
 def complete_bias(shapes):
     tup_fn = lambda tup: (tup[0], 1) if len(tup) < 2 else tup
-    shapes_new = [tup_fn(shape) for shape in shapes[:-1]]
+    shape_start = [tup_fn(shapes[0])]
+    shapes_new = [tup_fn(shape) for shape in s in shapes[:-1]]
     # output is special
-    shapes_new.append(shapes[-1])
+    shapes_start.append(shapes_new)
+    shapes_start.append(shapes[-1])
     return shapes_new
 
 # setup symbols for computation
@@ -65,21 +67,29 @@ def get_poly_eqs(shapes):
     from sympy.matrices.expressions import hadamard_product
     for i in range(1, len(shapes) - 1):
         shape = shapes[i]
-        bias = syp.MatrixSymbol("b_"+ str(i), shape[1][0], shape[1][1])
-        weight = syp.MatrixSymbol("w_" + str(i), shape[0][0], shape[0][1])
+        # 0 idx is IN shape
+        bias = syp.MatrixSymbol("b_"+ str(i), shape[2][0], shape[2][1])
+        # print(bias.shape)
+        weight = syp.MatrixSymbol("w_" + str(i), shape[1][0], shape[1][1])
 
         inner = vecmul(eq_system[-1], shape[0][1])
 
         # because we've made inner the same size dot doesn't work here
-        # use hadamard if same size
+        # use hadamard if same size and then summate 
+        # to get inner product
         alpha = None
         if inner.shape == weight.shape:
-            alpha = hadamard_product(inner, weight) 
-        else:
-            alpha = inner * weight 
-        bias_matrix = vecmul(bias, alpha.shape[1])              
+            # must have doit in here as to access columns maybe as_explicit works?
+            # it does :D
+            h_product =  hadamard_product(inner, weight).as_explicit()
+            alpha = syp.Matrix(
+                [sum([h_product[rows] for rows in range(h_product.rows)]) 
+                    for cols in range(h_product.cols)])
+        else: 
+            raise BaseException("Idunno")
 
-        eq_system.append((alpha + bias_matrix).applyfunc(activation_fn))
+        bias_matrix = vecmul(bias, alpha.shape[0])
+        eq_system.append((alpha + bias).applyfunc(activation_fn))
     
     # output shape equation
     output = sum([column for column in eq_system[-1][i] for i in range(eq_system[-1].cols)])
