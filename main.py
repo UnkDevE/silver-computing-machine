@@ -34,13 +34,19 @@ def convolute(tensors):
     return convs
 
 # helper 
-def complete_bias(shapes):
-    tup_fn = lambda tup: (tup[0], 1) if len(tup) < 2 else tup
-    shape_start = [tup_fn(shapes[0])]
-    shapes_new = [tup_fn(shape) for shape in s in shapes[:-1]]
-    # output is special
-    shapes_start.append(shapes_new)
-    shapes_start.append(shapes[-1])
+def complete_bias(shapes, targets):
+    tup_complete = lambda tup, tar: (tup[0], tar) if len(tup) < 2 else tup
+
+    shapes_new = [tup_complete(shapes[0], targets[0])]
+    for shape, target in zip(shapes[1:], targets[1:]):
+        new_shape = []
+        for (n, tuples) in enumerate(shape):
+            if n < 2:
+                new_shape.append(tup_complete(tuples, target))
+            else:
+                new_shape.append(tup_complete(tuples, targets[0]))
+        shapes_new.append(new_shape)
+        
     return shapes_new
 
 # setup symbols for computation
@@ -77,24 +83,22 @@ def get_poly_eqs(shapes):
         # because we've made inner the same size dot doesn't work here
         # use hadamard if same size and then summate 
         # to get inner product
-        alpha = None
-        if inner.shape == weight.shape:
-            # must have doit in here as to access columns maybe as_explicit works?
-            # it does :D
-            h_product =  hadamard_product(inner, weight).as_explicit()
-            alpha = syp.Matrix(
-                [sum([h_product[rows] for rows in range(h_product.rows)]) 
-                    for cols in range(h_product.cols)])
-        else: 
-            raise BaseException("Idunno")
+        # must have doit in here as to access columns maybe as_explicit works?
+        # it does :D
+        h_product =  hadamard_product(inner, weight).as_explicit()
+        alpha = syp.Matrix(
+            [sum([h_product[rows, cols] for rows in range(h_product.rows)]) 
+                for cols in range(h_product.cols)])
 
-        bias_matrix = vecmul(bias, alpha.shape[0])
-        eq_system.append((alpha + bias).applyfunc(activation_fn))
+        bias_matrix = vecmul(bias, alpha.shape[1])
+        eq_system.append((alpha + bias_matrix).applyfunc(activation_fn))
     
     # output shape equation
-    output = sum([column for column in eq_system[-1][i] for i in range(eq_system[-1].cols)])
-    # check if same shape as output in Keras
-    [None if x == y else throw("ShapeError") for x in output.shape for y in shape[-1]]
+    out_eq = eq_system[-1].as_explicit()
+    output = syp.Matrix([sum([out_eq[rows, i] for rows in range(out_eq.rows)]) 
+                            for i in range(out_eq.cols)])
+    # outputs inccorectly (1,1) out_eq is wrong (1,128)
+    print(output.shape)
     return output  
 
 def activation_fn_lookup(activ_src, csv):
@@ -284,11 +288,11 @@ def model_create_equation(model_dir, tex_save, training_data, csv):
                 act = parse_expr("x=x") 
             fft_layers.append([weights, baises, act])
             shapes.append([shape, weights.shape, baises.shape])
-
-        # append output shape
-        shapes.append([model.layers[-1].output.shape])
-
-        shapes = complete_bias(shapes) 
+        
+        targets = [1] * len(shapes)
+        # add output target
+        targets[-1] = model.output_shape[-1] 
+        shapes = complete_bias(shapes, targets) 
         peq_system = get_poly_eqs(shapes)
         # fft calculation goes through here
         inv_layers = output_aggregator(model, fft_layers, training_data)
