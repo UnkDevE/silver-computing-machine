@@ -64,42 +64,52 @@ def get_poly_eqs(shapes):
     # vector multiplication because sympy doesn't do it
     # with matricies is done by repeating the column in numpy  
     # if not a vector it leaves it alone
-    def vecmul(vec_m, target):
+    def vecmul(vec_m, target, transpose):
         inner = vec_m
         if vec_m.shape[1] == 1:
-           inner = syp.Matrix(np.repeat(inner, repeats=target, axis=1))
-        return inner
+           inner = np.repeat(inner, repeats=target, axis=1)
+           if transpose:
+               inner = inner.transpose()
+        return syp.Matrix(inner)
 
     from sympy.matrices.expressions import hadamard_product
-    for i in range(1, len(shapes) - 1):
+    for i in range(1, len(shapes)):
         shape = shapes[i]
         # 0 idx is IN shape
         bias = syp.MatrixSymbol("b_"+ str(i), shape[2][0], shape[2][1])
         # print(bias.shape)
         weight = syp.MatrixSymbol("w_" + str(i), shape[1][0], shape[1][1])
 
-        inner = vecmul(eq_system[-1], shape[0][1])
+        inner = vecmul(eq_system[-1], shape[0][1], False)
 
         # because we've made inner the same size dot doesn't work here
         # use hadamard if same size and then summate 
         # to get inner product
         # must have doit in here as to access columns maybe as_explicit works?
         # it does :D
-        h_product =  hadamard_product(inner, weight).as_explicit()
-        alpha = syp.Matrix(
-            [sum([h_product[rows, cols] for rows in range(h_product.rows)]) 
-                for cols in range(h_product.cols)])
+        alpha = None
+        if weight.shape == inner.shape:
+            alpha = hadamard_product(inner, weight).as_explicit()
+        else:
+            alpha = inner @ weight
 
-        bias_matrix = vecmul(bias, alpha.shape[1])
+        # this is too slow
+        # alpha = syp.Matrix(
+        #    [sum([h_product[rows, cols] for rows in range(h_product.rows)]) 
+        #        for rows in range(h_product.cols)])
+
+        # set transpose to true for biases
+        bias_matrix = vecmul(bias, alpha.shape[0], True)
         eq_system.append((alpha + bias_matrix).applyfunc(activation_fn))
     
     # output shape equation
-    out_eq = eq_system[-1].as_explicit()
-    output = syp.Matrix([sum([out_eq[rows, i] for rows in range(out_eq.rows)]) 
+    out_eq = eq_system[-1]
+    # this is slow
+    output = syp.Matrix([sum([out_eq[rows, i].as_exact() for rows in range(out_eq.rows)]) 
                             for i in range(out_eq.cols)])
     # outputs inccorectly (1,1) out_eq is wrong (1,128)
     print(output.shape)
-    return output  
+    return output
 
 def activation_fn_lookup(activ_src, csv):
     from sympy import Lambda

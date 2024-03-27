@@ -120,6 +120,7 @@ eigenstates for input matricies
 foruier transforms => to create human readable functions
 quanta + tunneling to find absoloute minima =>
 
+In foruier the derivative is multiplication
 minibatch selectors => HYP: 
 taking the largest distance inputs then getting smaller distances 
 until finding convergence 

@@ -17,17 +17,23 @@ using BSON
 BSON.@load model_state model
 
 using Flux, JLD2
-
 model_data = JLD2.load(model, model_state)
 
-using MLDatasets
-test = FileDataset([loadfn = FileIO.load,] test_data, pattern = "*", depth = 4)
+using MLDatasets, DataFrames
+data = FileDataset([loadfn = FileIO.load,], test_data, pattern = "*", depth = 4)
 
 # batch test into features
+features = data.metadata["feature_names"]
+
+feature_buckets = map(str -> filter(:feature = str, data), features)
+
+# predict model from buckets
+predict_features = map(fture -> model(fture), feature_buckets)
+
+# cacluate length of inverse
+grads = Flux.gradient(model) 
 
 
-# predict model
-#
-predictions = model(test)
+
 
 end # module SilverBullet
