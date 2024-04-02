@@ -5,6 +5,7 @@ import tensorflow_datasets as tdfs
 import numpy as np
 import scipy as sci
 import sympy as syp
+import sympy2c as sypc
 import pandas
 
 import sys
@@ -73,6 +74,7 @@ def get_poly_eqs(shapes):
         return syp.Matrix(inner)
 
     from sympy.matrices.expressions import hadamard_product
+    from sympy.matrices.expressions import FunctionMatrix 
     for i in range(1, len(shapes)):
         shape = shapes[i]
         # 0 idx is IN shape
@@ -87,29 +89,19 @@ def get_poly_eqs(shapes):
         # to get inner product
         # must have doit in here as to access columns maybe as_explicit works?
         # it does :D
-        alpha = None
-        if weight.shape == inner.shape:
-            alpha = hadamard_product(inner, weight).as_explicit()
-        else:
-            alpha = inner @ weight
-
-        # this is too slow
-        # alpha = syp.Matrix(
-        #    [sum([h_product[rows, cols] for rows in range(h_product.rows)]) 
-        #        for rows in range(h_product.cols)])
+        
+        alpha = weight.transpose() @ eq_system[-1] 
 
         # set transpose to true for biases
-        bias_matrix = vecmul(bias, alpha.shape[0], True)
-        eq_system.append((alpha + bias_matrix).applyfunc(activation_fn))
+        if len(shapes) == i:
+            eq_system.append((alpha + bias))
+        else:
+            Afn_matrix = FunctionMatrix(alpha.shape[0], alpha.shape[1], activation_fn)
+            eq_system.append((alpha + bias).func(Afn_matrix))
     
     # output shape equation
-    out_eq = eq_system[-1]
-    # this is slow
-    output = syp.Matrix([sum([out_eq[rows, i].as_exact() for rows in range(out_eq.rows)]) 
-                            for i in range(out_eq.cols)])
-    # outputs inccorectly (1,1) out_eq is wrong (1,128)
-    print(output.shape)
-    return output
+    eq_system[-1]
+    return eq_system
 
 def activation_fn_lookup(activ_src, csv):
     from sympy import Lambda
@@ -274,7 +266,7 @@ def model_create_equation(model_dir, tex_save, training_data, csv):
     if model != None:
         # calculate fft + shape
         from keras import backend as K
-        from sympy import parse_expr
+        from sympy.parsing.sympy_parser import parse_expr
         shapes = []
         fft_layers = []
         
@@ -324,5 +316,3 @@ please give filename of model to extract equation from""")
     else:
         print("""not enough commands, please give a filename of a model to extract, it's training dataset (which may be altered at future date)
 output for a tex file, and a csv file containing each type of acitvation used delimitered by ; (optional)""")
-
-
