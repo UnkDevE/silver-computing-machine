@@ -50,8 +50,17 @@ def complete_bias(shapes, targets):
         
     return shapes_new
 
+def activation_fn_lookup(activ_src, csv):
+    from sympy import Lambda
+    in_sym = syp.Symbol("x")
+    sourcestr = inspect.getsource(activ_src)
+    for (i, acc) in enumerate(csv['activation']):
+        if acc in sourcestr:
+            return Lambda(in_sym, csv['function'][i])
+    return Lambda(in_sym, "x=x") 
+
 # setup symbols for computation
-def get_poly_eqs(shapes):
+def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
     # add start
     activation = syp.MatrixSymbol("x", shapes[0][0], shapes[0][1])
     activation_fn = syp.Function("s")
@@ -76,6 +85,7 @@ def get_poly_eqs(shapes):
     from sympy.matrices.expressions import hadamard_product
     from sympy.matrices.expressions import FunctionMatrix 
     for i in range(1, len(shapes)):
+        layer = fft_layers[i-1]
         shape = shapes[i]
         # 0 idx is IN shape
         bias = syp.MatrixSymbol("b_"+ str(i), shape[2][0], shape[2][1])
@@ -91,45 +101,18 @@ def get_poly_eqs(shapes):
         # it does :D
         
         alpha = weight.transpose() @ eq_system[-1] 
-
+        Afn_matrix = FunctionMatrix(alpha.shape[0], alpha.shape[1], activation_fn)
         # set transpose to true for biases
         if len(shapes) == i:
             eq_system.append((alpha + bias))
         else:
-            Afn_matrix = FunctionMatrix(alpha.shape[0], alpha.shape[1], activation_fn)
             eq_system.append((alpha + bias).func(Afn_matrix))
     
-    # output shape equation
-    eq_system[-1]
-    return eq_system
-
-def activation_fn_lookup(activ_src, csv):
-    from sympy import Lambda
-    in_sym = syp.Symbol("x")
-    sourcestr = inspect.getsource(activ_src)
-    for (i, acc) in enumerate(csv['activation']):
-        if acc in sourcestr:
-            return Lambda(in_sym, csv['function'][i])
-    return Lambda(in_sym, "x=x") 
-
-def subst_into_system(fft_layers, eq_system, activ_obj, shapes):
-    input_symbol = syp.MatrixSymbol("x", shapes[0][0][0], shapes[0][0][1]) 
-    activation_fn = syp.Function("s")
-
-    for (i, layer) in enumerate(fft_layers):
-        shape = shapes[i]
-        # for each layer create seperate symbol
-        weight_symbol = syp.MatrixSymbol("w_" + str(i), 
-           shape[1][0], shape[1][1])
-        bias_symbol = syp.MatrixSymbol("b_" + str(i), 
-            shape[2][0], shape[2][1])
+        lookup = activation_fn_lookup(layer[2], activ_obj)
+        Afn_matrix.subs(([activation_fn, lookup]))
+        eq_system[-1].subs([weight, syp.Matrix(layer[0])])
+        eq_system[-1].subs([bias, syp.Matrix(layer[1])])
         
-        for system in eq_system[1:]:
-            system.subs(weight_symbol, syp.Matrix(layer[0]))
-            system.subs(bias_symbol, 
-                syp.Matrix(np.repeat(layer[1], repeats=shape[0][0], axis=0)))
-            system.subs(activation_fn, activation_fn_lookup(layer[2], activ_obj))
-    
     return eq_system
 
 # evaluate irfftn using cauchy residue theorem
@@ -295,10 +278,9 @@ def model_create_equation(model_dir, tex_save, training_data, csv):
         # add output target
         targets[-1] = model.output_shape[-1] 
         shapes = complete_bias(shapes, targets) 
-        peq_system = get_poly_eqs(shapes)
         # fft calculation goes through here
         inv_layers = output_aggregator(model, fft_layers, training_data)
-        peq_system = subst_into_system(fft_layers, peq_system, activ_obj, shapes)
+        peq_system = get_poly_eqs_subst(shapes, activ_obj, fft_layers)
         evaluate_system(peq_system, inv_layers, tex_save)
 
 if __name__=="__main__":
