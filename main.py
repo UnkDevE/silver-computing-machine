@@ -5,7 +5,6 @@ import tensorflow_datasets as tdfs
 import numpy as np
 import scipy as sci
 import sympy as syp
-import sympy2c as sypc
 import pandas
 
 import sys
@@ -20,19 +19,12 @@ tf.config.run_functions_eagerly(True)
 
 # hang fire with convolutions
 # helper might not use
-def convolute(tensors):
-    convs = []
-    for (i, sumtensor) in enumerate(tensors):
-        target = tensors.pop(i)
-        conv = target
-
-        for tensor in tensors:
-            conv = sci.signal.convolve(target, tensor)
-    
-        # cleanup for next iter
-        tensors.insert(i, target)
-        convs.append(conv)
-    return convs
+def convolute(tensors, method):
+    # use valid so that they overlap completely and our shape is scaled up 
+    conv = sci.signal.convolve(tensors[0], tensors[1], mode='valid', method=method)
+    for tensor in tensors[2:]:
+        conv = sci.signal.convolve(conv, tensor, mode='valid', method=method)
+    return conv
 
 # helper 
 def complete_bias(shapes, targets):
@@ -109,9 +101,9 @@ def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
             eq_system.append((alpha + bias).func(Afn_matrix))
     
         lookup = activation_fn_lookup(layer[2], activ_obj)
-        Afn_matrix.subs(([activation_fn, lookup]))
-        eq_system[-1].subs([weight, syp.Matrix(layer[0])])
-        eq_system[-1].subs([bias, syp.Matrix(layer[1])])
+        Afn_matrix.subs(activation_fn, lookup)
+        eq_system[-1].subs(weight, syp.Matrix(layer[0]))
+        eq_system[-1].subs(bias, syp.Matrix(layer[1]))
         
     return eq_system
 
@@ -124,7 +116,10 @@ def evaluate_system(eq_system, fft_inverse, tex_save):
    # needs to be the same 
    inverse_series = syp.Matrix(np.array(fft_inverse))
    inverse_poly = inverse_series.charpoly()
-   eq_poly = eq_system[-1].as_explicit().charpoly()
+
+   # this gives us N output neruons and N output equations in a system 
+   # however we need one equation so how do we do this?
+   eq_poly = eq_system[-1].as_explicit()
 
    equate = syp.Eq(eq_poly, inverse_poly)
    solved = syp.solve(equate).doit(deep=True)
@@ -214,7 +209,7 @@ def output_aggregator(model, fft_layers, data):
     len_db = [len_ds(data) for data in sets]  
     
     # numpy array of predictions
-    sumtensors = [[] for _ in range(len(sets))]
+    sumtensors = []
     for (i, dataset) in enumerate(sets):
         tensor = []
         # get the images
@@ -225,15 +220,16 @@ def output_aggregator(model, fft_layers, data):
             prediction = model.predict(sample)
             tensor.append(prediction)
 
-        # normalize sumtensor, use whole batch size 
-        # it seems to be between 0-10 not 0-1
-        avgtensors = np.sum(np.array(tensor), axis=(1,0)) / (len_db[i] * 10)
-        # this is good because it auto does 1/n here
-        sumtensors[i] = sci.fft.irfft(avgtensors.numpy(), n=len(avgtensors))
+        # convolute feature bucket
+        # this generalizes the feature
+        conv_tensor = convolute(tensor, 'auto') 
+        # run fourier transform 
+        ifftsor = sci.fft.irfft(conv_tensor, n=len(conv_tensor))
+        sumtensors.append(ifftsor)
         
-    # What if we convolute all of the outputs together?
-   
-    return sumtensors
+    # convolve the fourier transform
+    conv_tensor = convolute(sumtensors, 'direct')
+    return conv_tensor
 
     
 def model_create_equation(model_dir, tex_save, training_data, csv):

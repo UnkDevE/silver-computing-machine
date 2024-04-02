@@ -129,3 +129,14 @@ Once convergence is found for local minima i.e. det == 0
 find if convergable first?
 
 """
+
+main method:
+
+1) take the polynomial of the neural network modelled by symbolic computing
+2) use inverse laplace transform to create a function modelled by that taylor series
+3) this taylor series is in real domain therefore we can use inverse fourier transform
+4) if this is true then this talyor series is in fourier domain 
+5) the output is a system of equations each equation intersects one another 
+    think of this like graphing the solution of each equation and finding the intersects
+    as a convolution
+6) we set the convoluted system to the solution 
