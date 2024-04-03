@@ -18,14 +18,6 @@ tf.config.run_functions_eagerly(True)
 # tf.data.experimental.enable_debug_mode()
 
 # hang fire with convolutions
-# helper might not use
-def convolute(tensors, method):
-    # use valid so that they overlap completely and our shape is scaled up 
-    conv = sci.signal.convolve(tensors[0], tensors[1], mode='valid', method=method)
-    for tensor in tensors[2:]:
-        conv = sci.signal.convolve(conv, tensor, mode='valid', method=method)
-    return conv
-
 # helper 
 def complete_bias(shapes, targets):
     tup_complete = lambda tup, tar: (tup[0], tar) if len(tup) < 2 else tup
@@ -219,17 +211,26 @@ def output_aggregator(model, fft_layers, data):
         for sample in normalized:
             prediction = model.predict(sample)
             tensor.append(prediction)
+        sumtensors.append(tensor)
 
-        # convolute feature bucket
-        # this generalizes the feature
-        conv_tensor = convolute(tensor, 'auto') 
-        # run fourier transform 
-        ifftsor = sci.fft.irfft(conv_tensor, n=len(conv_tensor))
-        sumtensors.append(ifftsor)
-        
-    # convolve the fourier transform
-    conv_tensor = convolute(sumtensors, 'direct')
-    return conv_tensor
+    # helper function to convolve vstack
+    def convolute_signal(tensors, mode):
+        # use valid so that they overlap completely and our shape is scaled up 
+        conv = sci.ndimage.convolve(tensors[0], tensors[1], mode=mode)
+        for (i, tensor) in enumerate(tensors[2:]):
+            if i % 2 == 0:
+                conv = sci.ndimage.convolve(tensor, conv, mode=mode)
+            else:
+                conv = sci.ndimage.convolve(conv, tensor, mode=mode)
+        return conv       
+
+    # convolve the features
+    supertensor = np.vstack(sumtensors)
+    super_conv = convolute_signal(supertensor.transpose(), 'mirror')
+
+    # then inverse fourier transform
+    ifftsor = sci.fft.irfft(super_conv, n=len(super_conv))
+    return ifftsor 
 
     
 def model_create_equation(model_dir, tex_save, training_data, csv):
