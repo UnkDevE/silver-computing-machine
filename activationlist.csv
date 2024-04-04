@@ -4,5 +4,5 @@ step;Piecewise((0, x < 0), (1, x >= 1));
 logistic;1/(1+e^-x);
 tanh;e^x - e^-x/e^x+e^-x;
 smht;e^ax - e^-bx/e^cx + e^-dx;
-ReLU;Piecewise((0, x <= 0), (x, x> 0));
+relu;Piecewise((0, x <= 0), (x, x> 0));
 softplus;ln(1+e^x);

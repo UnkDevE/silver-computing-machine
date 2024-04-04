@@ -1,3 +1,14 @@
+"""
+
+Copyright 2024 Ethan Riley
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+"""
 import tensorflow as tf
 from tensorflow import keras 
 import tensorflow_datasets as tdfs 
@@ -11,18 +22,13 @@ import sys
 import os
 import inspect
 
+WEIGHT_SYMBOL = syp.Symbol("w")
+BIAS_SYMBOL = syp.Symbol("b")
 BATCH_SIZE = 1024
 
 tf.config.run_functions_eagerly(True)
 # do not remove forces tf.data to run eagerly
 # tf.data.experimental.enable_debug_mode()
-
-# normalize first
-def normalize(tensor, constant_idx):
-    constant_idx = tensor.pop(constant_idx)
-    squared = np.sqrt(sum(tensor**2))
-    tensor.append(constant_idx)
-    return map(lambda t: t / squared, tensor)
 # hang fire with convolutions
 # helper 
 def complete_bias(shapes, targets):
@@ -43,9 +49,9 @@ def complete_bias(shapes, targets):
 def activation_fn_lookup(activ_src, csv):
     from sympy import Lambda
     in_sym = syp.Symbol("x")
-    sourcestr = inspect.getsource(activ_src)
+    sourcefnc = activ_src.__name__
     for (i, acc) in enumerate(csv['activation']):
-        if acc in sourcestr:
+        if acc == sourcefnc:
             return Lambda(in_sym, csv['function'][i])
     return Lambda(in_sym, "x=x") 
 
@@ -53,36 +59,18 @@ def activation_fn_lookup(activ_src, csv):
 def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
     # add start
     activation = syp.MatrixSymbol("x", shapes[0][0], shapes[0][1])
-    activation_fn = syp.Function("s")
-
     # create neruonal activation equations
     eq_system = [activation]
 
     # summate equations to get output
-    from sympy.matrices import expressions
-    
-    # vector multiplication because sympy doesn't do it
-    # with matricies is done by repeating the column in numpy  
-    # if not a vector it leaves it alone
-    def vecmul(vec_m, target, transpose):
-        inner = vec_m
-        if vec_m.shape[1] == 1:
-           inner = np.repeat(inner, repeats=target, axis=1)
-           if transpose:
-               inner = inner.transpose()
-        return syp.Matrix(inner)
-
-    from sympy.matrices.expressions import hadamard_product
     from sympy.matrices.expressions import FunctionMatrix 
     for i in range(1, len(shapes)):
         layer = fft_layers[i-1]
         shape = shapes[i]
         # 0 idx is IN shape
-        bias = syp.MatrixSymbol("b_"+ str(i), shape[2][0], shape[2][1])
+        bias = syp.MatrixSymbol("b_" + str(i), shape[2][0], shape[2][1])
         # print(bias.shape)
         weight = syp.MatrixSymbol("w_" + str(i), shape[1][0], shape[1][1])
-
-        inner = vecmul(eq_system[-1], shape[0][1], False)
 
         # because we've made inner the same size dot doesn't work here
         # use hadamard if same size and then summate 
@@ -91,39 +79,44 @@ def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
         # it does :D
         
         alpha = weight.transpose() @ eq_system[-1] 
-        Afn_matrix = FunctionMatrix(alpha.shape[0], alpha.shape[1], activation_fn)
+        lookup = activation_fn_lookup(layer[2], activ_obj)
+        ii, jj = syp.symbols("ii,jj")
+        Afn_matrix = FunctionMatrix(alpha.shape[0], alpha.shape[1], syp.Lambda((ii, jj), 
+                    lookup(ii)))
         # set transpose to true for biases
         if len(shapes) == i:
             eq_system.append((alpha + bias))
         else:
             eq_system.append((alpha + bias).func(Afn_matrix))
     
-        lookup = activation_fn_lookup(layer[2], activ_obj)
-        Afn_matrix.subs(activation_fn, lookup)
-        eq_system[-1].subs(weight, syp.Matrix(layer[0]))
-        eq_system[-1].subs(bias, syp.Matrix(layer[1]))
+    
+        def calc_power(matrix, coeff, symbol, old):
+            matrix.subs(old, coeff * symbol ** i)
+            
+        calc_power(eq_system[-1], syp.Matrix(layer[0]), WEIGHT_SYMBOL, weight)
+        calc_power(eq_system[-1], syp.Matrix(layer[1]), BIAS_SYMBOL, bias)
         
     return eq_system
 
 # evaluate irfftn using cauchy residue theorem
-def evaluate_system(eq_system, fft_inverse, tex_save):
+def evaluate_system(eq_system, out, tex_save):
    # inverse of fourier transform is anaglogous to convergence of fourier series
    from sympy import fourier_series, solve, latex, sympify 
    
-   # set as polynomials
-   # needs to be the same 
-   inverse_series = syp.Matrix(np.array(fft_inverse))
-   inverse_poly = inverse_series.charpoly()
-
+   # set as a power series
+   eq_poly = sum(eq_system[-1].as_explicit())
+   
+   # calculate inverse fourier of output side
+   # from scipy.fft import irfft
+   # fft_inverse = irfft(output, n=len(output))
+   
    # this gives us N output neruons and N output equations in a system 
    # however we need one equation so how do we do this?
-   eq_poly = eq_system[-1].as_explicit()
-
-   equate = syp.Eq(eq_poly, inverse_poly)
+   equate = syp.Eq(eq_poly, syp.Matrix(out))
    solved = syp.solve(equate).doit(deep=True)
 
    tex_save = latex(solved)
-   file = open("out.tex", "xt")
+   file = open("out.tex", "wxt")
    file.write(tex_save)
    file.close()
 
@@ -138,19 +131,7 @@ def output_aggregator(model, fft_layers, data):
     # get label and value
     value, *features = list(list(dataset.take(1).as_numpy_iterator())[0].keys())
 
-    # this is our optimized len fn
-    @tf.function
-    def len_ds(ds):
-        length_np = 0
-        for _ in ds.map(lambda x: 1, 
-                num_parallel_calls=tf.data.AUTOTUNE, deterministic=False):
-            length_np += 1
-        return tf.cast(length_np, tf.int64)
-    
-    len_ds_auto = tf.autograph.to_graph(len_ds.python_function)
-
-    db_len = len(dataset)
-
+   
     # get types of labels
     # dataset.unique() doesn't work with uint8
     # so we remove the offending key and use it
@@ -180,8 +161,6 @@ def output_aggregator(model, fft_layers, data):
 
     # have to update cardinality each time
     # remember labels is a list due to extract
-    length = len(labels)
-
     @tf.function
     def condense(v):
         b = True 
@@ -204,8 +183,6 @@ def output_aggregator(model, fft_layers, data):
     def normalize_img(image):
       return tf.cast(image, tf.float32) / 255.
 
-    len_db = [len_ds(data) for data in sets]  
-    
     # numpy array of predictions
     sumtensors = []
     for (i, dataset) in enumerate(sets):
@@ -216,26 +193,24 @@ def output_aggregator(model, fft_layers, data):
         normalized = batch.map(lambda x: normalize_img(x['image']))
         for sample in normalized:
             prediction = model.predict(sample)
-            tensor.append(np.sum(prediction, axis=0) / prediction.shape[0])
+            # divide by 10 because output is in form n instead of 1\n
+            tensor.append(np.sum(prediction, axis=0) / prediction.shape[0] / 10)
         # take avg and append
         sumtensors.append(np.sum(tensor, axis=0) / len(tensor))
 
-    # convolve the features
-    supertensor = np.vstack(sumtensors)
-    
-   # put planes in hessian
+    # assume planes in hessian
     def hyperplane_intersect(ta, tb):
         # assume normalized
         # so as ta and tb are bases so we have to calcualate vectors        
         # both are in abs form so we can take diff
         # we then set theta 
-        amat = np.asarray([ta,tb])
+        amat = np.asarray([ta.transpose(),tb.transpose()])
         b = np.abs(ta - tb)
-        theta = np.arccos(ta.transpose(), tb)
+        theta = np.arccos(ta.transpose()*tb)
 
         if np.sin(theta).any(0):
             # vectors are colinear so throw soft error to be dealt with later
-            if ta.all(tb) : return ta
+            if np.all([ta, tb]) : return ta
             raise BaseException("vectors are colinear")
  
         xln = amat.transpose() * sci.linalg.inv(amat * amat.transpose()) * b
@@ -250,8 +225,9 @@ def output_aggregator(model, fft_layers, data):
         tensorsect = hyperplane_intersect(tensorsect, tensor)
 
     # then inverse fourier transform
-    ifftsor = sci.fft.irfft(tensorsect, n=len(tensorsect))
-    return ifftsor 
+    # ifftsor = sci.fft.irfft(tensorsect, n=len(tensorsect))
+    # return ifftsor 
+    return tensorsect
 
     
 def model_create_equation(model_dir, tex_save, training_data, csv):
