@@ -63,7 +63,6 @@ def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
     eq_system = [activation]
 
     # summate equations to get output
-    from sympy.matrices.expressions import FunctionMatrix 
     for i in range(1, len(shapes)):
         layer = fft_layers[i-1]
         shape = shapes[i]
@@ -80,21 +79,21 @@ def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
         
         alpha = weight.transpose() @ eq_system[-1] 
         lookup = activation_fn_lookup(layer[2], activ_obj)
-        ii, jj = syp.symbols("ii,jj")
-        Afn_matrix = FunctionMatrix(alpha.shape[0], alpha.shape[1], syp.Lambda((ii, jj), 
-                    lookup(ii)))
-        # set transpose to true for biases
+        
+        # if at end of list don't apply activation fn
         if len(shapes) == i:
-            eq_system.append((alpha + bias))
+            eq_system.append(alpha + bias)
         else:
-            eq_system.append((alpha + bias).func(Afn_matrix))
+            eq_system.append((alpha + bias).applyfunc(lookup))
     
     
         def calc_power(matrix, coeff, symbol, old):
-            matrix.subs(old, coeff * symbol ** i)
+            # massive bottleneck here
+            # matrix = matrix.as_explicit()
+            return matrix.subs(old, coeff * symbol ** i)
             
-        calc_power(eq_system[-1], syp.Matrix(layer[0]), WEIGHT_SYMBOL, weight)
-        calc_power(eq_system[-1], syp.Matrix(layer[1]), BIAS_SYMBOL, bias)
+        eq_system[-1] = calc_power(eq_system[-1], syp.Matrix(layer[0]), WEIGHT_SYMBOL, weight)
+        eq_system[-1] = calc_power(eq_system[-1], syp.Matrix(layer[1]), BIAS_SYMBOL, bias)
         
     return eq_system
 
@@ -112,11 +111,16 @@ def evaluate_system(eq_system, out, tex_save):
    
    # this gives us N output neruons and N output equations in a system 
    # however we need one equation so how do we do this?
-   equate = syp.Eq(eq_poly, syp.Matrix(out))
-   solved = syp.solve(equate).doit(deep=True)
+   solved = syp.solve(eq_poly, out).doit(deep=True)
 
    tex_save = latex(solved)
-   file = open("out.tex", "wxt")
+
+   import os.path
+   file = None
+   if os.path.isfile("out.tex"):
+       file = open("out.tex", "wt")
+   else:
+       file = open("out.tex", "xt")
    file.write(tex_save)
    file.close()
 
