@@ -17,6 +17,12 @@ tf.config.run_functions_eagerly(True)
 # do not remove forces tf.data to run eagerly
 # tf.data.experimental.enable_debug_mode()
 
+# normalize first
+def normalize(tensor, constant_idx):
+    constant_idx = tensor.pop(constant_idx)
+    squared = np.sqrt(sum(tensor**2))
+    tensor.append(constant_idx)
+    return map(lambda t: t / squared, tensor)
 # hang fire with convolutions
 # helper 
 def complete_bias(shapes, targets):
@@ -210,26 +216,41 @@ def output_aggregator(model, fft_layers, data):
         normalized = batch.map(lambda x: normalize_img(x['image']))
         for sample in normalized:
             prediction = model.predict(sample)
-            tensor.append(prediction)
-        sumtensors.append(tensor)
-
-    # helper function to convolve vstack
-    def convolute_signal(tensors, mode):
-        # use valid so that they overlap completely and our shape is scaled up 
-        conv = sci.ndimage.convolve(tensors[0], tensors[1], mode=mode)
-        for (i, tensor) in enumerate(tensors[2:]):
-            if i % 2 == 0:
-                conv = sci.ndimage.convolve(tensor, conv, mode=mode)
-            else:
-                conv = sci.ndimage.convolve(conv, tensor, mode=mode)
-        return conv       
+            tensor.append(np.sum(prediction, axis=0) / prediction.shape[0])
+        # take avg and append
+        sumtensors.append(np.sum(tensor, axis=0) / len(tensor))
 
     # convolve the features
     supertensor = np.vstack(sumtensors)
-    super_conv = convolute_signal(supertensor.transpose(), 'mirror')
+    
+   # put planes in hessian
+    def hyperplane_intersect(ta, tb):
+        # assume normalized
+        # so as ta and tb are bases so we have to calcualate vectors        
+        # both are in abs form so we can take diff
+        # we then set theta 
+        amat = np.asarray([ta,tb])
+        b = np.abs(ta - tb)
+        theta = np.arccos(ta.transpose(), tb)
+
+        if np.sin(theta).any(0):
+            # vectors are colinear so throw soft error to be dealt with later
+            if ta.all(tb) : return ta
+            raise BaseException("vectors are colinear")
+ 
+        xln = amat.transpose() * sci.linalg.inv(amat * amat.transpose()) * b
+       
+        from scipy.linalg import null_space
+        nulls = null_space(amat)        
+        return xln + nulls
+    
+    # find intersects
+    tensorsect = hyperplane_intersect(sumtensors[0], sumtensors[1])
+    for tensor in sumtensors[2:]:
+        tensorsect = hyperplane_intersect(tensorsect, tensor)
 
     # then inverse fourier transform
-    ifftsor = sci.fft.irfft(super_conv, n=len(super_conv))
+    ifftsor = sci.fft.irfft(tensorsect, n=len(tensorsect))
     return ifftsor 
 
     

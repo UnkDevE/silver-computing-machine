@@ -137,6 +137,6 @@ main method:
 3) this taylor series is in real domain therefore we can use inverse fourier transform
 4) if this is true then this talyor series is in fourier domain 
 5) the output is a system of equations each equation intersects one another 
-    think of this like graphing the solution of each equation and finding the intersects
-    as a convolution
-6) we set the convoluted system to the solution 
+    this can be done using linear algebra at this point
+
+6) we then inverse fourier the outpur 
