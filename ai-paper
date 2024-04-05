@@ -138,5 +138,5 @@ main method:
 4) if this is true then this talyor series is in fourier domain 
 5) the output is a system of equations each equation intersects one another 
     this can be done using linear algebra at this point
-
-6) we then inverse fourier the outpur 
+6) we then inverse fourier both the equation and output
+7) we set the solver to solve this equation

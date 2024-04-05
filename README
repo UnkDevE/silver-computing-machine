@@ -1,0 +1,16 @@
+# What this project does
+Given a Tensorflow network and a dataset it converts the neural network into a human readable Math function
+Currently I have only tested this on MNIST, it is slow and so I'm writing a julia clone to work on the GPU
+possiblity for C/C++ translation is on the cards too.
+
+
+The main idea on this project is that:
+A nerual network can be converted into a polynomial with weights and basies as coefficients
+this polynomial is massive and can be seen as a power series, so if we inverse laplace the series
+we get a readable function.
+
+Laplace is slow *however* because there are no complex planes in the equations (we're not using i here)
+so we can use an inverse fourier transform for the equation speeding it up condiserably
+we then set sympy to solve this output and put it in a tex file
+
+
