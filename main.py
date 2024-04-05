@@ -22,7 +22,7 @@ import sys
 import os
 import inspect
 
-WEIGHT_SYMBOL = syp.Symbol("w")
+INPUT_SYMBOL = syp.Symbol("x")
 BIAS_SYMBOL = syp.Symbol("b")
 BATCH_SIZE = 1024
 
@@ -57,27 +57,37 @@ def activation_fn_lookup(activ_src, csv):
 
 # setup symbols for computation
 def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
-    # add start
-    activation = syp.MatrixSymbol("x", shapes[0][0], shapes[0][1])
-    # create neruonal activation equations
-    eq_system = [activation]
+
+    from numpy import empty, ndindex
+    # pre generates a matrix with symbols in
+    def calc_expr(coeff, symbol, i):
+        from sympy import sympify
+        # nabbed from sympy source and edited for use case
+        arr = empty(coeff.shape, dtype=object)
+        for index in ndindex(coeff.shape):
+            arr[index] = sympify(coeff[index]) * symbol ** i
+        return syp.Matrix(arr)
+
+    # add input 
+    x_input = empty(shapes[0], dtype=object)
+    for index in ndindex(shapes[0]):
+        x_input[index] = INPUT_SYMBOL
+    # to system 
+    eq_system = [x_input]
 
     # summate equations to get output
     for i in range(1, len(shapes)):
         layer = fft_layers[i-1]
         shape = shapes[i]
-        # 0 idx is IN shape
-        bias = syp.MatrixSymbol("b_" + str(i), shape[2][0], shape[2][1])
-        # print(bias.shape)
-        weight = syp.MatrixSymbol("w_" + str(i), shape[1][0], shape[1][1])
 
-        # because we've made inner the same size dot doesn't work here
-        # use hadamard if same size and then summate 
-        # to get inner product
-        # must have doit in here as to access columns maybe as_explicit works?
-        # it does :D
-        
+        # get our matrix exprs 
+        weight = calc_expr(syp.Matrix(layer[0]), INPUT_SYMBOL, i)
+        bias = calc_expr(syp.Matrix(layer[1]), BIAS_SYMBOL, i)
+ 
+        # dot product transpose shapes to work correctly
         alpha = weight.transpose() @ eq_system[-1] 
+        
+        # lookup the activation function 
         lookup = activation_fn_lookup(layer[2], activ_obj)
         
         # if at end of list don't apply activation fn
@@ -85,16 +95,7 @@ def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
             eq_system.append(alpha + bias)
         else:
             eq_system.append((alpha + bias).applyfunc(lookup))
-    
-    
-        def calc_power(matrix, coeff, symbol, old):
-            # massive bottleneck here
-            # matrix = matrix.as_explicit()
-            return matrix.subs(old, coeff * symbol ** i)
-            
-        eq_system[-1] = calc_power(eq_system[-1], syp.Matrix(layer[0]), WEIGHT_SYMBOL, weight)
-        eq_system[-1] = calc_power(eq_system[-1], syp.Matrix(layer[1]), BIAS_SYMBOL, bias)
-        
+       
     return eq_system
 
 # evaluate irfftn using cauchy residue theorem
@@ -103,15 +104,18 @@ def evaluate_system(eq_system, out, tex_save):
    from sympy import fourier_series, solve, latex, sympify 
    
    # set as a power series
-   eq_poly = sum(eq_system[-1].as_explicit())
+   eq_poly = sum(eq_system[-1])
    
    # calculate inverse fourier of output side
-   # from scipy.fft import irfft
-   # fft_inverse = irfft(output, n=len(output))
+   from scipy.fft import irfft
+   fft_inverse = irfft(out, n=len(out))
+   
+   from sympy import inverse_fourier_transform
+   inv = inverse_fourier_transform(eq_poly, INPUT_SYMBOL, BIAS_SYMBOL)
    
    # this gives us N output neruons and N output equations in a system 
    # however we need one equation so how do we do this?
-   solved = syp.solve(eq_poly, out).doit(deep=True)
+   solved = syp.solve(inv, fft_inverse).doit(deep=True)
 
    tex_save = latex(solved)
 
