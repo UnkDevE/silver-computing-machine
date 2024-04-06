@@ -2,7 +2,7 @@ tf-nightly
 tensorflow_datasets
 scipy
 numpy
-sympy2c
+lcapy
 sympy
 pandas
 matplotlib

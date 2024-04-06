@@ -99,36 +99,45 @@ def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
     return eq_system
 
 # evaluate irfftn using cauchy residue theorem
-def evaluate_system(eq_system, out, tex_save):
-   # inverse of fourier transform is anaglogous to convergence of fourier series
-   from sympy import fourier_series, solve, latex, sympify 
-   
-   # set as a power series
-   eq_poly = sum(eq_system[-1])
-   
-   # calculate inverse fourier of output side
-   from scipy.fft import irfft
-   fft_inverse = irfft(out, n=len(out))
-   
-   from sympy import inverse_fourier_transform
-   inv = inverse_fourier_transform(eq_poly, INPUT_SYMBOL, BIAS_SYMBOL)
-   
-   # this gives us N output neruons and N output equations in a system 
-   # however we need one equation so how do we do this?
-   solved = syp.solve(inv, fft_inverse).doit(deep=True)
+def evaluate_system(shapes, eq_system, out, tex_save):
+    # inverse of fourier transform is anaglogous to convergence of fourier series
+    from sympy import fourier_series, solve, latex, sympify 
 
-   tex_save = latex(solved)
+    # set as a power series
+    eq_poly = sum(eq_system[-1])
 
-   import os.path
-   file = None
-   if os.path.isfile("out.tex"):
-       file = open("out.tex", "wt")
-   else:
-       file = open("out.tex", "xt")
-   file.write(tex_save)
-   file.close()
+    # calculate inverse fourier of output side
+    from scipy.fft import irfft
+    fft_inverse = irfft(out, n=len(out))
 
-   print("eq solved")
+    # calculate the limit
+    from sympy.series.limitseq import limit_seq
+
+    def get_len(shapes):
+        l = shapes[0][0] * shapes[0][1] 
+        for shape in shapes[1:]:
+            l += shape[0][0] * shape[0][1]
+        return l
+    
+    inf_poly = limit_seq(eq_poly, n=get_len(shapes))
+    inf_poly = inf_poly.cancel()
+    inf_poly = inf_poly.simplify()
+    # this gives us N output neruons and N output equations in a system 
+    # however we need one equation so how do we do this?
+    solved = syp.solve(inf_poly, fft_inverse).doit(deep=True)
+
+    tex_save = latex(solved)
+
+    import os.path
+    file = None
+    if os.path.isfile("out.tex"):
+        file = open("out.tex", "wt")
+    else:
+        file = open("out.tex", "xt")
+    file.write(tex_save)
+    file.close()
+
+    print("eq solved")
 
 
 def output_aggregator(model, fft_layers, data):
@@ -268,7 +277,7 @@ def model_create_equation(model_dir, tex_save, training_data, csv):
         for [weights, baises, act, shape] in [
                 (layer.weights[0].numpy(), 
                     layer.weights[1].numpy(), 
-                        layer.activation, layer.kernel.shape)
+                        layer.activation, layer.kernel.shape.as_list())
                           for layer in model.layers if len(layer.weights) > 1]:
             # if no activation assume linear
             if act == None:
@@ -283,7 +292,7 @@ def model_create_equation(model_dir, tex_save, training_data, csv):
         # fft calculation goes through here
         inv_layers = output_aggregator(model, fft_layers, training_data)
         peq_system = get_poly_eqs_subst(shapes, activ_obj, fft_layers)
-        evaluate_system(peq_system, inv_layers, tex_save)
+        evaluate_system(shapes, peq_system, inv_layers, tex_save)
 
 if __name__=="__main__":
     if len(sys.argv) > 2:
