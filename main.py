@@ -19,11 +19,11 @@
 # list of activation functions
 ACTIVATION_LIST = """activation;function;
 linear;x;
-step;piecewise([(0, x < 0), (1, x >= 1)]);
+step;heaviside(x)
 logistic;1/(1+e^-x);
 tanh;e^x - e^-x/e^x+e^-x;
 smht;e^ax - e^-bx/e^cx + e^-dx;
-relu;piecewise([(0, x <= 0), (x, x> 0)]);
+relu;max_symbolic(0,x);
 softplus;ln(1+e^x);
 """
 import tensorflow as tf
@@ -34,7 +34,8 @@ import numpy as np
 import scipy as sci
 import pandas
 import sage
-from sage.all import var
+#bit lazy but heyho 
+from sage.all import *
 
 import sys
 import os
@@ -78,30 +79,34 @@ def complete_bias(shapes, targets):
     return shapes_new
 
 def activation_fn_lookup(activ_src, csv):
-    from sage.misc.parser import Parser
-    parse = Parser()
     sourcefnc = activ_src.__name__
     for (i, acc) in enumerate(csv['activation']):
         if acc == sourcefnc:
-            return parser.parse(csv['function'][i])
-    return parser.parse(csv['activation']['linear'])
+            return eval(csv['function'][i])
+    return eval(csv['function']['linear'])
 
 def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
     from numpy import empty, ndindex
-    from sage.all import Matrix
+    from sage.matrix.constructor import matrix
+    from sage.all import vector
+
     # pre generates a matrix with symbols in
     def calc_expr(coeff, symbol, i):
         # nabbed from sympy source and edited for use case
         arr = empty(coeff.shape, dtype=object)
         for index in ndindex(coeff.shape):
             arr[index] = coeff[index] * symbol ** i
-        return matrix(arr)
+        # if not werid tuple shaping
+        if len(list(coeff.shape)) != 1:
+            return matrix(arr)
+        else:
+            return vector(list(arr))
 
     x_input = empty(shapes[0], dtype=object)
     for index in ndindex(shapes[0]):
         x_input[index] = INPUT_SYMBOL
     # to system 
-    eq_system = [matrix(x_input)]
+    eq_system = [vector(x_input.flatten())]
 
     # summate equations to get output
     for i in range(1, len(shapes)):
@@ -113,7 +118,7 @@ def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
         bias = calc_expr(layer[1], BIAS_SYMBOL, i)
  
         # dot product transpose shapes to work correctly
-        alpha = weight.transpose() @ eq_system[-1] 
+        alpha = eq_system[-1] * weight
         
         # lookup the activation function 
         lookup = activation_fn_lookup(layer[2], activ_obj)
@@ -122,7 +127,7 @@ def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
         if len(shapes) == i:
             eq_system.append(alpha + bias)
         else:
-            eq_system.append((alpha + bias).applyfunc(lookup))
+            eq_system.append((alpha + bias).apply_map(lambda x: lookup(x=x)))
        
     return eq_system
 
