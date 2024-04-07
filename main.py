@@ -29,6 +29,19 @@ BATCH_SIZE = 1024
 tf.config.run_functions_eagerly(True)
 # do not remove forces tf.data to run eagerly
 # tf.data.experimental.enable_debug_mode()
+
+# saver function helper
+def save(filename, write):
+    import os.path
+    file = None
+    if os.path.isfile(filename):
+        file = open(filename, "wt")
+    else:
+        file = open(filename, "xt")
+    file.write(write)
+    file.close()
+
+
 # hang fire with convolutions
 # helper 
 def complete_bias(shapes, targets):
@@ -121,24 +134,21 @@ def evaluate_system(shapes, eq_system, out, tex_save):
     
     inf_poly = limit_seq(eq_poly, n=get_len(shapes))
     inf_poly = inf_poly.cancel()
-    inf_poly = inf_poly.simplify()
+
+    from sympy.utilities.codegen import codegen
+    [(c_name, c_code), (h_name, c_header)] = codegen(("nn", inf_poly), "C99", 
+             "nn_test", header=False, empty=False)
     # this gives us N output neruons and N output equations in a system 
     # however we need one equation so how do we do this?
-    solved = syp.solve(inf_poly, fft_inverse).doit(deep=True)
-
+    
+    save(c_name, c_code)
+    save(h_name, c_header)
+    
+    """
+    solved = syp.solve(inf_poly, fft_inverse, INPUT_SYMBOL).doit(deep=True)
     tex_save = latex(solved)
-
-    import os.path
-    file = None
-    if os.path.isfile("out.tex"):
-        file = open("out.tex", "wt")
-    else:
-        file = open("out.tex", "xt")
-    file.write(tex_save)
-    file.close()
-
     print("eq solved")
-
+    """
 
 def output_aggregator(model, fft_layers, data):
     from functools import reduce
