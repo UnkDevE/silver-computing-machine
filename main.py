@@ -1,13 +1,30 @@
 """
+    SILVER-COMPUTING-MACHINE converts Nerual nets into human readable code or maths 
+    Copyright (C) 2024 Ethan Riley 
 
-Copyright 2024 Ethan Riley
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
 
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+"""
 
-THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
+# list of activation functions
+ACTIVATION_LIST = """activation;function;
+linear;x;
+step;piecewise([(0, x < 0), (1, x >= 1)]);
+logistic;1/(1+e^-x);
+tanh;e^x - e^-x/e^x+e^-x;
+smht;e^ax - e^-bx/e^cx + e^-dx;
+relu;piecewise([(0, x <= 0), (x, x> 0)]);
+softplus;ln(1+e^x);
 """
 import tensorflow as tf
 from tensorflow import keras 
@@ -15,15 +32,16 @@ import tensorflow_datasets as tdfs
 
 import numpy as np
 import scipy as sci
-import sympy as syp
 import pandas
+import sage
+from sage.all import var
 
 import sys
 import os
 import inspect
 
-INPUT_SYMBOL = syp.Symbol("x")
-BIAS_SYMBOL = syp.Symbol("b")
+INPUT_SYMBOL = var("x")
+BIAS_SYMBOL = var("b")
 BATCH_SIZE = 1024
 
 tf.config.run_functions_eagerly(True)
@@ -60,33 +78,30 @@ def complete_bias(shapes, targets):
     return shapes_new
 
 def activation_fn_lookup(activ_src, csv):
-    from sympy import Lambda
-    in_sym = syp.Symbol("x")
+    from sage.misc.parser import Parser
+    parse = Parser()
     sourcefnc = activ_src.__name__
     for (i, acc) in enumerate(csv['activation']):
         if acc == sourcefnc:
-            return Lambda(in_sym, csv['function'][i])
-    return Lambda(in_sym, "x=x") 
+            return parser.parse(csv['function'][i])
+    return parser.parse(csv['activation']['linear'])
 
-# setup symbols for computation
 def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
-
     from numpy import empty, ndindex
+    from sage.all import Matrix
     # pre generates a matrix with symbols in
     def calc_expr(coeff, symbol, i):
-        from sympy import sympify
         # nabbed from sympy source and edited for use case
         arr = empty(coeff.shape, dtype=object)
         for index in ndindex(coeff.shape):
-            arr[index] = sympify(coeff[index]) * symbol ** i
-        return syp.Matrix(arr)
+            arr[index] = coeff[index] * symbol ** i
+        return matrix(arr)
 
-    # add input 
     x_input = empty(shapes[0], dtype=object)
     for index in ndindex(shapes[0]):
         x_input[index] = INPUT_SYMBOL
     # to system 
-    eq_system = [x_input]
+    eq_system = [matrix(x_input)]
 
     # summate equations to get output
     for i in range(1, len(shapes)):
@@ -94,8 +109,8 @@ def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
         shape = shapes[i]
 
         # get our matrix exprs 
-        weight = calc_expr(syp.Matrix(layer[0]), INPUT_SYMBOL, i)
-        bias = calc_expr(syp.Matrix(layer[1]), BIAS_SYMBOL, i)
+        weight = calc_expr(layer[0], INPUT_SYMBOL, i)
+        bias = calc_expr(layer[1], BIAS_SYMBOL, i)
  
         # dot product transpose shapes to work correctly
         alpha = weight.transpose() @ eq_system[-1] 
@@ -111,6 +126,15 @@ def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
        
     return eq_system
 
+def evaluate_system(shapes, eq_system, out, tex_save):
+    # set as a power series
+    eq_poly = sum(eq_system[-1])
+    # calculate inverse fourier of output side
+    from scipy.fft import irfft
+    fft_inverse = irfft(out, n=len(out))
+    pass
+
+"""
 # evaluate irfftn using cauchy residue theorem
 def evaluate_system(shapes, eq_system, out, tex_save):
     # inverse of fourier transform is anaglogous to convergence of fourier series
@@ -135,20 +159,13 @@ def evaluate_system(shapes, eq_system, out, tex_save):
     inf_poly = limit_seq(eq_poly, n=get_len(shapes))
     inf_poly = inf_poly.cancel()
 
-    from sympy.utilities.codegen import codegen
-    [(c_name, c_code), (h_name, c_header)] = codegen(("nn", inf_poly), "C99", 
-             "nn_test", header=False, empty=False)
-    # this gives us N output neruons and N output equations in a system 
-    # however we need one equation so how do we do this?
-    
-    save(c_name, c_code)
-    save(h_name, c_header)
-    
-    """
+    from sympy import srepr
+    save("nn_poly", srepr(inf_poly))
+
     solved = syp.solve(inf_poly, fft_inverse, INPUT_SYMBOL).doit(deep=True)
     tex_save = latex(solved)
     print("eq solved")
-    """
+"""
 
 def output_aggregator(model, fft_layers, data):
     from functools import reduce
@@ -259,11 +276,8 @@ def output_aggregator(model, fft_layers, data):
     
 def model_create_equation(model_dir, tex_save, training_data, csv):
     # check optional args
-    if csv == None:
-        path = os.path.dirname(__file__)
-        csv = os.path.join(path, "./activationlist.csv")
-
-    activ_obj = pandas.read_csv(csv, delimiter=';')
+    from io import StringIO
+    activ_obj = pandas.read_csv(StringIO(ACTIVATION_LIST), delimiter=';')
 
     # create prequesties
     model = tf.keras.models.load_model(model_dir)
@@ -307,8 +321,9 @@ def model_create_equation(model_dir, tex_save, training_data, csv):
 if __name__=="__main__":
     if len(sys.argv) > 2:
         path = os.path.dirname(__file__)
+        model = os.path.join(path, sys.argv[1]) 
         try:
-            model = os.path.join(path, sys.argv[1])
+            print(os.path.abspath(model))
             if len(sys.argv) > 4:
                 model_create_equation(os.path.abspath(model), sys.argv[3], sys.argv[2], sys.argv[4])
             else:
