@@ -23,7 +23,7 @@ step;heaviside(x)
 logistic;1/(1+e^-x);
 tanh;e^x - e^-x/e^x+e^-x;
 smht;e^ax - e^-bx/e^cx + e^-dx;
-relu;max_symbolic(0,x);
+relu;x>0;
 softplus;ln(1+e^x);
 """
 import tensorflow as tf
@@ -34,15 +34,14 @@ import numpy as np
 import scipy as sci
 import pandas
 import sage
-#bit lazy but heyho 
-from sage.all import *
+from sage.all import var, heaviside
 
 import sys
 import os
 import inspect
 
+
 INPUT_SYMBOL = var("x")
-BIAS_SYMBOL = var("b")
 BATCH_SIZE = 1024
 
 tf.config.run_functions_eagerly(True)
@@ -91,11 +90,14 @@ def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
     from sage.all import vector
 
     # pre generates a matrix with symbols in
-    def calc_expr(coeff, symbol, i):
+    def calc_expr(coeff, symbol):
+        # if bias
+        if symbol == None:
+            return vector(list(coeff))
         # nabbed from sympy source and edited for use case
         arr = empty(coeff.shape, dtype=object)
         for index in ndindex(coeff.shape):
-            arr[index] = coeff[index] * symbol ** i
+            arr[index] = coeff[index] * symbol 
         # if not werid tuple shaping
         if len(list(coeff.shape)) != 1:
             return matrix(arr)
@@ -114,8 +116,8 @@ def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
         shape = shapes[i]
 
         # get our matrix exprs 
-        weight = calc_expr(layer[0], INPUT_SYMBOL, i)
-        bias = calc_expr(layer[1], BIAS_SYMBOL, i)
+        weight = calc_expr(layer[0], INPUT_SYMBOL)
+        bias = calc_expr(layer[1], None)
  
         # dot product transpose shapes to work correctly
         alpha = eq_system[-1] * weight
@@ -131,12 +133,28 @@ def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
        
     return eq_system
 
+
+# recursive flatten 
+def flatten(S):
+    if S == []:
+        return S
+    if isinstance(S[0], list):
+        return flatten(S[0]) + flatten(S[1:])
+    return S[:1] + flatten(S[1:])
+    
+    
 def evaluate_system(shapes, eq_system, out, tex_save):
     # set as a power series
-    eq_poly = sum(eq_system[-1])
-    # calculate inverse fourier of output side
-    from scipy.fft import irfft
-    fft_inverse = irfft(out, n=len(out))
+    from sage.symbolic.relation import solve_ineq_univar, solve_ineq_fourier
+
+    ineqsols = []
+    for eq_poly in eq_system[1:]:
+        for (i, eq) in enumerate(eq_poly):
+            solved = solve_ineq_univar(eq)
+            ineqsols.append(solved)
+
+    # this is too slow! took more than 2 hrs
+    inequals = solve_ineq_fourier(ineq=flatten(ineqsols), vars=[INPUT_SYMBOL])
     pass
 
 """
@@ -247,36 +265,7 @@ def output_aggregator(model, fft_layers, data):
         # take avg and append
         sumtensors.append(np.sum(tensor, axis=0) / len(tensor))
 
-    # assume planes in hessian
-    def hyperplane_intersect(ta, tb):
-        # assume normalized
-        # so as ta and tb are bases so we have to calcualate vectors        
-        # both are in abs form so we can take diff
-        # we then set theta 
-        amat = np.asarray([ta.transpose(),tb.transpose()])
-        b = np.abs(ta - tb)
-        theta = np.arccos(ta.transpose()*tb)
-
-        if np.sin(theta).any(0):
-            # vectors are colinear so throw soft error to be dealt with later
-            if np.all([ta, tb]) : return ta
-            raise BaseException("vectors are colinear")
- 
-        xln = amat.transpose() * sci.linalg.inv(amat * amat.transpose()) * b
-       
-        from scipy.linalg import null_space
-        nulls = null_space(amat)        
-        return xln + nulls
-    
-    # find intersects
-    tensorsect = hyperplane_intersect(sumtensors[0], sumtensors[1])
-    for tensor in sumtensors[2:]:
-        tensorsect = hyperplane_intersect(tensorsect, tensor)
-
-    # then inverse fourier transform
-    # ifftsor = sci.fft.irfft(tensorsect, n=len(tensorsect))
-    # return ifftsor 
-    return tensorsect
+    return sumtensors 
 
     
 def model_create_equation(model_dir, tex_save, training_data, csv):

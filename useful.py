@@ -27,3 +27,29 @@ def normalize(tensor, constant_idx):
     tensor.append(constant_idx)
     return map(lambda t: t / squared, tensor)
 #
+# assume planes in hessian
+def hyperplane_intersect(ta, tb):
+    # assume normalized
+    # so as ta and tb are bases so we have to calcualate vectors        
+    # both are in abs form so we can take diff
+    # we then set theta 
+    amat = np.asarray([ta.transpose(),tb.transpose()])
+    b = np.abs(ta - tb)
+    theta = np.arccos(ta.transpose()*tb)
+
+    if np.sin(theta).any(0):
+        # vectors are colinear so throw soft error to be dealt with later
+        if np.all([ta, tb]) : return ta
+        raise BaseException("vectors are colinear")
+
+    xln = amat.transpose() * sci.linalg.inv(amat * amat.transpose()) * b
+   
+    from scipy.linalg import null_space
+    nulls = null_space(amat)        
+    return xln + nulls
+
+# find intersects
+tensorsect = hyperplane_intersect(sumtensors[0], sumtensors[1])
+for tensor in sumtensors[2:]:
+    tensorsect = hyperplane_intersect(tensorsect, tensor)
+
