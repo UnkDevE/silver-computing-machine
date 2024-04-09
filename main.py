@@ -144,19 +144,36 @@ def flatten(S):
     
     
 def evaluate_system(shapes, eq_system, out, tex_save):
+    # seperate real and imaginary because sage throws
+    # type error went converting
+    # so this is a workaround
+    def simplify_sep_reim(eq):
+        from sage.all import i
+        from sage.misc.sage_eval import sage_eval 
+
+        real = eq.real()
+        imag = eq.imag()
+
+        real = str(real).replace("realpart","")
+        imag = str(imag).replace("imagpart","")
+
+        return sage_eval(real, locals={'x':INPUT_SYMBOL}) + i * sage_eval(imag, 
+                locals={'x':INPUT_SYMBOL})
+
     # set as a power series
-    from sage.symbolic.relation import solve_ineq_univar, solve_ineq_fourier
+    from sage.symbolic.relation import solve_ineq_univar, solve_ineq
+    from sage.symbolic.expression import Expression 
+    from sage.all import latex
 
     ineqsols = []
     for eq_poly in eq_system[1:]:
         for (i, eq) in enumerate(eq_poly):
             solved = solve_ineq_univar(eq)
-            ineqsols.append(solved)
+            ineqsols.append([eq.full_simplify() for eq in flatten(solved)])
 
     # this is too slow! took more than 2 hrs
-    inequals = solve_ineq_fourier(ineq=flatten(ineqsols), vars=[INPUT_SYMBOL])
-    pass
-
+    inequals = solve_ineq(ineq=ineqsols, vars=[INPUT_SYMBOL])
+    print(inequals)
 """
 # evaluate irfftn using cauchy residue theorem
 def evaluate_system(shapes, eq_system, out, tex_save):

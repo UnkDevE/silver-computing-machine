@@ -2,8 +2,6 @@ tf-nightly
 tensorflow_datasets
 scipy
 numpy
-sympy
-sage_conf
 notebook
 pandas
 matplotlib

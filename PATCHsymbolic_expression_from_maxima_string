@@ -1,0 +1,12 @@
+<ADD TO CALCULUS.py>
+2417
+        # addition to patch real and imaginary parts
+        if "realpart" in s:
+            # need to remove brackets as well
+            s = s.replace("realpart","").replace("imagpart","")
+            # remove the first parentheses that real and imag part had
+            # so that the parser plays nice
+            s = s.replace("(", "", 1).replace(")", "", 1)
+            return SRM_parser.parse_expression(s)
+2426
+ 
