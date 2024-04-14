@@ -143,23 +143,7 @@ def flatten(S):
     return S[:1] + flatten(S[1:])
     
     
-def evaluate_system(shapes, eq_system, out, tex_save):
-    # seperate real and imaginary because sage throws
-    # type error went converting
-    # so this is a workaround
-    def simplify_sep_reim(eq):
-        from sage.all import i
-        from sage.misc.sage_eval import sage_eval 
-
-        real = eq.real()
-        imag = eq.imag()
-
-        real = str(real).replace("realpart","")
-        imag = str(imag).replace("imagpart","")
-
-        return sage_eval(real, locals={'x':INPUT_SYMBOL}) + i * sage_eval(imag, 
-                locals={'x':INPUT_SYMBOL})
-
+def evaluate_system(shapes, eq_system, tex_save):
     # set as a power series
     from sage.symbolic.relation import solve_ineq_univar, solve_ineq
     from sage.symbolic.expression import Expression 
@@ -172,7 +156,7 @@ def evaluate_system(shapes, eq_system, out, tex_save):
             ineqsols.append([eq.full_simplify() for eq in flatten(solved)])
 
     # this is too slow! took more than 2 hrs
-    inequals = solve_ineq(ineq=ineqsols, vars=[INPUT_SYMBOL])
+    inequals = solve_ineq(ineq=flatten(ineqsols), vars=[INPUT_SYMBOL])
     print(inequals)
 """
 # evaluate irfftn using cauchy residue theorem
@@ -295,7 +279,7 @@ def model_create_equation(model_dir, tex_save, training_data, csv):
     if model != None:
         # calculate fft + shape
         from keras import backend as K
-        from sympy.parsing.sympy_parser import parse_expr
+        from sage.misc.sage_eval import sage_eval
         shapes = []
         fft_layers = []
         
@@ -316,7 +300,7 @@ def model_create_equation(model_dir, tex_save, training_data, csv):
                           for layer in model.layers if len(layer.weights) > 1]:
             # if no activation assume linear
             if act == None:
-                act = parse_expr("x=x") 
+                act = sage_eval('x',locals={"x": INPUT_SYMBOL})
             fft_layers.append([weights, baises, act])
             shapes.append([shape, weights.shape, baises.shape])
         
@@ -325,9 +309,9 @@ def model_create_equation(model_dir, tex_save, training_data, csv):
         targets[-1] = model.output_shape[-1] 
         shapes = complete_bias(shapes, targets) 
         # fft calculation goes through here
-        inv_layers = output_aggregator(model, fft_layers, training_data)
+        # inv_layers = output_aggregator(model, fft_layers, training_data)
         peq_system = get_poly_eqs_subst(shapes, activ_obj, fft_layers)
-        evaluate_system(shapes, peq_system, inv_layers, tex_save)
+        evaluate_system(shapes, peq_system, tex_save)
 
 if __name__=="__main__":
     if len(sys.argv) > 2:
