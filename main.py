@@ -35,6 +35,7 @@ import scipy as sci
 import pandas
 import sage
 from sage.all import var, heaviside
+from sage.calculus.transforms.all import * 
 
 import sys
 import os
@@ -53,7 +54,7 @@ def save(filename, write):
     import os.path
     file = None
     if os.path.isfile(filename):
-        file = open(filename, "wt")
+        file = open(filename, "at")
     else:
         file = open(filename, "xt")
     file.write(write)
@@ -145,19 +146,35 @@ def flatten(S):
     
 def evaluate_system(shapes, eq_system, tex_save):
     # set as a power series
-    from sage.symbolic.relation import solve_ineq_univar, solve_ineq
+    from sage.symbolic.relation import solve_ineq_univar, solve
     from sage.symbolic.expression import Expression 
     from sage.all import latex
 
-    ineqsols = []
-    for eq_poly in eq_system[1:]:
-        for (i, eq) in enumerate(eq_poly):
-            solved = solve_ineq_univar(eq)
-            ineqsols.append([eq.full_simplify() for eq in flatten(solved)])
+    inequals = eq_system[2:][0]
+    from functools import reduce
+    diff = reduce(lambda xs,x: xs - x, inequals)
+    diff = flatten(solve(diff, INPUT_SYMBOL))
 
+    vars = []
+    solves = []
+    for j, inq in enumerate(list(inequals)):
+        vars.append(var("x_"+str(j)))
+        inq = inq.substitute(INPUT_SYMBOL==vars[j])
+        inq = solve(inq.full_simplify(), INPUT_SYMBOL)
+
+        for d in flatten(diff):
+            for i in flatten(inq):
+                if i.operator() == d.operator():
+                    solves.append(i.operator()(vars[j] * INPUT_SYMBOL, i.rhs() * d.rhs()))
+                        
+        # else no match
+    vars.append(INPUT_SYMBOL)
+    solved = solve(flatten(solves), *vars)
+        
     # this is too slow! took more than 2 hrs
-    inequals = solve_ineq(ineq=flatten(ineqsols), vars=[INPUT_SYMBOL])
-    print(inequals)
+    for sol in flatten(solved):
+        save("out.tex",latex(sol))
+
 """
 # evaluate irfftn using cauchy residue theorem
 def evaluate_system(shapes, eq_system, out, tex_save):
