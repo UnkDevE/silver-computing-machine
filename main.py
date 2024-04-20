@@ -91,14 +91,14 @@ def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
     from sage.all import vector
 
     # pre generates a matrix with symbols in
-    def calc_expr(coeff, symbol):
+    def calc_expr(coeff, prev_input, ops):
         # if bias
         if symbol == None:
             return vector(list(coeff))
         # nabbed from sympy source and edited for use case
         arr = empty(coeff.shape, dtype=object)
         for index in ndindex(coeff.shape):
-            arr[index] = coeff[index] * symbol 
+            arr[index] = sum(ops(coeff[index], prev_input))
         # if not werid tuple shaping
         if len(list(coeff.shape)) != 1:
             return matrix(arr)
@@ -107,7 +107,7 @@ def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
 
     x_input = empty(shapes[0], dtype=object)
     for index in ndindex(shapes[0]):
-        x_input[index] = INPUT_SYMBOL
+        x_input[index] = var("x_" + str(index))
     # to system 
     eq_system = [vector(x_input.flatten())]
 
@@ -117,20 +117,19 @@ def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
         shape = shapes[i]
 
         # get our matrix exprs 
-        weight = calc_expr(layer[0], INPUT_SYMBOL)
-        bias = calc_expr(layer[1], None)
- 
-        # dot product transpose shapes to work correctly
-        alpha = eq_system[-1] * weight
+        # calculates dot product in creation
+        from operator import __mul__, __add__
+        weight = calc_expr(layer[0], x_input, __mul__)
+        bias = calc_expr(layer[1], weight, __add__)
         
         # lookup the activation function 
         lookup = activation_fn_lookup(layer[2], activ_obj)
         
         # if at end of list don't apply activation fn
         if len(shapes) == i:
-            eq_system.append(alpha + bias)
+            eq_system.append(bias)
         else:
-            eq_system.append((alpha + bias).apply_map(lambda x: lookup(x=x)))
+            eq_system.append((bias).apply_map(lambda x: lookup(x=x)))
        
     return eq_system
 
@@ -146,33 +145,34 @@ def flatten(S):
     
 def evaluate_system(shapes, eq_system, tex_save):
     # set as a power series
-    from sage.symbolic.relation import solve_ineq_univar, solve
-    from sage.symbolic.expression import Expression 
+    from sage.symbolic.relation import solve
     from sage.all import latex
 
     inequals = eq_system[2:][0]
     from functools import reduce
     diff = reduce(lambda xs,x: xs - x, inequals)
-    diff = flatten(solve(diff, INPUT_SYMBOL))
+    diff = flatten(solve(diff, *eq_system[0]))
 
+    """
     vars = []
     solves = []
     for j, inq in enumerate(list(inequals)):
         vars.append(var("x_"+str(j)))
-        inq = inq.substitute(INPUT_SYMBOL==vars[j])
+        inq = inq.substitute(vars[j]==INPUT_SYMBOL)
         inq = solve(inq.full_simplify(), INPUT_SYMBOL)
 
         for d in flatten(diff):
             for i in flatten(inq):
                 if i.operator() == d.operator():
-                    solves.append(i.operator()(vars[j] * INPUT_SYMBOL, i.rhs() * d.rhs()))
+                    solves.append(i.operator()(vars[j], i.rhs() * d.rhs()))
                         
         # else no match
     vars.append(INPUT_SYMBOL)
     solved = solve(flatten(solves), *vars)
-        
+    """
+    
     # this is too slow! took more than 2 hrs
-    for sol in flatten(solved):
+    for sol in flatten(diff):
         save("out.tex",latex(sol))
 
 """
