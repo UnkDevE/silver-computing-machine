@@ -89,14 +89,12 @@ def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
     from numpy import empty, ndindex
     from sage.matrix.constructor import matrix
     from sage.all import vector
+    from sage.all import Expression
 
     # pre generates a matrix with symbols in
     def calc_expr(coeff, prev_input, ops):
-        # if bias
-        if symbol == None:
-            return vector(list(coeff))
         # nabbed from sympy source and edited for use case
-        arr = empty(coeff.shape, dtype=object)
+        arr = empty(coeff.shape, dtype=Expression)
         for index in ndindex(coeff.shape):
             arr[index] = sum(ops(coeff[index], prev_input))
         # if not werid tuple shaping
@@ -106,8 +104,8 @@ def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
             return vector(list(arr))
 
     x_input = empty(shapes[0], dtype=object)
-    for index in ndindex(shapes[0]):
-        x_input[index] = var("x_" + str(index))
+    for n, index in enumerate(ndindex(shapes[0])):
+        x_input[index] = var("x_" + str(n))
     # to system 
     eq_system = [vector(x_input.flatten())]
 
