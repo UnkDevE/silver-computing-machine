@@ -86,17 +86,17 @@ def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
     from numpy import empty, ndindex
     from sage.matrix.constructor import matrix
     from sage.all import vector
-    from sage.all import Expression
+    from sage.all import SR
 
     # pre generates a matrix with symbols in
+    # USES ONLY NUMPY ARRAYS as coeff and prev_input
     def calc_expr(coeff, prev_input, ops):
         # nabbed from sympy source and edited for use case
-        arr = empty(coeff.shape, dtype=Expression)
-        for index in ndindex(coeff.shape):
-            arr[index] = sum(ops(coeff[index], prev_input))
+        arr = empty(coeff.shape, dtype=object)
+        arr = ops(coeff, prev_input.sum())
         # if not werid tuple shaping
         if len(list(coeff.shape)) != 1:
-            return matrix(arr)
+            return matrix(SR, coeff.shape[0], coeff.shape[1], arr)
         else:
             return vector(list(arr))
 
@@ -113,8 +113,8 @@ def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
         # get our matrix exprs 
         # calculates dot product in creation
         from operator import __mul__, __add__
-        weight = calc_expr(layer[0], x_input, __mul__)
-        bias = calc_expr(layer[1], weight, __add__)
+        weight = calc_expr(layer[0], eq_system[-1].numpy(), __mul__)
+        bias = calc_expr(layer[1], weight.numpy(), __add__)
         
         # lookup the activation function 
         lookup = activation_fn_lookup(layer[2], activ_obj)
@@ -142,11 +142,15 @@ def evaluate_system(shapes, eq_system, tex_save):
     from sage.symbolic.relation import solve
     from sage.all import latex
 
-    inequals = eq_system[2:][0]
+    inequals = eq_system[-1]
     from functools import reduce
-    diff = reduce(lambda xs,x: xs - x, inequals)
-    diff = flatten(solve(diff, *eq_system[0]))
+    import itertools
+    # find intersects
+    diffs = map(lambda ineq: reduce(lambda xs,x: xs - x, ineq), 
+        itertools.permutations(inequals))
 
+    sols = solve(map(lambda y: solve(y, *eq_system[-1]), diffs), *eq_system[0])
+    
     """
     vars = []
     solves = []
@@ -165,8 +169,7 @@ def evaluate_system(shapes, eq_system, tex_save):
     solved = solve(flatten(solves), *vars)
     """
     
-    # this is too slow! took more than 2 hrs
-    for sol in flatten(diff):
+    for sol in sols:
         save("out.tex",latex(sol))
 
 """
