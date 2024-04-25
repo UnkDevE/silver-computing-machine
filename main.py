@@ -15,6 +15,17 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
+import sys
+import os
+
+import tensorflow as tf
+import tensorflow_datasets as tdfs 
+
+import numpy as np
+import pandas
+# heaveside is used here it's just eval'ed in
+from sage.all import var, heaviside
+
 
 # list of activation functions
 ACTIVATION_LIST = """activation;function;
@@ -26,21 +37,6 @@ smht;e^ax - e^-bx/e^cx + e^-dx;
 relu;x>0;
 softplus;ln(1+e^x);
 """
-import tensorflow as tf
-from tensorflow import keras 
-import tensorflow_datasets as tdfs 
-
-import numpy as np
-import scipy as sci
-import pandas
-import sage
-from sage.all import var, heaviside
-from sage.calculus.transforms.all import * 
-
-import sys
-import os
-import inspect
-
 
 INPUT_SYMBOL = var("x")
 BATCH_SIZE = 1024
@@ -64,7 +60,8 @@ def save(filename, write):
 # hang fire with convolutions
 # helper 
 def complete_bias(shapes, targets):
-    tup_complete = lambda tup, tar: (tup[0], tar) if len(tup) < 2 else tup
+    def tup_complete(tup, tar): 
+        return (tup[0], tar) if len(tup) < 2 else tup
 
     shapes_new = [tup_complete(shapes[0], targets[0])]
     for shape, target in zip(shapes[1:], targets[1:]):
@@ -112,7 +109,6 @@ def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
     # summate equations to get output
     for i in range(1, len(shapes)):
         layer = fft_layers[i-1]
-        shape = shapes[i]
 
         # get our matrix exprs 
         # calculates dot product in creation
@@ -207,7 +203,6 @@ def evaluate_system(shapes, eq_system, out, tex_save):
 """
 
 def output_aggregator(model, fft_layers, data):
-    from functools import reduce
     # load and get unique features
     [dataset, test] = tdfs.load(data, download=False, split=['train', 'test'])
     
@@ -291,9 +286,8 @@ def model_create_equation(model_dir, tex_save, training_data, csv):
 
     # create prequesties
     model = tf.keras.models.load_model(model_dir)
-    if model != None:
+    if model is not None:
         # calculate fft + shape
-        from keras import backend as K
         from sage.misc.sage_eval import sage_eval
         shapes = []
         fft_layers = []
@@ -314,7 +308,7 @@ def model_create_equation(model_dir, tex_save, training_data, csv):
                         layer.activation, layer.kernel.shape.as_list())
                           for layer in model.layers if len(layer.weights) > 1]:
             # if no activation assume linear
-            if act == None:
+            if act is None:
                 act = sage_eval('x',locals={"x": INPUT_SYMBOL})
             fft_layers.append([weights, baises, act])
             shapes.append([shape, weights.shape, baises.shape])
