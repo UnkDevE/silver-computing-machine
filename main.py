@@ -149,7 +149,7 @@ def evaluate_system(shapes, eq_system, tex_save):
     diffs = map(lambda ineq: reduce(lambda xs,x: xs - x, ineq), 
         itertools.permutations(inequals))
 
-    sols = solve(map(lambda y: solve(y, *eq_system[-1]), diffs), *eq_system[0])
+    sols = solve(list(map(lambda y: solve(y, *eq_system[-1]), diffs)), *eq_system[0])
     
     """
     vars = []
