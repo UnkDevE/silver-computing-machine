@@ -90,10 +90,10 @@ def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
 
     # pre generates a matrix with symbols in
     # USES ONLY NUMPY ARRAYS as coeff and prev_input
-    def calc_expr(coeff, prev_input, ops):
+    def calc_expr(coeff, prev_input, ops, exp):
         # nabbed from sympy source and edited for use case
         arr = empty(coeff.shape, dtype=object)
-        arr = ops(coeff, prev_input.sum())
+        arr = ops(coeff, prev_input.sum() ** exp)
         # if not werid tuple shaping
         if len(list(coeff.shape)) != 1:
             return matrix(SR, coeff.shape[0], coeff.shape[1], arr)
@@ -113,8 +113,9 @@ def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
         # get our matrix exprs 
         # calculates dot product in creation
         from operator import __mul__, __add__
-        weight = calc_expr(layer[0], eq_system[-1].numpy(), __mul__)
-        bias = calc_expr(layer[1], weight.numpy(), __add__)
+        weight = calc_expr(layer[0], eq_system[-1].numpy(), __mul__, i)
+        # power is always 1 here because bias is linear
+        bias = calc_expr(layer[1], weight.numpy(), __add__, 1)
         
         # lookup the activation function 
         lookup = activation_fn_lookup(layer[2], activ_obj)
@@ -126,49 +127,23 @@ def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
             eq_system.append((bias).apply_map(lambda x: lookup(x=x)))
        
     return eq_system
-
-
-# recursive flatten 
-def flatten(S):
-    if S == []:
-        return S
-    if isinstance(S[0], list):
-        return flatten(S[0]) + flatten(S[1:])
-    return S[:1] + flatten(S[1:])
-    
     
 def evaluate_system(shapes, eq_system, tex_save):
     # set as a power series
     from sage.symbolic.relation import solve
     from sage.all import latex
+    from sage.misc.flatten import flatten
 
     inequals = eq_system[-1]
     from functools import reduce
     import itertools
     # find intersects
-    diffs = map(lambda ineq: reduce(lambda xs,x: xs - x, ineq), 
-        itertools.permutations(inequals))
+    # debug this line
+    permutes = list(itertools.permutations(inequals))
+    diffs = list(map(lambda ineq: reduce(lambda xs,x: xs - x, ineq), permutes))
 
-    sols = solve(list(map(lambda y: solve(y, *eq_system[-1]), diffs)), *eq_system[0])
-    
-    """
-    vars = []
-    solves = []
-    for j, inq in enumerate(list(inequals)):
-        vars.append(var("x_"+str(j)))
-        inq = inq.substitute(vars[j]==INPUT_SYMBOL)
-        inq = solve(inq.full_simplify(), INPUT_SYMBOL)
-
-        for d in flatten(diff):
-            for i in flatten(inq):
-                if i.operator() == d.operator():
-                    solves.append(i.operator()(vars[j], i.rhs() * d.rhs()))
-                        
-        # else no match
-    vars.append(INPUT_SYMBOL)
-    solved = solve(flatten(solves), *vars)
-    """
-    
+    sols = solve(flatten(list(set(diffs))), *eq_system[0])
+ 
     for sol in sols:
         save("out.tex",latex(sol))
 
