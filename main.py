@@ -93,7 +93,8 @@ def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
     def calc_expr(coeff, prev_input, ops, exp):
         # nabbed from sympy source and edited for use case
         arr = empty(coeff.shape, dtype=object)
-        arr = ops(coeff, prev_input.sum() ** exp)
+        arr = ops(coeff, (prev_input ** exp).sum())
+
         # if not werid tuple shaping
         if len(list(coeff.shape)) != 1:
             return matrix(SR, coeff.shape[0], coeff.shape[1], arr)
@@ -113,9 +114,11 @@ def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
         # get our matrix exprs 
         # calculates dot product in creation
         from operator import __mul__, __add__
-        weight = calc_expr(layer[0], eq_system[-1].numpy(), __mul__, i)
+        from scipy.fft import fftn
+        # because we cannot calculate coeffecients of expressions neatly we calcualate dfft here
+        weight = calc_expr(fftn(layer[0], layer[0].shape), eq_system[-1].numpy(), __mul__, i)
         # power is always 1 here because bias is linear
-        bias = calc_expr(layer[1], weight.numpy(), __add__, 1)
+        bias = calc_expr(fftn(layer[1], layer[1].shape), weight.numpy(), __add__, 1)
         
         # lookup the activation function 
         lookup = activation_fn_lookup(layer[2], activ_obj)
@@ -133,14 +136,13 @@ def evaluate_system(shapes, eq_system, tex_save):
     from sage.symbolic.relation import solve
     from sage.all import latex
     from sage.misc.flatten import flatten
-
-    inequals = eq_system[-1]
+    
     from functools import reduce
     import itertools
     # find intersects
     # debug this line
-    permutes = list(itertools.permutations(inequals))
-    diffs = list(map(lambda ineq: reduce(lambda xs,x: xs - x, ineq), permutes))
+    permutes = list(itertools.permutations(eq_system[-1]))
+    diffs = list(map(lambda ineq: reduce(lambda xs,x: xs - x, ineq), flatten(permutes))
 
     sols = solve(flatten(list(set(diffs))), *eq_system[0])
  
