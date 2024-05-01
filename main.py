@@ -82,18 +82,25 @@ def activation_fn_lookup(activ_src, csv):
             return eval(csv['function'][i])
     return eval(csv['function']['linear'])
 
+def trig_eulerlfy(x, i):
+    from sage.all import I, cos, sin, log
+    csh = (i*x).apply_map(cos)
+    ssh = (I*(i*x)).apply_map(sin)
+    return (csh + ssh).apply_map(log) / I
+ 
 def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
     from numpy import empty, ndindex
     from sage.matrix.constructor import matrix
     from sage.all import vector
     from sage.all import SR
-
+       
     # pre generates a matrix with symbols in
     # USES ONLY NUMPY ARRAYS as coeff and prev_input
     def calc_expr(coeff, prev_input, ops, exp):
         # nabbed from sympy source and edited for use case
         arr = empty(coeff.shape, dtype=object)
-        arr = ops(coeff, (prev_input ** exp).sum())
+        arr = ops(coeff, prev_input.sum())
+        # convert into trigonomentric terms so we can have linear dfft
 
         # if not werid tuple shaping
         if len(list(coeff.shape)) != 1:
@@ -139,10 +146,10 @@ def evaluate_system(shapes, eq_system, tex_save):
     
     from functools import reduce
     import itertools
-    # find intersects
-    # debug this line
+    # find intersects of permutations
+    C_matrix = trig_eulerlfy(eq_system[-1])
     permutes = list(itertools.permutations(eq_system[-1]))
-    diffs = list(map(lambda ineq: reduce(lambda xs,x: xs - x, ineq), flatten(permutes))
+    diffs = list(map(lambda ineq: reduce(lambda xs,x: xs - x, ineq), flatten(permutes)))
 
     sols = solve(flatten(list(set(diffs))), *eq_system[0])
  
