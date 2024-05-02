@@ -82,10 +82,10 @@ def activation_fn_lookup(activ_src, csv):
             return eval(csv['function'][i])
     return eval(csv['function']['linear'])
 
-def trig_eulerlfy(x, i):
+def trig_eulerlfy(x):
     from sage.all import I, cos, sin, log
-    csh = (i*x).apply_map(cos)
-    ssh = (I*(i*x)).apply_map(sin)
+    csh = (x).apply_map(cos)
+    ssh = (I*(x)).apply_map(sin)
     return (csh + ssh).apply_map(log) / I
  
 def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
@@ -147,8 +147,8 @@ def evaluate_system(shapes, eq_system, tex_save):
     from functools import reduce
     import itertools
     # find intersects of permutations
-    C_matrix = trig_eulerlfy(eq_system[-1])
-    permutes = list(itertools.permutations(eq_system[-1]))
+    cmatrix = trig_eulerlfy(eq_system[-1])
+    permutes = list(itertools.permutations(cmatrix))
     diffs = list(map(lambda ineq: reduce(lambda xs,x: xs - x, ineq), flatten(permutes)))
 
     sols = solve(flatten(list(set(diffs))), *eq_system[0])
