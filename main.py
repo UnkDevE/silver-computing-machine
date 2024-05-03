@@ -25,7 +25,7 @@ import numpy as np
 import pandas
 # heaveside is used here it's just eval'ed in
 from sage.all import var, heaviside
-
+from sage.matrix.constructor import matrix
 
 # list of activation functions
 ACTIVATION_LIST = """activation;function;
@@ -82,31 +82,70 @@ def activation_fn_lookup(activ_src, csv):
             return eval(csv['function'][i])
     return eval(csv['function']['linear'])
 
-def trig_eulerlfy(x):
-    from sage.all import I, cos, sin, log
-    csh = (x).apply_map(cos)
-    ssh = (I*(x)).apply_map(sin)
-    return (csh + ssh).apply_map(log) / I
+def dtft(eq_system):
+    from sage.all import I, e
+    dtft_v = []
+    eq_system.reverse()
+    #dtft 
+    for i, system in enumerate(eq_system):
+        system = system * (e ** i*I)
+        np_sys = system.numpy()
+        dtft_v.append(np_sys.sum(axis=len(np_sys.shape)-1))
+
+    dtft_v.reverse()
+    return dtft_v
  
+def common_shape(x, y):
+    if x.shape == y.shape: 
+        return list(x.shape)
+    else:
+        xs = []
+        for x_s in x.shape:
+            for y_s in y.shape:
+                if x_s == y_s:
+                    xs.append(x_s)
+        if len(xs) < 1:
+            raise "No common shape for" + str(x) + "and" + str(y)
+        else:
+            return xs
+
 def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
     from numpy import empty, ndindex
-    from sage.matrix.constructor import matrix
     from sage.all import vector
     from sage.all import SR
+    from sage.misc.flatten import flatten
        
     # pre generates a matrix with symbols in
     # USES ONLY NUMPY ARRAYS as coeff and prev_input
     def calc_expr(coeff, prev_input, ops, exp):
+        # expands out vector shapes
+        # input is the given vector
+        def reshaper(arr, input):
+            from itertools import cycle
+            cs = common_shape(arr, input)
+            acs = [x if x != y else None for x, y in zip(list(arr.shape),
+                             cycle(cs))]
+            acs = list(filter(lambda x: x is not None, acs))
+            reshape = flatten([cs, [1 for x in acs]])
+            
+            vec = input.reshape(reshape)
+            return np.repeat(vec, acs, axis=len(acs))
+
         # nabbed from sympy source and edited for use case
         arr = empty(coeff.shape, dtype=object)
-        arr = ops(coeff, prev_input.sum())
-        # convert into trigonomentric terms so we can have linear dfft
+        vec = np.power(prev_input, exp)
 
-        # if not werid tuple shaping
-        if len(list(coeff.shape)) != 1:
-            return matrix(SR, coeff.shape[0], coeff.shape[1], arr)
+        if len(vec.shape) < len(coeff.shape): # vector
+            if sum(vec.shape) < sum(coeff.shape) and len(vec.shape) < len(coeff.shape):
+                vec = reshaper(coeff, vec)
+            else:
+                coeff = reshaper(vec, coeff)
+
+            arr = ops(vec, coeff)
         else:
-            return vector(list(arr))
+            arr = ops(vec, coeff)
+
+        return matrix(SR, *arr.shape, arr) 
 
     x_input = empty(shapes[0], dtype=object)
     for n, index in enumerate(ndindex(shapes[0])):
@@ -119,13 +158,17 @@ def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
         layer = fft_layers[i-1]
 
         # get our matrix exprs 
-        # calculates dot product in creation
-        from operator import __mul__, __add__
-        from scipy.fft import fftn
-        # because we cannot calculate coeffecients of expressions neatly we calcualate dfft here
-        weight = calc_expr(fftn(layer[0], layer[0].shape), eq_system[-1].numpy(), __mul__, i)
+        from operator import  __add__, __mul__, __matmul__
+        prev = eq_system[-1].numpy()
+
+        if layer[0].shape == prev.shape or len(prev.shape) == 1:
+            weight = calc_expr(layer[0], prev, __mul__, i)
+        else:
+            weight = calc_expr(layer[0], prev, __matmul__, i)
+
+
         # power is always 1 here because bias is linear
-        bias = calc_expr(fftn(layer[1], layer[1].shape), weight.numpy(), __add__, 1)
+        bias = calc_expr(layer[1], weight.numpy(), __add__, 1)
         
         # lookup the activation function 
         lookup = activation_fn_lookup(layer[2], activ_obj)
@@ -144,17 +187,11 @@ def evaluate_system(shapes, eq_system, tex_save):
     from sage.all import latex
     from sage.misc.flatten import flatten
     
-    from functools import reduce
-    import itertools
     # find intersects of permutations
-    cmatrix = trig_eulerlfy(eq_system[-1])
-    permutes = list(itertools.permutations(cmatrix))
-    diffs = list(map(lambda ineq: reduce(lambda xs,x: xs - x, ineq), flatten(permutes)))
-
-    sols = solve(flatten(list(set(diffs))), *eq_system[0])
- 
-    for sol in sols:
-        save("out.tex",latex(sol))
+    fft_system = dtft(eq_system)
+    from functools import reduce
+    intersect = reduce(lambda eq, i: eq - i, list(fft_system[-1]))
+    save("out.tex",latex(intersect))
 
 """
 # evaluate irfftn using cauchy residue theorem

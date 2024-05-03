@@ -70,3 +70,10 @@ def gr_operand(l, r):
         lhs = l
         rhs = r
     return lhs, rh
+
+from itertools import cycle
+cs = common_shape(arr, prev_input)
+acs = [x if x != y else None for x, y in zip(list(arr.shape),
+         cycle(cs))]
+acs = list(filter(lambda x: x is not None, acs))
+
