@@ -88,8 +88,7 @@ def dtft(eq_system):
     eq_system.reverse()
     #dtft 
     for i, system in enumerate(eq_system):
-        system = system * (e ** i*I)
-        np_sys = system.numpy()
+        np_sys = system.numpy() * (e ** i*I)
         dtft_v.append(np_sys.sum(axis=len(np_sys.shape)-1))
 
     dtft_v.reverse()
@@ -191,7 +190,8 @@ def evaluate_system(shapes, eq_system, tex_save):
     fft_system = dtft(eq_system)
     from functools import reduce
     intersect = reduce(lambda eq, i: eq - i, list(fft_system[-1]))
-    save("out.tex",latex(intersect))
+    isum = intersect.limit()
+    save("out.tex",latex(isum))
 
 """
 # evaluate irfftn using cauchy residue theorem
