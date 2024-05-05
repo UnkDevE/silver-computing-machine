@@ -53,27 +53,26 @@ tensorsect = hyperplane_intersect(sumtensors[0], sumtensors[1])
 for tensor in sumtensors[2:]:
     tensorsect = hyperplane_intersect(tensorsect, tensor)
 
-# returns a the largest expression on the LHS
-def gr_operand(l, r):
-    rhs = None
-    lhs = None
-    if l.operands() > 1:
-        rhs = l
-        if rhs > r.operands():
-            lhs = rhs
-            rhs = r
-        else:
-            lhs = r
-    elif r.operands() > 1:
-        rhs, lhs = gr_operand(r, l)
-    else:
-        lhs = l
-        rhs = r
-    return lhs, rh
-
 from itertools import cycle
 cs = common_shape(arr, prev_input)
 acs = [x if x != y else None for x, y in zip(list(arr.shape),
          cycle(cs))]
 acs = list(filter(lambda x: x is not None, acs))
+
+  def gr_operand(l, r):
+        rhs = None
+        lhs = None
+        if len(l.operands()) > 1:
+            rhs = l
+            if len(rhs.operands()) > len(r.operands()):
+                lhs = rhs
+                rhs = r
+            else:
+                lhs = r
+        elif len(r.operands()) > 1:
+            rhs, lhs = gr_operand(r, l)
+        else:
+            lhs = l
+            rhs = r
+        return lhs, rhs
 

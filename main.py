@@ -85,13 +85,11 @@ def activation_fn_lookup(activ_src, csv):
 def dtft(eq_system):
     from sage.all import I, e
     dtft_v = []
-    eq_system.reverse()
     #dtft 
     for i, system in enumerate(eq_system):
-        np_sys = system.numpy() * (e ** i*I)
-        dtft_v.append(np_sys.sum(axis=len(np_sys.shape)-1))
+        np_sys = ((e * system) * (e ** -i*I))
+        dtft_v.append(np_sys)
 
-    dtft_v.reverse()
     return dtft_v
  
 def common_shape(x, y):
@@ -183,14 +181,26 @@ def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
 def evaluate_system(shapes, eq_system, tex_save):
     # set as a power series
     from sage.symbolic.relation import solve
-    from sage.all import latex
-    from sage.misc.flatten import flatten
+    from sage.all import latex, pi
     
+    # returns a the largest expression on the LHS
+  
     # find intersects of permutations
     fft_system = dtft(eq_system)
-    from functools import reduce
-    intersect = reduce(lambda eq, i: eq - i, list(fft_system[-1]))
-    isum = intersect.limit()
+
+    from sage.misc.flatten import flatten
+
+    def intersect(system, i):
+        # gives list of vecs
+        eqs = list(system[-1])
+        eq0 = eqs.pop(i)
+        for eq in eqs:
+            eq0 -= eq
+        return eq0
+            
+    intersects = intersect(fft_system,0)
+
+    isum = intersect.limit(x=2 * pi)
     save("out.tex",latex(isum))
 
 """
