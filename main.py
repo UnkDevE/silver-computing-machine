@@ -160,33 +160,59 @@ def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
        
     return eq_system
     
-def evaluate_system(shapes, eq_system, tex_save):
+def evaluate_system(shapes, eq_system, tex_save, outputs):
     # set as a power series
     from sage.symbolic.relation import solve
     from sage.all import latex, pi
     
     # returns a the largest expression on the LHS
-  
+    def gr_operand(system):
+        r = system.rhs() 
+        l = system.lhs() 
+        rhs, lhs = None, None
+        if len(l.operands()) > 1:
+            rhs = l
+            if len(rhs.operands()) > len(r.operands()):
+                lhs = rhs
+                rhs = r
+            else:
+                lhs = r
+        elif len(r.operands()) > 1:
+            rhs, lhs = gr_operand(r, l)
+        else:
+            lhs = l
+            rhs = r
+        return lhs, rhs
+
     # find intersects of permutations
     fft_system = dtft(eq_system)
 
     from sage.misc.flatten import flatten
 
-    def intersect(system, i):
+    def reduce(system, i, ops):
         # gives list of vecs
         eqs = list(system)
         eq0 = eqs.pop(i)
         for eq in eqs:
-            eq0 -= eq
+            eq0 = ops(eq0, eq)
         return eq0
+    
+    from operator import __sub__, __mul__
             
     intersects = []
     for i, eq in enumerate(fft_system[-1]):
-        intersects.append(intersect(fft_system[-1], i))
+        intersects.append(reduce(fft_system[-1], i, __sub__))
+    
+    def classify_out(i, l):
+        return [1 if i == x else 0 for x in range(0, l)]
 
-    isum = intersect(intersects,0)
-    ilimit = isum.limit(x=2*pi)
-    save("out.tex",latex(ilimit))
+    for i in range(len(intersects)):
+        sheaf = reduce(intersects, i, __mul__)
+        lhs, rhs = gr_operand(sheaf)
+        rhsnew = classify_out(i, len(intersects))
+
+
+    save("out.tex",latex(sheaf))
 
 """
 # evaluate irfftn using cauchy residue theorem
@@ -339,7 +365,7 @@ def model_create_equation(model_dir, tex_save, training_data, csv):
         # fft calculation goes through here
         # inv_layers = output_aggregator(model, fft_layers, training_data)
         peq_system = get_poly_eqs_subst(shapes, activ_obj, fft_layers)
-        evaluate_system(shapes, peq_system, tex_save)
+        evaluate_system(shapes, peq_system, tex_save, None)
 
 if __name__=="__main__":
     if len(sys.argv) > 2:
