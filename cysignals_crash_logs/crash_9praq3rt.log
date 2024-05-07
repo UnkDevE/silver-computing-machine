@@ -1,0 +1,158 @@
+GNU gdb (GDB) 14.2
+Copyright (C) 2023 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+Type "show copying" and "show warranty" for details.
+This GDB was configured as "aarch64-unknown-linux-gnu".
+Type "show configuration" for configuration details.
+For bug reporting instructions, please see:
+<https://www.gnu.org/software/gdb/bugs/>.
+Find the GDB manual and other documentation resources online at:
+    <http://www.gnu.org/software/gdb/documentation/>.
+
+For help, type "help".
+Type "apropos word" to search for commands related to "word".
+[New LWP 44986]
+[New LWP 44987]
+[New LWP 44989]
+[New LWP 44990]
+[New LWP 45082]
+[New LWP 45083]
+[New LWP 45084]
+[New LWP 45085]
+[New LWP 45086]
+[New LWP 45087]
+[New LWP 45088]
+[New LWP 45089]
+[New LWP 45090]
+[New LWP 45091]
+[New LWP 45092]
+[New LWP 45093]
+[New LWP 45094]
+[New LWP 45095]
+[New LWP 45096]
+[New LWP 45097]
+[New LWP 45098]
+To enable execution of this file add
+	add-auto-load-safe-path /usr/lib/libthread_db.so.1
+line to your configuration file "/home/ethanr/.config/gdb/gdbinit".
+To completely disable this security protection add
+	set auto-load safe-path /
+line to your configuration file "/home/ethanr/.config/gdb/gdbinit".
+For more information about this security protection see the
+"Auto-loading safe path" section in the GDB manual.  E.g., run from the shell:
+	info "(gdb)Auto-loading safe path"
+
+Stack backtrace
+---------------
+[Inferior 1 (process 44979) detached]
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/tensorflow/python/platform/../../../tf_nightly.libs/libomp-e9212f90.so.5:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /usr/lib/libresolv.so.2:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/optree/_C.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/pandas_parser.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/pandas_datetime.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/interval.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/hashtable.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/missing.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/tslibs/dtypes.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/tslibs/ccalendar.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/tslibs/np_datetime.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/tslibs/conversion.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/tslibs/base.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/tslibs/offsets.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/tslibs/timestamps.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/tslibs/nattype.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/tslibs/timedeltas.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/tslibs/timezones.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/tslibs/fields.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/tslibs/tzconversion.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/properties.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/tslibs/parsing.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/tslibs/strptime.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/tslibs/period.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/tslibs/vectorized.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/ops_dispatch.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/algos.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/lib.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/ops.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/hashing.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/arrays.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/tslib.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/sparse.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/internals.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/indexing.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/index.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/writers.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/join.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/window/aggregations.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/window/indexers.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/reshape.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/groupby.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/json.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/parsers.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/pandas/_libs/testing.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Error while reading shared library symbols for /home/ethanr/miniforge3/envs/sage-dev/lib/python3.11/site-packages/tree/_tree.cpython-311-aarch64-linux-gnu.so:
+/proc/44979/ns/mnt: No such file or directory.
+Cannot access memory at address 0xffffbb6a51b0
+warning: Unable to find dynamic linker breakpoint function.
+GDB will be unable to debug shared library initializers
+and track explicitly loaded dynamic code.
+Failed to read a valid object file image from memory.
+warning: td_ta_new failed: generic error
+warning: File "/usr/lib/libthread_db.so.1" auto-loading has been declined by your `auto-load safe-path' set to "$debugdir:$datadir/auto-load".
+warning: Unable to find libthread_db matching inferior's thread library, thread debugging will not be available.
+Unable to read JIT descriptor from remote memory
+Unable to fetch general registers: No such process.
+Unable to fetch general registers: No such process.
+Python Exception <class 'gdb.error'>: Unable to fetch general registers: No such process.
+Unable to fetch general registers: No such process.
+Traceback (most recent call last):
+  File "<string>", line 25, in <module>
+ModuleNotFoundError: No module named 'Cython'
+Error while executing Python code.

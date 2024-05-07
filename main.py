@@ -87,7 +87,7 @@ def dtft(eq_system):
     dtft_v = []
     #dtft 
     for i, system in enumerate(eq_system):
-        np_sys = ((e * system) * (e ** -i*I))
+        np_sys = (system * (e ** -i*I))
         dtft_v.append(np_sys)
 
     return dtft_v
@@ -192,15 +192,16 @@ def evaluate_system(shapes, eq_system, tex_save):
 
     def intersect(system, i):
         # gives list of vecs
-        eqs = list(system[-1])
+        eqs = list(system)
         eq0 = eqs.pop(i)
         for eq in eqs:
             eq0 -= eq
         return eq0
             
-    intersects = intersect(fft_system,0)
+    isectvec = intersect(fft_system[-1], 0)
+    intersects = intersect(isectvec, 0)
 
-    isum = intersect.limit(x=2 * pi)
+    isum = intersects.limit(x=2 * pi)
     save("out.tex",latex(isum))
 
 """
