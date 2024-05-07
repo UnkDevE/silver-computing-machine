@@ -116,33 +116,15 @@ def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
     # USES ONLY NUMPY ARRAYS as coeff and prev_input
     def calc_expr(coeff, prev_input, ops, exp):
         # expands out vector shapes
-        # input is the given vector
-        def reshaper(arr, input):
-            from itertools import cycle
-            cs = common_shape(arr, input)
-            acs = [x if x != y else None for x, y in zip(list(arr.shape),
-                             cycle(cs))]
-            acs = list(filter(lambda x: x is not None, acs))
-            reshape = flatten([cs, [1 for x in acs]])
-            
-            vec = input.reshape(reshape)
-            return np.repeat(vec, acs, axis=len(acs))
-
-        # nabbed from sympy source and edited for use case
+        # input is the given vector        
         arr = empty(coeff.shape, dtype=object)
         vec = np.power(prev_input, exp)
+        arr = ops(vec, coeff)
 
-        if len(vec.shape) < len(coeff.shape): # vector
-            if sum(vec.shape) < sum(coeff.shape) and len(vec.shape) < len(coeff.shape):
-                vec = reshaper(coeff, vec)
-            else:
-                coeff = reshaper(vec, coeff)
-
-            arr = ops(vec, coeff)
+        if len(arr.shape) < 1:
+            return matrix(SR, *arr.shape, arr) 
         else:
-            arr = ops(vec, coeff)
-
-        return matrix(SR, *arr.shape, arr) 
+            return vector(arr)
 
     x_input = empty(shapes[0], dtype=object)
     for n, index in enumerate(ndindex(shapes[0])):
@@ -159,9 +141,9 @@ def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
         prev = eq_system[-1].numpy()
 
         if layer[0].shape == prev.shape or len(prev.shape) == 1:
-            weight = calc_expr(layer[0], prev, __mul__, i)
-        else:
             weight = calc_expr(layer[0], prev, __matmul__, i)
+        else:
+            weight = calc_expr(layer[0], prev, __mul__, i)
 
 
         # power is always 1 here because bias is linear
@@ -198,8 +180,8 @@ def evaluate_system(shapes, eq_system, tex_save):
             eq0 -= eq
         return eq0
             
-    isectvec = intersect(fft_system[-1], 0)
-    intersects = intersect(isectvec, 0)
+    intersects = intersect(map(lambda i, sys: intersect(sys, i), 
+                     zip(range(0..len(fft_system[-1]), fft_system[-1]))), 0)
 
     isum = intersects.limit(x=2 * pi)
     save("out.tex",latex(isum))

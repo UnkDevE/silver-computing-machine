@@ -76,3 +76,33 @@ acs = list(filter(lambda x: x is not None, acs))
             rhs = r
         return lhs, rhs
 
+
+   def calc_expr(coeff, prev_input, ops, exp):
+        # expands out vector shapes
+        # input is the given vector
+        def reshaper(arr, input):
+            from itertools import cycle
+            cs = common_shape(arr, input)
+            acs = [x if x != y else None for x, y in zip(list(arr.shape),
+                             cycle(cs))]
+            acs = list(filter(lambda x: x is not None, acs))
+            reshape = flatten([cs, [1 for x in acs]])
+            
+            vec = input.reshape(reshape)
+            return np.repeat(vec, acs, axis=len(acs))
+
+        # nabbed from sympy source and edited for use case
+        arr = empty(coeff.shape, dtype=object)
+        vec = np.power(prev_input, exp)
+
+        if len(vec.shape) < len(coeff.shape): # vector
+            if sum(vec.shape) < sum(coeff.shape) and len(vec.shape) < len(coeff.shape):
+                vec = reshaper(coeff, vec)
+            else:
+                coeff = reshaper(vec, coeff)
+
+            arr = ops(vec, coeff)
+        else:
+            arr = ops(vec, coeff)
+
+        return matrix(SR, *arr.shape, arr) 
