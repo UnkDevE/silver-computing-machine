@@ -180,11 +180,13 @@ def evaluate_system(shapes, eq_system, tex_save):
             eq0 -= eq
         return eq0
             
-    intersects = intersect(map(lambda i, sys: intersect(sys, i), 
-                     zip(range(0..len(fft_system[-1]), fft_system[-1]))), 0)
+    intersects = []
+    for i, eq in enumerate(fft_system[-1]):
+        intersects.append(intersect(fft_system[-1], i))
 
-    isum = intersects.limit(x=2 * pi)
-    save("out.tex",latex(isum))
+    isum = intersect(intersects,0)
+    ilimit = isum.limit(x=2*pi)
+    save("out.tex",latex(ilimit))
 
 """
 # evaluate irfftn using cauchy residue theorem
