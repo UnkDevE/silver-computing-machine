@@ -162,8 +162,8 @@ def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
     
 def evaluate_system(shapes, eq_system, tex_save, outputs):
     # set as a power series
-    from sage.symbolic.relation import solve
-    from sage.all import latex, pi
+    from sage.all import latex, pi, e, I
+    from sage.plot.plot import plot
     
     # returns a the largest expression on the LHS
     def gr_operand(system):
@@ -184,35 +184,29 @@ def evaluate_system(shapes, eq_system, tex_save, outputs):
             rhs = r
         return lhs, rhs
 
-    # find intersects of permutations
+    # transform into dtft
     fft_system = dtft(eq_system)
 
-    from sage.misc.flatten import flatten
-
-    def reduce(system, i, ops):
-        # gives list of vecs
-        eqs = list(system)
-        eq0 = eqs.pop(i)
-        for eq in eqs:
-            eq0 = ops(eq0, eq)
-        return eq0
     
-    from operator import __sub__, __mul__
-            
-    intersects = []
-    for i, eq in enumerate(fft_system[-1]):
-        intersects.append(reduce(fft_system[-1], i, __sub__))
+    outvec = fft_system[-1].numpy()
     
-    def classify_out(i, l):
-        return [1 if i == x else 0 for x in range(0, l)]
+    # caclulate the chec cohomology using the fft_system as a linear system
+    # fft_system is linear over polynomials of n 
+    cocycle = np.sum(outvec * (-np.ones_like(outvec)**np.mgrid[0:len(outvec)]), axis=len(outvec.shape)-1)
 
-    for i in range(len(intersects)):
-        sheaf = reduce(intersects, i, __mul__)
-        lhs, rhs = gr_operand(sheaf)
-        rhsnew = classify_out(i, len(intersects))
+    #cocycle check in floating point
+    if cocycle <= 1 and cocycle > -1:
+        raise("no sheaf avialable for NN check probablity scores")
 
+    # simplex in this case is the direct sum
+    simplex = outvec * (-np.ones_like(outvec)**np.mgrid[1:len(outvec)+1])
 
-    save("out.tex",latex(sheaf))
+    # get line bundle via mul
+    linebundle = simplex * -np.flip(simplex)
+    
+    # inverse dtft
+    inverse = sum(linebundle * (e ** I * np.ones_like(linebundle) * (2*pi)))
+    save("out.tex",latex(inverse))
 
 """
 # evaluate irfftn using cauchy residue theorem
@@ -324,7 +318,7 @@ def output_aggregator(model, fft_layers, data):
     return sumtensors 
 
     
-def model_create_equation(model_dir, tex_save, training_data, csv):
+def model_create_equation(model_dir, tex_save, training_data):
     # check optional args
     from io import StringIO
     activ_obj = pandas.read_csv(StringIO(ACTIVATION_LIST), delimiter=';')
@@ -373,13 +367,14 @@ if __name__=="__main__":
         model = os.path.join(path, sys.argv[1]) 
         try:
             print(os.path.abspath(model))
-            if len(sys.argv) > 4:
-                model_create_equation(os.path.abspath(model), sys.argv[3], sys.argv[2], sys.argv[4])
+            if len(sys.argv) > 3:
+                model_create_equation(os.path.abspath(model), sys.argv[3], sys.argv[2])
             else:
-                model_create_equation(os.path.abspath(model), sys.argv[3], sys.argv[2], None)
+                print("""not enough commands, please give a filename of a model to extract, it's training dataset (which may be altered at future date)
+                output for a tex file, and a csv file containing each type of acitvation used delimitered by ; (optional)""")
         except FileNotFoundError:
             print("""file not found, 
-please give filename of model to extract equation from""")
+                        please give filename of model to extract equation from""")
     else:
         print("""not enough commands, please give a filename of a model to extract, it's training dataset (which may be altered at future date)
 output for a tex file, and a csv file containing each type of acitvation used delimitered by ; (optional)""")

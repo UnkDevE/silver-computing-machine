@@ -90,3 +90,16 @@ acs = list(filter(lambda x: x is not None, acs))
             arr = ops(vec, coeff)
 
         return matrix(SR, *arr.shape, arr) 
+
+
+    def classify_out(i, l):
+        return [1 if i == x else 0 for x in range(0, l)]
+    
+
+    def reduce(system, i, ops):
+        # gives list of vecs
+        eqs = list(system)
+        eq0 = eqs.pop(i)
+        for eq in eqs:
+            eq0 = ops(eq0, eq)
+        return eq0
