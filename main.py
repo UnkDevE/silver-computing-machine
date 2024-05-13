@@ -188,24 +188,24 @@ def evaluate_system(shapes, eq_system, tex_save, outputs):
     fft_system = dtft(eq_system)
 
     
-    outvec = fft_system[-1].numpy()
+    # fft_system is linear over polynomials of n 
+    for vecs in fft_system:
+        outvec = vecs.numpy()
     
     # caclulate the chec cohomology using the fft_system as a linear system
-    # fft_system is linear over polynomials of n 
-    cocycle = np.sum(outvec * (-np.ones_like(outvec)**np.mgrid[0:len(outvec)]), axis=len(outvec.shape)-1)
 
-    #cocycle check in floating point
-    if cocycle <= 1 and cocycle > -1:
-        raise("no sheaf avialable for NN check probablity scores")
-
-    # simplex in this case is the direct sum
-    simplex = outvec * (-np.ones_like(outvec)**np.mgrid[1:len(outvec)+1])
-
-    # get line bundle via mul
-    linebundle = simplex * -np.flip(simplex)
+    # simplex / cocycle in this case is the direct sum
+    diff_cocycle = outvec * (-np.ones_like(outvec)**np.mgrid[0:len(outvec)])
+    kminus1 = outvec * (-np.ones_like(outvec)**np.mgrid[0:len(outvec)-1])
     
+    if np.sum(kminus1) * np.sum(diff_cocycle) != 0:
+        raise("chomology not available")
+    
+    ker = np.dot(diff_cocycle)
+    image = 
+
     # inverse dtft
-    inverse = sum(linebundle * (e ** I * np.ones_like(linebundle) * (2*pi)))
+    inverse = linebundle * (e ** I * np.ones_like(linebundle) * (2*pi))
     save("out.tex",latex(inverse))
 
 """
