@@ -23,9 +23,6 @@ import tensorflow_datasets as tdfs
 
 import numpy as np
 import pandas
-# heaveside is used here it's just eval'ed in
-from sage.all import var, heaviside
-from sage.matrix.constructor import matrix
 
 # list of activation functions
 ACTIVATION_LIST = """activation;function;
@@ -38,7 +35,7 @@ relu;x>0;
 softplus;ln(1+e^x);
 """
 
-INPUT_SYMBOL = var("x")
+# INPUT_SYMBOL = var("x")
 BATCH_SIZE = 1024
 
 tf.config.run_functions_eagerly(True)
@@ -56,8 +53,6 @@ def save(filename, write):
     file.write(write)
     file.close()
 
-
-# hang fire with convolutions
 # helper 
 def complete_bias(shapes, targets):
     def tup_complete(tup, tar): 
@@ -75,6 +70,7 @@ def complete_bias(shapes, targets):
         
     return shapes_new
 
+# looks up each activation from csv and then defines a function to it 
 def activation_fn_lookup(activ_src, csv):
     sourcefnc = activ_src.__name__
     for (i, acc) in enumerate(csv['activation']):
@@ -82,173 +78,7 @@ def activation_fn_lookup(activ_src, csv):
             return eval(csv['function'][i])
     return eval(csv['function']['linear'])
 
-def dtft(eq_system):
-    from sage.all import I, e
-    dtft_v = []
-    #dtft 
-    for i, system in enumerate(eq_system):
-        np_sys = (system * (e ** -i*I))
-        dtft_v.append(np_sys)
-
-    return dtft_v
- 
-def common_shape(x, y):
-    if x.shape == y.shape: 
-        return list(x.shape)
-    else:
-        xs = []
-        for x_s in x.shape:
-            for y_s in y.shape:
-                if x_s == y_s:
-                    xs.append(x_s)
-        if len(xs) < 1:
-            raise "No common shape for" + str(x) + "and" + str(y)
-        else:
-            return xs
-
-def get_poly_eqs_subst(shapes, activ_obj, fft_layers):
-    from numpy import empty, ndindex
-    from sage.all import vector
-    from sage.all import SR
-    from sage.misc.flatten import flatten
-       
-    # pre generates a matrix with symbols in
-    # USES ONLY NUMPY ARRAYS as coeff and prev_input
-    def calc_expr(coeff, prev_input, ops, exp):
-        # expands out vector shapes
-        # input is the given vector        
-        arr = empty(coeff.shape, dtype=object)
-        vec = np.power(prev_input, exp)
-        arr = ops(vec, coeff)
-
-        if len(arr.shape) < 1:
-            return matrix(SR, *arr.shape, arr) 
-        else:
-            return vector(arr)
-
-    x_input = empty(shapes[0], dtype=object)
-    for n, index in enumerate(ndindex(shapes[0])):
-        x_input[index] = var("x_" + str(n))
-    # to system 
-    eq_system = [vector(x_input.flatten())]
-
-    # summate equations to get output
-    for i in range(1, len(shapes)):
-        layer = fft_layers[i-1]
-
-        # get our matrix exprs 
-        from operator import  __add__, __mul__, __matmul__
-        prev = eq_system[-1].numpy()
-
-        if layer[0].shape == prev.shape or len(prev.shape) == 1:
-            weight = calc_expr(layer[0], prev, __matmul__, i)
-        else:
-            weight = calc_expr(layer[0], prev, __mul__, i)
-
-
-        # power is always 1 here because bias is linear
-        bias = calc_expr(layer[1], weight.numpy(), __add__, 1)
-        
-        # lookup the activation function 
-        lookup = activation_fn_lookup(layer[2], activ_obj)
-        
-        # if at end of list don't apply activation fn
-        if len(shapes) == i:
-            eq_system.append(bias)
-        else:
-            eq_system.append((bias).apply_map(lambda x: lookup(x=x)))
-       
-    return eq_system
-    
-def evaluate_system(shapes, eq_system, tex_save, outputs):
-    # set as a power series
-    from sage.all import latex, pi, e, I
-    from sage.plot.plot import plot
-    
-    # returns a the largest expression on the LHS
-    def gr_operand(system):
-        r = system.rhs() 
-        l = system.lhs() 
-        rhs, lhs = None, None
-        if len(l.operands()) > 1:
-            rhs = l
-            if len(rhs.operands()) > len(r.operands()):
-                lhs = rhs
-                rhs = r
-            else:
-                lhs = r
-        elif len(r.operands()) > 1:
-            rhs, lhs = gr_operand(r, l)
-        else:
-            lhs = l
-            rhs = r
-        return lhs, rhs
-
-    # transform into dtft
-    fft_system = dtft(eq_system)
-
-    
-    # fft_system is linear over polynomials of n 
-    # however the first is input so ignore
-    for vecs in fft_system[1:]:
-        outvec = vecs.numpy()
-        
-        # caclulate the chec cohomology using the fft_system as a linear system
-
-        # simplex / cocycle in this case is the direct sum
-        diff_cocycle = outvec * (-np.ones_like(outvec)**np.mgrid[0:len(outvec)])
-        kminus1 = outvec * (-np.ones_like(outvec)**np.mgrid[0:len(outvec)-1])
-        
-        if np.sum(kminus1) * np.sum(diff_cocycle) != 0:
-            raise("chomology not available")
-        
-        from scipy import linalg
-
-        img_km1 = set(linalg.solve(kminus1, np.zeros_like(outvec)))
-        # LDU we want U (reduced row echelon form)
-        _, _, ker_cocycle = linalg.lu(linalg.solve(diff_cocycle, np.zeros_like(outvec)))
-
-
-
-        # inverse dtft
-        inverse = linebundle * (e ** I * np.ones_like(linebundle) * (2*pi))
-
-    save("out.tex",latex(inverse))
-
-"""
-# evaluate irfftn using cauchy residue theorem
-def evaluate_system(shapes, eq_system, out, tex_save):
-    # inverse of fourier transform is anaglogous to convergence of fourier series
-    from sympy import fourier_series, solve, latex, sympify 
-
-    # set as a power series
-    eq_poly = sum(eq_system[-1])
-
-    # calculate inverse fourier of output side
-    from scipy.fft import irfft
-    fft_inverse = irfft(out, n=len(out))
-
-    # calculate the limit
-    from sympy.series.limitseq import limit_seq
-
-    def get_len(shapes):
-        l = shapes[0][0] * shapes[0][1] 
-        for shape in shapes[1:]:
-            l += shape[0][0] * shape[0][1]
-        return l
-    
-    inf_poly = limit_seq(eq_poly, n=get_len(shapes))
-    inf_poly = inf_poly.cancel()
-
-    from sympy import srepr
-    save("nn_poly", srepr(inf_poly))
-
-    solved = syp.solve(inf_poly, fft_inverse, INPUT_SYMBOL).doit(deep=True)
-    tex_save = latex(solved)
-    print("eq solved")
-"""
-
-def output_aggregator(model, fft_layers, data):
+def output_aggregator(model, data):
     # load and get unique features
     [dataset, test] = tdfs.load(data, download=False, split=['train', 'test'])
     
@@ -324,7 +154,50 @@ def output_aggregator(model, fft_layers, data):
 
     return sumtensors 
 
-    
+# kernel in linear algebra
+def kernel(rref):
+    # now column reduced echeolon
+    cref = rref.transpose()
+    cstack = []
+    # we flip here as we want the bottom half of the matrix up to the zero 
+    # row reducing compute
+    for row in np.flip(cref):
+        # split by zero row
+        if row == np.zeros_like(cref)[0]:
+            return np.hstack(cstack)
+        cstack.append(row)
+    return np.hstack(cstack) 
+
+def solve_system(shapes, acitvations, layers, solutions):
+    # first dtft makes our system linear, however it's already in this form 
+    # so we can ignore our transform until we finish computation
+    from scipy import linalg
+    diffs, kernels = ([], [])
+    for layer in layers:  
+        # finding chec cohomology from sheafs
+        # simplex / cocycle in this case is the direct sum
+        diffs.append(layer * ((-np.ones_like(layer))**np.mgrid[0:len(layer)]))
+
+        # LDU we want U (reduced row echelon form)
+        _, _, rref = linalg.lu(linalg.solve(diffs[-1], np.zeros_like(layer)))
+        kernels.append(kernel(rref))
+             
+    # compute images and chec cohomologies
+    cohomologies = []
+    images = []
+    for diff in zip(diffs, kernels):
+        image = set(linalg.solve(diff, np.zeros_like(diff)[0]))
+
+        if len(images) < 1:
+            cohomologies.append(kernel)
+        else:
+            cohomologies.append(kernel * linalg.inv(images[-1]))
+
+    # next part is to direct sum all comolohogies 
+
+    pass
+
+
 def model_create_equation(model_dir, tex_save, training_data):
     # check optional args
     from io import StringIO
@@ -334,9 +207,8 @@ def model_create_equation(model_dir, tex_save, training_data):
     model = tf.keras.models.load_model(model_dir)
     if model is not None:
         # calculate fft + shape
-        from sage.misc.sage_eval import sage_eval
         shapes = []
-        fft_layers = []
+        layers = []
         
         def product(x):
             out = 1
@@ -353,10 +225,11 @@ def model_create_equation(model_dir, tex_save, training_data):
                     layer.weights[1].numpy(), 
                         layer.activation, layer.kernel.shape.as_list())
                           for layer in model.layers if len(layer.weights) > 1]:
+
             # if no activation assume linear
             if act is None:
-                act = sage_eval('x',locals={"x": INPUT_SYMBOL})
-            fft_layers.append([weights, baises, act])
+                act = "linear"
+            layers.append([weights, baises, act])
             shapes.append([shape, weights.shape, baises.shape])
         
         targets = [1] * len(shapes)
@@ -364,9 +237,9 @@ def model_create_equation(model_dir, tex_save, training_data):
         targets[-1] = model.output_shape[-1] 
         shapes = complete_bias(shapes, targets) 
         # fft calculation goes through here
-        # inv_layers = output_aggregator(model, fft_layers, training_data)
-        peq_system = get_poly_eqs_subst(shapes, activ_obj, fft_layers)
-        evaluate_system(shapes, peq_system, tex_save, None)
+        solutions = output_aggregator(model, training_data)
+        solved_system = solve_system(shapes, activ_obj, layers, solutions)
+        # evaluate_system(shapes, peq_system, tex_save, None)
 
 if __name__=="__main__":
     if len(sys.argv) > 2:
