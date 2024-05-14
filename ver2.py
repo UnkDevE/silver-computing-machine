@@ -138,21 +138,20 @@ def output_aggregator(model, data):
       return tf.cast(image, tf.float32) / 255.
 
     # numpy array of predictions
-    sumtensors = []
+    inputimages = []
+    tensors = []
     for (i, dataset) in enumerate(sets):
-        tensor = []
         # get the images
         batch = dataset.padded_batch(BATCH_SIZE, drop_remainder=True)
         # samples not normalized
         normalized = batch.map(lambda x: normalize_img(x['image']))
         for sample in normalized:
+            inputimages.append(sample)
             prediction = model.predict(sample)
             # divide by 10 because output is in form n instead of 1\n
-            tensor.append(np.sum(prediction, axis=0) / prediction.shape[0] / 10)
-        # take avg and append
-        sumtensors.append(np.sum(tensor, axis=0) / len(tensor))
+            tensors.append(np.sum(prediction, axis=0) / prediction.shape[0] / 10)
 
-    return sumtensors 
+    return list(zip(inputimages, tensors)) 
 
 # kernel in linear algebra
 def kernel(rref):
@@ -172,28 +171,39 @@ def solve_system(shapes, acitvations, layers, solutions):
     # first dtft makes our system linear, however it's already in this form 
     # so we can ignore our transform until we finish computation
     from scipy import linalg
-    diffs, kernels = ([], [])
-    for layer in layers:  
-        # finding chec cohomology from sheafs
-        # simplex / cocycle in this case is the direct sum
-        diffs.append(layer * ((-np.ones_like(layer))**np.mgrid[0:len(layer)]))
+
+    # create the function matrix of layers
+    # sum cols in rows of each layer
+    basises = list(map(lambda l: np.sum(l, axis=1), layers[1:]))
+
+    # now we modify the differential to apply for matricies
+    # so for this we simply mutliple 
+    diffs = 
+
+    # start finding chec cohomology from sheafs
+    # simplex / cocycle in this case is the direct sum
+
+    # compute kernels, images and chec cohomologies
+    kernels = []
+    cohomologies = []
+    images = []
+    for diff in diffs:
+        images.append(set(linalg.solve(diff, np.zeros_like(diff)[0])))
 
         # LDU we want U (reduced row echelon form)
         _, _, rref = linalg.lu(linalg.solve(diffs[-1], np.zeros_like(layer)))
         kernels.append(kernel(rref))
-             
-    # compute images and chec cohomologies
-    cohomologies = []
-    images = []
-    for diff in zip(diffs, kernels):
-        image = set(linalg.solve(diff, np.zeros_like(diff)[0]))
 
+        # calculate chomologies
         if len(images) < 1:
-            cohomologies.append(kernel)
+            cohomologies.append(kernels[-1])
         else:
-            cohomologies.append(kernel * linalg.inv(images[-1]))
+            cohomologies.append(kernels[-1] * linalg.inv(images[-1]))
 
+ 
     # next part is to direct sum all comolohogies 
+    # direct_sum = map(np.sum, cohomologies) 
+    
 
     pass
 
