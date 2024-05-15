@@ -20,6 +20,7 @@ import os
 
 import tensorflow as tf
 import tensorflow_datasets as tdfs 
+from sage.all import heaviside, var
 
 import numpy as np
 import pandas
@@ -35,7 +36,7 @@ relu;x>0;
 softplus;ln(1+e^x);
 """
 
-# INPUT_SYMBOL = var("x")
+INPUT_SYMBOL = var("x")
 BATCH_SIZE = 1024
 
 tf.config.run_functions_eagerly(True)
@@ -72,11 +73,13 @@ def complete_bias(shapes, targets):
 
 # looks up each activation from csv and then defines a function to it 
 def activation_fn_lookup(activ_src, csv):
+    if activ_src is None:
+        return csv['function']['linear']
     sourcefnc = activ_src.__name__
     for (i, acc) in enumerate(csv['activation']):
         if acc == sourcefnc:
-            return eval(csv['function'][i])
-    return eval(csv['function']['linear'])
+            return (csv['function'][i])
+    return csv['function']['linear']
 
 def output_aggregator(model, data):
     # load and get unique features
@@ -167,44 +170,78 @@ def kernel(rref):
         cstack.append(row)
     return np.hstack(cstack) 
 
+# calculates the chec differential
+def chec_diff(x, start):
+    return np.cumsum(x * (-np.ones_like(x)**np.mgrid[start:len()]))
+    
+# start finding chec cohomology from sheafs
+# simplex / cocycle in this case is the direct sum
+# compute kernels, images and chec cohomologies
+# gets the kth layers kth Chomology class
+def chec_chomology(layer):
+    from scipy import linalg
+
+    diff = chec_diff(layer, 0)
+    cocycle = chec_diff(layer, 1)
+    image = linalg.solve(cocycle, np.zeros_like(cocycle)[0])
+
+    # LDU we want U (reduced row echelon form)
+    _, _, rref = linalg.lu(linalg.solve(diff[-1], np.zeros_like(layer)))
+    ker = kernel(rref)
+
+    # calculate chomologies
+    return ker * linalg.inv(image) 
+
+ 
 def solve_system(shapes, acitvations, layers, solutions):
     # first dtft makes our system linear, however it's already in this form 
     # so we can ignore our transform until we finish computation
-    from scipy import linalg
-
-    # create the function matrix of layers
-    # sum cols in rows of each layer
-    basises = list(map(lambda l: np.sum(l, axis=1), layers[1:]))
 
     # now we modify the differential to apply for matricies
     # so for this we simply mutliple 
-    diffs = 
 
-    # start finding chec cohomology from sheafs
-    # simplex / cocycle in this case is the direct sum
+    # This for loop below caclualtes all the terms lienarly so we want to add 
+    # in the non linear function compositions in a liner manner
+    # we do this by finding the taylor expansion of the function
+    def taylor2mat(taylor):
+        cfs = taylor.coefficients()
+        # fill in gaps of coefficients
+        mat = []
+        for (cff, ipow), i in enumerate(cfs):
+            zcf = []
+            if ipow != i:
+                zcf = [0 for _ in ipow - i]
+            mat.append(*zcf)
+            mat.append(cff)
 
-    # compute kernels, images and chec cohomologies
-    kernels = []
-    cohomologies = []
-    images = []
-    for diff in diffs:
-        images.append(set(linalg.solve(diff, np.zeros_like(diff)[0])))
-
-        # LDU we want U (reduced row echelon form)
-        _, _, rref = linalg.lu(linalg.solve(diffs[-1], np.zeros_like(layer)))
-        kernels.append(kernel(rref))
-
-        # calculate chomologies
-        if len(images) < 1:
-            cohomologies.append(kernels[-1])
-        else:
-            cohomologies.append(kernels[-1] * linalg.inv(images[-1]))
-
+        return np.array(mat)
  
+    tayloract = [taylor2mat(act.taylor(INPUT_SYMBOL, 0, len(layers))) for act in acitvations]
+
+    chec = []
+    lacts = []    
+    for layer,act in zip(layers, tayloract):
+        # create the multiplicants of powers in taylor series
+        lactpow = np.stack([layer * xn for xn in act])
+        # add each power to right power bukcket
+        # creates a line for input so we can use it for chec
+        # use pythonic sum to sum matricies
+        lacts.append(sum([layer[i] + lpow for i, lpow in enumerate(lactpow)]))
+
+        # find chomologies
+        cohol = []
+        for funclayer in lacts:
+            cohol.append(chec_chomology(funclayer))
+
+        # restack the power matrix 
+        chec.append(np.hstack(cohol))
+    
+    # TODO: compose chomologies of R* 
+    # TODO: get out of fourier domain using inverse transform
+    # TODO: UNIT tests
+
     # next part is to direct sum all comolohogies 
     # direct_sum = map(np.sum, cohomologies) 
-    
-
     pass
 
 
@@ -225,6 +262,8 @@ def model_create_equation(model_dir, tex_save, training_data):
             for y in x:
                 out *= y
             return out 
+        
+        from sage.misc.sage_eval import sage_eval
 
         # append input shape remove None type
         shapes.append([product(model.input_shape[1:])])
@@ -237,8 +276,8 @@ def model_create_equation(model_dir, tex_save, training_data):
                           for layer in model.layers if len(layer.weights) > 1]:
 
             # if no activation assume linear
-            if act is None:
-                act = "linear"
+            act = sage_eval(activation_fn_lookup(act), locals={'x': INPUT_SYMBOL})
+
             layers.append([weights, baises, act])
             shapes.append([shape, weights.shape, baises.shape])
         
