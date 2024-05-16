@@ -218,7 +218,7 @@ def solve_system(shapes, acitvations, layers, solutions):
  
     tayloract = [taylor2mat(act.taylor(INPUT_SYMBOL, 0, len(layers))) for act in acitvations]
 
-    chec = []
+    cech = []
     lacts = []    
     for layer,act in zip(layers, tayloract):
         # create the multiplicants of powers in taylor series
@@ -233,8 +233,8 @@ def solve_system(shapes, acitvations, layers, solutions):
         for funclayer in lacts:
             cohol.append(chec_chomology(funclayer))
 
-        # restack the power matrix 
-        chec.append(np.hstack(cohol))
+        # append direct sum of power matricies
+        cech.append(np.sum(cohol, axis=len(cohol)-1))
     
     # TODO: compose chomologies of R* 
     # TODO: get out of fourier domain using inverse transform
