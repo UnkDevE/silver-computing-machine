@@ -192,7 +192,19 @@ def chec_chomology(layer):
     # calculate chomologies
     return ker * linalg.inv(image) 
 
- 
+# create matrix of inputs of powers len(shapes) from shape[0]
+def create_inputs(shapes):
+    # create the symbolics
+    x_input = np.empty(shapes[0], dtype=object)
+    for n, index in enumerate(np.ndindex(shapes[0])):
+        x_input[index] = var("x_" + str(n))
+
+    symbolics = []
+    for i in range(1, len(shapes)):
+        symbolics.append(x_input ** i)
+    
+    return symbolics
+
 def solve_system(shapes, acitvations, layers, solutions):
     # first dtft makes our system linear, however it's already in this form 
     # so we can ignore our transform until we finish computation
@@ -220,6 +232,9 @@ def solve_system(shapes, acitvations, layers, solutions):
 
     cech = []
     lacts = []    
+    eigs = []
+
+    from scipy import linalg 
     for layer,act in zip(layers, tayloract):
         # create the multiplicants of powers in taylor series
         lactpow = np.stack([layer * xn for xn in act])
@@ -235,9 +250,14 @@ def solve_system(shapes, acitvations, layers, solutions):
 
         # append direct sum of power matricies
         cech.append(np.sum(cohol, axis=len(cohol)-1))
+
+        # caluclate each eigenvalues
+        eigs.append(linalg.eig(cech[-1]))
+        # use calcuation of linear R* powers
+        (lacts[-2] - eigs[-1]) ** 
     
-    # TODO: compose chomologies of R* 
-    # TODO: get out of fourier domain using inverse transform
+
+    # TODO: find eigen values to solve system of ODE's
     # TODO: UNIT tests
 
     # next part is to direct sum all comolohogies 
