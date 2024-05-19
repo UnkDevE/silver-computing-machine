@@ -233,9 +233,9 @@ def solve_system(shapes, acitvations, layers, solutions):
     cech = []
     lacts = []    
     eigs = []
-
+    sols = []
     from scipy import linalg 
-    for layer,act in zip(layers, tayloract):
+    for i, (layer,act) in enumerate(zip(layers, tayloract)):
         # create the multiplicants of powers in taylor series
         lactpow = np.stack([layer * xn for xn in act])
         # add each power to right power bukcket
@@ -250,20 +250,25 @@ def solve_system(shapes, acitvations, layers, solutions):
 
         # append direct sum of power matricies
         cech.append(np.sum(cohol, axis=len(cohol)-1))
-
-        # caluclate each eigenvalues
         eigs.append(linalg.eig(cech[-1]))
-        # use calcuation of linear R* powers
-        (lacts[-2] - eigs[-1]) ** 
+        solves = linalg.solve(cech[-1], 0)
+
+        sols.append(linalg.solve(eigs, solves) * np.e ** eigs)
     
+    return sols
 
-    # TODO: find eigen values to solve system of ODE's
-    # TODO: UNIT tests
-
+""" HUMAN READBLE OUTPUT 
+    in_shape = create_inputs(shapes)
     # next part is to direct sum all comolohogies 
     # direct_sum = map(np.sum, cohomologies) 
-    pass
+    
+    linear_systems = []
+    for i, sol in zip(in_shape, sols):
+        linear_systems.append(i * sols)
 
+   
+   return linear_systems
+"""
 
 def model_create_equation(model_dir, tex_save, training_data):
     # check optional args
