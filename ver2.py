@@ -230,11 +230,10 @@ def solve_system(shapes, acitvations, layers, solutions):
  
     tayloract = [taylor2mat(act.taylor(INPUT_SYMBOL, 0, len(layers))) for act in acitvations]
 
-    cech = []
     lacts = []    
-    eigs = []
     sols = []
     from scipy import linalg 
+    from sagemath.all import E
     for i, (layer,act) in enumerate(zip(layers, tayloract)):
         # create the multiplicants of powers in taylor series
         lactpow = np.stack([layer * xn for xn in act])
@@ -249,26 +248,19 @@ def solve_system(shapes, acitvations, layers, solutions):
             cohol.append(chec_chomology(funclayer))
 
         # append direct sum of power matricies
-        cech.append(np.sum(cohol, axis=len(cohol)-1))
-        eigs.append(linalg.eig(cech[-1]))
-        solves = linalg.solve(cech[-1], 0)
+        cech = np.sum(cohol, axis=len(cohol)-1)
+        eigs = linalg.eig(cech)
+        solves = linalg.solve(cech, 0)
 
-        sols.append(linalg.solve(eigs, solves) * np.e ** eigs)
+        sols.append(linalg.solve(eigs, solves) * E ** eigs)
     
-    return sols
-
-""" HUMAN READBLE OUTPUT 
     in_shape = create_inputs(shapes)
-    # next part is to direct sum all comolohogies 
-    # direct_sum = map(np.sum, cohomologies) 
-    
+
     linear_systems = []
     for i, sol in zip(in_shape, sols):
-        linear_systems.append(i * sols)
+        linear_systems.append(sols ** i)
 
-   
-   return linear_systems
-"""
+    return linear_systems
 
 def model_create_equation(model_dir, tex_save, training_data):
     # check optional args
@@ -313,7 +305,13 @@ def model_create_equation(model_dir, tex_save, training_data):
         # fft calculation goes through here
         solutions = output_aggregator(model, training_data)
         solved_system = solve_system(shapes, activ_obj, layers, solutions)
-        # evaluate_system(shapes, peq_system, tex_save, None)
+        # we now have a linear system of powers lets add them
+
+        from sagemath.all import matrix, latex
+        equations = matrix(sum(solved_system))
+        # find the determinant 
+        solution = equations.determinant()
+        save("out.tex", latex(solution))
 
 if __name__=="__main__":
     if len(sys.argv) > 2:
