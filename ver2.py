@@ -32,7 +32,7 @@ step;heaviside(x)
 logistic;1/(1+e^-x);
 tanh;e^x - e^-x/e^x+e^-x;
 smht;e^ax - e^-bx/e^cx + e^-dx;
-relu;x>0;
+relu;x * heaviside(x);
 softplus;ln(1+e^x);
 """
 
@@ -81,6 +81,7 @@ def activation_fn_lookup(activ_src, csv):
             return (csv['function'][i])
     return csv['function']['linear']
 
+"""
 def output_aggregator(model, data):
     # load and get unique features
     [dataset, test] = tdfs.load(data, download=False, split=['train', 'test'])
@@ -155,6 +156,7 @@ def output_aggregator(model, data):
             tensors.append(np.sum(prediction, axis=0) / prediction.shape[0] / 10)
 
     return list(zip(inputimages, tensors)) 
+"""
 
 # kernel in linear algebra
 def kernel(rref):
@@ -205,7 +207,7 @@ def create_inputs(shapes):
     
     return symbolics
 
-def solve_system(shapes, acitvations, layers, solutions):
+def solve_system(shapes, acitvations, layers):
     # first dtft makes our system linear, however it's already in this form 
     # so we can ignore our transform until we finish computation
 
@@ -219,21 +221,21 @@ def solve_system(shapes, acitvations, layers, solutions):
         cfs = taylor.coefficients()
         # fill in gaps of coefficients
         mat = []
-        for (cff, ipow), i in enumerate(cfs):
+        for i, (cff, ipow) in enumerate(cfs):
             zcf = []
-            if ipow != i:
-                zcf = [0 for _ in ipow - i]
-            mat.append(*zcf)
+            if ipow - 1 > i:
+                zcf = [0 for _ in ipow - 1 - i]
+                mat.append(*zcf)
             mat.append(cff)
 
-        return np.array(mat)
+        return np.array(mat).astype(float)
  
     tayloract = [taylor2mat(act.taylor(INPUT_SYMBOL, 0, len(layers))) for act in acitvations]
 
     lacts = []    
     sols = []
     from scipy import linalg 
-    from sagemath.all import E
+    from sage.all import E
     for i, (layer,act) in enumerate(zip(layers, tayloract)):
         # create the multiplicants of powers in taylor series
         lactpow = np.stack([layer * xn for xn in act])
@@ -284,6 +286,7 @@ def model_create_equation(model_dir, tex_save, training_data):
 
         # append input shape remove None type
         shapes.append([product(model.input_shape[1:])])
+        activations = []
 
         # main wb extraction loop
         for [weights, baises, act, shape] in [
@@ -293,9 +296,9 @@ def model_create_equation(model_dir, tex_save, training_data):
                           for layer in model.layers if len(layer.weights) > 1]:
 
             # if no activation assume linear
-            act = sage_eval(activation_fn_lookup(act), locals={'x': INPUT_SYMBOL})
-
-            layers.append([weights, baises, act])
+            activations.append(
+                sage_eval(activation_fn_lookup(act, activ_obj), locals={'x': INPUT_SYMBOL}))
+            layers.append([weights, baises]) 
             shapes.append([shape, weights.shape, baises.shape])
         
         targets = [1] * len(shapes)
@@ -303,15 +306,14 @@ def model_create_equation(model_dir, tex_save, training_data):
         targets[-1] = model.output_shape[-1] 
         shapes = complete_bias(shapes, targets) 
         # fft calculation goes through here
-        solutions = output_aggregator(model, training_data)
-        solved_system = solve_system(shapes, activ_obj, layers, solutions)
+        solved_system = solve_system(shapes, activations, layers) 
         # we now have a linear system of powers lets add them
 
-        from sagemath.all import matrix, latex
+        from sage.all import matrix, latex
         equations = matrix(sum(solved_system))
         # find the determinant 
         solution = equations.determinant()
-        save("out.tex", latex(solution))
+        save(tex_save, latex(solution))
 
 if __name__=="__main__":
     if len(sys.argv) > 2:
