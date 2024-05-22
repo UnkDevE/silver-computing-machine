@@ -32,7 +32,7 @@ step;heaviside(x)
 logistic;1/(1+e^-x);
 tanh;e^x - e^-x/e^x+e^-x;
 smht;e^ax - e^-bx/e^cx + e^-dx;
-relu;x * heaviside(x);
+relu;symbolic_max(x, 1);
 softplus;ln(1+e^x);
 """
 
@@ -207,7 +207,7 @@ def create_inputs(shapes):
     
     return symbolics
 
-def solve_system(shapes, acitvations, layers):
+def solve_system(shapes, activations, layers):
     # first dtft makes our system linear, however it's already in this form 
     # so we can ignore our transform until we finish computation
 
@@ -216,46 +216,28 @@ def solve_system(shapes, acitvations, layers):
 
     # This for loop below caclualtes all the terms lienarly so we want to add 
     # in the non linear function compositions in a liner manner
-    # we do this by finding the taylor expansion of the function
-    def taylor2mat(taylor):
-        cfs = taylor.coefficients()
-        # fill in gaps of coefficients
-        mat = []
-        for i, (cff, ipow) in enumerate(cfs):
-            zcf = []
-            if ipow - 1 > i:
-                zcf = [0 for _ in ipow - 1 - i]
-                mat.append(*zcf)
-            mat.append(cff)
+   
 
-        return np.array(mat).astype(float)
- 
-    tayloract = [taylor2mat(act.taylor(INPUT_SYMBOL, 0, len(layers))) for act in acitvations]
+    from sage.all import E, matrix
 
-    lacts = []    
     sols = []
     from scipy import linalg 
-    from sage.all import E
-    for i, (layer,act) in enumerate(zip(layers, tayloract)):
-        # create the multiplicants of powers in taylor series
-        lactpow = np.stack([layer * xn for xn in act])
-        # add each power to right power bukcket
-        # creates a line for input so we can use it for chec
-        # use pythonic sum to sum matricies
-        lacts.append(sum([layer[i] + lpow for i, lpow in enumerate(lactpow)]))
+    for i, (layer,act) in enumerate(zip(layers, activations)):
+        # find solution for linear part
+        eigs = linalg.eig(layer)
+        solves = linalg.solve(layer, 0)
+        sols.append(linalg.solve(eigs, solves) * E ** eigs)
+        
+        # add in nonlinear operator 
 
         # find chomologies
         cohol = []
-        for funclayer in lacts:
+        for funclayer in layers:
             cohol.append(chec_chomology(funclayer))
 
         # append direct sum of power matricies
         cech = np.sum(cohol, axis=len(cohol)-1)
-        eigs = linalg.eig(cech)
-        solves = linalg.solve(cech, 0)
-
-        sols.append(linalg.solve(eigs, solves) * E ** eigs)
-    
+   
     in_shape = create_inputs(shapes)
 
     linear_systems = []
