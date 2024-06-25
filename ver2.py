@@ -18,10 +18,12 @@
 import sys
 import os
 
+from sympy import Q
 import tensorflow as tf
 import tensorflow_datasets as tdfs 
-from sage.all import heaviside, var
+from sage.all import heaviside, var, E
 
+from scipy import linalg 
 import numpy as np
 import pandas
 
@@ -32,11 +34,12 @@ step;heaviside(x)
 logistic;1/(1+e^-x);
 tanh;e^x - e^-x/e^x+e^-x;
 smht;e^ax - e^-bx/e^cx + e^-dx;
-relu;symbolic_max(x, 1);
+relu;max_symbolic(0, x);
 softplus;ln(1+e^x);
 """
 
 INPUT_SYMBOL = var("x")
+LAPLACE_SYMBOL = var("t")
 BATCH_SIZE = 1024
 
 tf.config.run_functions_eagerly(True)
@@ -158,8 +161,8 @@ def output_aggregator(model, data):
     return list(zip(inputimages, tensors)) 
 """
 
-# kernel in linear algebra
-def kernel(rref):
+# image in linear algebra
+def image(rref):
     # now column reduced echeolon
     cref = rref.transpose()
     cstack = []
@@ -167,32 +170,49 @@ def kernel(rref):
     # row reducing compute
     for row in np.flip(cref):
         # split by zero row
-        if row == np.zeros_like(cref)[0]:
-            return np.hstack(cstack)
+        if np.all(row == np.zeros_like(cref[0]).astype(np.float64)):
+            return np.stack(cstack)
         cstack.append(row)
-    return np.hstack(cstack) 
+    return np.stack(cstack) 
 
 # calculates the chec differential
-def chec_diff(x, start):
-    return np.cumsum(x * (-np.ones_like(x)**np.mgrid[start:len()]))
+def _chec_diff(x, start):
+    return np.cumsum(x * (-np.ones_like(x)**np.mgrid[start:len(x)+start]))
+
+#rolls a 1D array
+def shifts(x, start):
+    y = []
+    for i in range(-start, x.shape[0] - start):
+        y.append(np.roll(x, i))
+    return y
+
     
+def chec_diff(x, start):
+    permutes = shifts(x, start)
+
+    diffs = []
+    for i, perm in enumerate(permutes):
+        diffs.append(_chec_diff(perm, i))
+
+    return np.array(diffs)
+
+        
 # start finding chec cohomology from sheafs
 # simplex / cocycle in this case is the direct sum
 # compute kernels, images and chec cohomologies
 # gets the kth layers kth Chomology class
 def chec_chomology(layer):
-    from scipy import linalg
-
     diff = chec_diff(layer, 0)
     cocycle = chec_diff(layer, 1)
-    image = linalg.solve(cocycle, np.zeros_like(cocycle)[0])
+    _, _, rrefco = linalg.lu(cocycle)
+    im = image(rrefco)
 
     # LDU we want U (reduced row echelon form)
-    _, _, rref = linalg.lu(linalg.solve(diff[-1], np.zeros_like(layer)))
-    ker = kernel(rref)
+    _, _, rref = linalg.lu(diff)
+    ker = linalg.solve(rref, np.zeros_like(rref[0]))
 
     # calculate chomologies
-    return ker * linalg.inv(image) 
+    return ker * linalg.inv(im) 
 
 # create matrix of inputs of powers len(shapes) from shape[0]
 def create_inputs(shapes):
@@ -203,9 +223,26 @@ def create_inputs(shapes):
 
     symbolics = []
     for i in range(1, len(shapes)):
-        symbolics.append(x_input ** i)
+        symbolics.append(x_input)
     
     return symbolics
+
+def linsolve(layer):
+    eigs = linalg.eig(layer)
+    solves = linalg.solve(layer, np.zeros(layer.shape[0]))
+    return linalg.solve(eigs, solves) * E ** eigs
+        
+def cohomologies(layers):
+    # find chomologies
+    cohol = []
+    # layer is normally nonsquare so we vectorize
+    for funclayer in layers:
+        cohol.append(chec_chomology(funclayer))
+
+    cohol = np.array(cohol)
+    # append direct sum of power matricies
+    cech = np.sum(cohol, axis=len(cohol.shape)-1)
+    return cech
 
 def solve_system(shapes, activations, layers):
     # first dtft makes our system linear, however it's already in this form 
@@ -216,33 +253,32 @@ def solve_system(shapes, activations, layers):
 
     # This for loop below caclualtes all the terms lienarly so we want to add 
     # in the non linear function compositions in a liner manner
-   
-
-    from sage.all import E, matrix
-
     sols = []
-    from scipy import linalg 
+
     for i, (layer,act) in enumerate(zip(layers, activations)):
-        # find solution for linear part
-        eigs = linalg.eig(layer)
-        solves = linalg.solve(layer, 0)
-        sols.append(linalg.solve(eigs, solves) * E ** eigs)
-        
         # add in nonlinear operator 
+        # take power to remove nonlinears
+        weight = np.float_power(layer[0], float(i+1))
+        bias = np.float_power(layer[1], float(i+1))
 
-        # find chomologies
-        cohol = []
-        for funclayer in layers:
-            cohol.append(chec_chomology(funclayer))
+        # TODO: recovery of inputs through activaiton?
+        # vectorize activation
+        inv = np.vectorize(lambda x: act(x=x))
 
-        # append direct sum of power matricies
-        cech = np.sum(cohol, axis=len(cohol)-1)
-   
+        # recreate zeta
+        zeta = None
+        if len(sols) < 1:
+            zeta = weight + bias
+        else:
+            zeta = weight @ sols[-1] + bias
+        # run cohomologies
+        sols.append(cohomologies(inv(zeta).astype(np.float64)))
+        
     in_shape = create_inputs(shapes)
 
     linear_systems = []
-    for i, sol in zip(in_shape, sols):
-        linear_systems.append(sols ** i)
+    for ins, sol in zip(in_shape, sols):
+        linear_systems.append(sol * ins)
 
     return linear_systems
 
