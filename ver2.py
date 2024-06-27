@@ -177,7 +177,8 @@ def image(rref):
 
 # calculates the chec differential
 def _chec_diff(x, start):
-    return np.cumsum(x * (-np.ones_like(x)**np.mgrid[start:len(x)+start]))
+    shape = np.roll(np.reshape(np.meshgrid(x)[0], x.shape), start, axis=1)
+    return np.reshape(np.cumsum(x * (-np.ones_like(x)**shape)), x.shape)
 
 #rolls a 1D array
 def shifts(x, start):
@@ -202,17 +203,17 @@ def chec_diff(x, start):
 # compute kernels, images and chec cohomologies
 # gets the kth layers kth Chomology class
 def chec_chomology(layer):
-    diff = chec_diff(layer, 0)
-    cocycle = chec_diff(layer, 1)
+    diff = _chec_diff(layer, 0)
+    cocycle = _chec_diff(layer, 1)
     _, _, rrefco = linalg.lu(cocycle)
     im = image(rrefco)
 
     # LDU we want U (reduced row echelon form)
     _, _, rref = linalg.lu(diff)
-    ker = linalg.solve(rref, np.zeros_like(rref[0]))
+    ker = image(rref.transpose())
 
     # calculate chomologies
-    return ker * linalg.inv(im) 
+    return (ker, im) 
 
 # create matrix of inputs of powers len(shapes) from shape[0]
 def create_inputs(shapes):
@@ -223,7 +224,7 @@ def create_inputs(shapes):
 
     symbolics = []
     for i in range(1, len(shapes)):
-        symbolics.append(x_input)
+        symbolics.append(x_input ** i)
     
     return symbolics
 
@@ -235,13 +236,21 @@ def linsolve(layer):
 def cohomologies(layers):
     # find chomologies
     cohol = []
+    kerims = []
+
     # layer is normally nonsquare so we vectorize
     for funclayer in layers:
-        cohol.append(chec_chomology(funclayer))
+        kerims.append(chec_chomology(funclayer))
+        if len(kerims) >= 2:
+            # this has incorrect sizing MAYBE: guass kernel?
+            cohol.append(kerims[-1][0] * linalg.inv(kerims[-2][1]))
 
     cohol = np.array(cohol)
-    # append direct sum of power matricies
-    cech = np.sum(cohol, axis=len(cohol.shape)-1)
+
+    # NOPE need to find constant sheaf
+    const_sheaf = np.multiply.reduce(cohol)
+    # append direct sum of power matricies - KINDA SUS
+    cech = np.sum(np.fmod(cohol,const_sheaf), axis=len(cohol.shape)-1)
     return cech
 
 def solve_system(shapes, activations, layers):
@@ -253,31 +262,31 @@ def solve_system(shapes, activations, layers):
 
     # This for loop below caclualtes all the terms lienarly so we want to add 
     # in the non linear function compositions in a liner manner
-    sols = []
 
+    zetas = []
     for i, (layer,act) in enumerate(zip(layers, activations)):
         # add in nonlinear operator 
         # take power to remove nonlinears
-        weight = np.float_power(layer[0], float(i+1))
-        bias = np.float_power(layer[1], float(i+1))
-
+        # weight = np.float_power(layer[0], float(i+1))
+        # bias = np.float_power(layer[1], float(i+1))
+        weight = layer[0]
+        bias = layer[1] # still gives zero
         # TODO: recovery of inputs through activaiton?
         # vectorize activation
         inv = np.vectorize(lambda x: act(x=x))
 
         # recreate zeta
-        zeta = None
-        if len(sols) < 1:
-            zeta = weight + bias
+        if len(zetas) < 1:
+            zetas.append(weight + bias)
         else:
-            zeta = weight @ sols[-1] + bias
-        # run cohomologies
-        sols.append(cohomologies(inv(zeta).astype(np.float64)))
+            zetas.append(zetas[-1] @ weight + bias)
+    # run cohomologies
+    sols = cohomologies(zetas)
         
     in_shape = create_inputs(shapes)
 
     linear_systems = []
-    for ins, sol in zip(in_shape, sols):
+    for i, (ins, sol) in enumerate(zip(in_shape, sols)):
         linear_systems.append(sol * ins)
 
     return linear_systems
@@ -327,8 +336,8 @@ def model_create_equation(model_dir, tex_save, training_data):
         solved_system = solve_system(shapes, activations, layers) 
         # we now have a linear system of powers lets add them
 
-        from sage.all import matrix, latex
-        equations = matrix(sum(solved_system))
+        from sage.all import matrix, latex 
+        equations = matrix(solved_system)
         # find the determinant 
         solution = equations.determinant()
         save(tex_save, latex(solution))
