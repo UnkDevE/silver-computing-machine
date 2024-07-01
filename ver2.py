@@ -18,7 +18,6 @@
 import sys
 import os
 
-from sympy import Q
 import tensorflow as tf
 import tensorflow_datasets as tdfs 
 from sage.all import heaviside, var, E
@@ -232,7 +231,20 @@ def linsolve(layer):
     eigs = linalg.eig(layer)
     solves = linalg.solve(layer, np.zeros(layer.shape[0]))
     return linalg.solve(eigs, solves) * E ** eigs
-        
+
+
+# where space is the space in matrix format
+# plus the subset of spaces
+def quot_space(subset, space):
+    from scipy.ndimage import convolve
+    # mutliply two matricies from subspace
+    conv = convolve(space, subset)
+    # find pivots 
+    stack = np.hstack(subset, space)
+    pivot, _, rref = linalg.lu(stack)
+
+    return space * pivot
+
 def cohomologies(layers):
     # find chomologies
     cohol = []
@@ -243,7 +255,7 @@ def cohomologies(layers):
         kerims.append(chec_chomology(funclayer))
         if len(kerims) >= 2:
             # this has incorrect sizing MAYBE: guass kernel?
-            cohol.append(kerims[-1][0] * linalg.inv(kerims[-2][1]))
+            cohol.append(quot_space(kerims[-1][0], linalg.inv(kerims[-2][1])))
 
     cohol = np.array(cohol)
 
@@ -279,7 +291,8 @@ def solve_system(shapes, activations, layers):
         if len(zetas) < 1:
             zetas.append(weight + bias)
         else:
-            zetas.append(zetas[-1] @ weight + bias)
+            zetas.append(inv(zetas[-1]).astype(np.float64) @ weight + bias)
+
     # run cohomologies
     sols = cohomologies(zetas)
         
