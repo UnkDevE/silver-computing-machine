@@ -203,6 +203,7 @@ def pad_coeff_output(coeff):
         if i-1 >= last:
             [arr.append(0) for _ in range(i-1)]
         arr.append(x)
+        last = i
 
     return arr
 
