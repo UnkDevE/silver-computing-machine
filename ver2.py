@@ -20,7 +20,7 @@ import os
 
 import tensorflow as tf
 import tensorflow_datasets as tdfs 
-from sage.all import heaviside, var, E
+from sage.all import heaviside, var, E, matrix, latex
 
 from scipy import linalg 
 import numpy as np
@@ -196,6 +196,25 @@ def chec_diff(x, start):
 
     return np.array(diffs)
 
+def pad_coeff_output(coeff):
+    last = 0
+    arr = []
+    for [x, i] in coeff:
+        if i-1 >= last:
+            [arr.append(0) for _ in range(i-1)]
+        arr.append(x)
+
+    return arr
+
+def coeff(mat, shape):
+    matf = []
+    for v in mat:
+        coeffs = []
+        for e in v:
+            coeffs.append(pad_coeff_output(e.coefficients()))
+        matf.append(coeffs)
+
+    return np.reshape(np.array(coeffs), shape)
         
 # start finding chec cohomology from sheafs
 # simplex / cocycle in this case is the direct sum
@@ -204,11 +223,11 @@ def chec_diff(x, start):
 def chec_chomology(layer):
     diff = _chec_diff(layer, 0)
     cocycle = _chec_diff(layer, 1)
-    _, _, rrefco = linalg.lu(cocycle)
+    _, _, rrefco = linalg.lu(coeff(cocycle, layer.shape))
     im = image(rrefco)
 
     # LDU we want U (reduced row echelon form)
-    _, _, rref = linalg.lu(diff)
+    _, _, rref = linalg.lu(coeff(diff, layer.shape))
     ker = image(rref.transpose())
 
     # calculate chomologies
@@ -220,12 +239,7 @@ def create_inputs(shapes):
     x_input = np.empty(shapes[0], dtype=object)
     for n, index in enumerate(np.ndindex(shapes[0])):
         x_input[index] = var("x_" + str(n))
-
-    symbolics = []
-    for i in range(1, len(shapes)):
-        symbolics.append(x_input ** i)
-    
-    return symbolics
+    return x_input 
 
 def linsolve(layer):
     eigs = linalg.eig(layer)
@@ -236,14 +250,20 @@ def linsolve(layer):
 # where space is the space in matrix format
 # plus the subset of spaces
 def quot_space(subset, space):
-    from scipy.ndimage import convolve
     # mutliply two matricies from subspace
-    conv = convolve(space, subset)
-    # find pivots 
-    stack = np.hstack(subset, space)
-    pivot, _, rref = linalg.lu(stack)
+    spaces = []
+    for vsp in space:
+        for vsub in subset:
+            spaces.append(vsp /
+               np.pad(vsub, (space.shape[0] - subset.shape[0], 0), 'constant', 
+                      constant_values=(1,1)))
 
-    return space * pivot
+    quot = np.reshape(np.array(spaces), (subset.shape[0], *space.shape))
+    # remove infinities and nans
+    quot[np.isposinf(quot)] = 1.0
+    quot[np.isneginf(-quot)] = 0
+
+    return quot
 
 def cohomologies(layers):
     # find chomologies
@@ -274,6 +294,7 @@ def solve_system(shapes, activations, layers):
 
     # This for loop below caclualtes all the terms lienarly so we want to add 
     # in the non linear function compositions in a liner manner
+    inputs = create_inputs(shapes)
 
     zetas = []
     for i, (layer,act) in enumerate(zip(layers, activations)):
@@ -289,20 +310,12 @@ def solve_system(shapes, activations, layers):
 
         # recreate zeta
         if len(zetas) < 1:
-            zetas.append(weight + bias)
+            zetas.append(inputs * weight + bias)
         else:
-            zetas.append(inv(zetas[-1]).astype(np.float64) @ weight + bias)
+            zetas.append(inv(zetas[-1]) @ weight + bias)
 
     # run cohomologies
-    sols = cohomologies(zetas)
-        
-    in_shape = create_inputs(shapes)
-
-    linear_systems = []
-    for i, (ins, sol) in enumerate(zip(in_shape, sols)):
-        linear_systems.append(sol * ins)
-
-    return linear_systems
+    return cohomologies(zetas)
 
 def model_create_equation(model_dir, tex_save, training_data):
     # check optional args
@@ -348,12 +361,13 @@ def model_create_equation(model_dir, tex_save, training_data):
         # fft calculation goes through here
         solved_system = solve_system(shapes, activations, layers) 
         # we now have a linear system of powers lets add them
+             
+        # add em up
+        poly = np.sum(solved_system, axis=len(solved_system.shape) - 1)
 
-        from sage.all import matrix, latex 
-        equations = matrix(solved_system)
-        # find the determinant 
-        solution = equations.determinant()
-        save(tex_save, latex(solution))
+        # simplify 
+        poly.simplify()
+        save(tex_save, latex(poly))
 
 if __name__=="__main__":
     if len(sys.argv) > 2:

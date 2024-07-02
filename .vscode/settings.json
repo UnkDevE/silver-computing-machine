@@ -2,5 +2,5 @@
     "cmake.configureOnOpen": false,
     "terminal.integrated.inheritEnv": false,
     "python.REPL.enableREPLSmartSend": false,
-    "python.analysis.autoImportCompletions": true
+    "python.analysis.autoImportCompletions": false
 }
