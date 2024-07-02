@@ -196,6 +196,7 @@ def chec_diff(x, start):
 
     return np.array(diffs)
 
+"""
 def pad_coeff_output(coeff):
     last = 0
     arr = []
@@ -205,17 +206,18 @@ def pad_coeff_output(coeff):
         arr.append(x)
         last = i
 
-    return arr
+    return np.array(arr)
+"""
 
 def coeff(mat, shape):
     matf = []
     for v in mat:
         coeffs = []
         for e in v:
-            coeffs.append(pad_coeff_output(e.coefficients()))
-        matf.append(coeffs)
+            coeffs.append(e.list())
+        matf.append(np.array(coeffs))
 
-    return np.reshape(np.array(coeffs), shape)
+    return np.reshape(np.array(matf), shape).astype(np.float64)
         
 # start finding chec cohomology from sheafs
 # simplex / cocycle in this case is the direct sum
@@ -224,11 +226,11 @@ def coeff(mat, shape):
 def chec_chomology(layer):
     diff = _chec_diff(layer, 0)
     cocycle = _chec_diff(layer, 1)
-    _, _, rrefco = linalg.lu(coeff(cocycle, layer.shape))
+    _, _, rrefco = linalg.lu(coeff(cocycle, (layer.shape[1], 2)))
     im = image(rrefco)
 
     # LDU we want U (reduced row echelon form)
-    _, _, rref = linalg.lu(coeff(diff, layer.shape))
+    _, _, rref = linalg.lu(coeff(diff, (layer.shape[1], 2)))
     ker = image(rref.transpose())
 
     # calculate chomologies
