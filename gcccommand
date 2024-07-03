@@ -1,0 +1,2 @@
+#/bin/bash
+gcc -Os -I$HOME/miniforge3/include/python3.10/  ver2.c -lpython3.10 -o silver-compute-machine -v

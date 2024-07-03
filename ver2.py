@@ -15,12 +15,13 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
+import Cython
 import sys
 import os
 
 import tensorflow as tf
 import tensorflow_datasets as tdfs 
-from sage.all import heaviside, var, E, matrix, latex
+from sage.all import heaviside, var, E, matrix, latex, Expression
 
 from scipy import linalg 
 import numpy as np
@@ -209,15 +210,17 @@ def pad_coeff_output(coeff):
     return np.array(arr)
 """
 
-def coeff(mat, shape):
-    matf = []
-    for v in mat:
-        coeffs = []
-        for e in v:
-            coeffs.append(e.list())
-        matf.append(np.array(coeffs))
+def deepfloat(exp):
+    coeff = []
+    args = exp.args()
+    for a in args:
+        coeff.append(exp.list(a))
+    
+    return coeff
 
-    return np.reshape(np.array(matf), shape).astype(np.float64)
+def coeff(mat, shape):
+    deepvec = np.vectorize(lambda ex: deepfloat(ex))
+    return deepvec(mat).astype(np.float64)
         
 # start finding chec cohomology from sheafs
 # simplex / cocycle in this case is the direct sum
@@ -226,11 +229,11 @@ def coeff(mat, shape):
 def chec_chomology(layer):
     diff = _chec_diff(layer, 0)
     cocycle = _chec_diff(layer, 1)
-    _, _, rrefco = linalg.lu(coeff(cocycle, (layer.shape[1], 2)))
+    _, _, rrefco = linalg.lu(coeff(cocycle, (*layer.shape, 2)))
     im = image(rrefco)
 
     # LDU we want U (reduced row echelon form)
-    _, _, rref = linalg.lu(coeff(diff, (layer.shape[1], 2)))
+    _, _, rref = linalg.lu(coeff(diff, (*layer.shape, 2)))
     ker = image(rref.transpose())
 
     # calculate chomologies
@@ -366,10 +369,9 @@ def model_create_equation(model_dir, tex_save, training_data):
         # we now have a linear system of powers lets add them
              
         # add em up
-        poly = np.sum(solved_system, axis=len(solved_system.shape) - 1)
+        poly = np.sum(solved_system)
 
         # simplify 
-        poly.simplify()
         save(tex_save, latex(poly))
 
 if __name__=="__main__":
