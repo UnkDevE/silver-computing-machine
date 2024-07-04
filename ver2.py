@@ -15,7 +15,6 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
-import Cython
 import sys
 import os
 
@@ -177,7 +176,7 @@ def image(rref):
 
 # calculates the chec differential
 def _chec_diff(x, start):
-    shape = np.roll(np.reshape(np.meshgrid(x)[0], x.shape), start, axis=1)
+    shape = np.roll(np.reshape(np.meshgrid(x)[0], x.shape), start)
     return np.reshape(np.cumsum(x * (-np.ones_like(x)**shape)), x.shape)
 
 #rolls a 1D array
@@ -209,31 +208,18 @@ def pad_coeff_output(coeff):
 
     return np.array(arr)
 """
-
-def deepfloat(exp):
-    coeff = []
-    args = exp.args()
-    for a in args:
-        coeff.append(exp.list(a))
-    
-    return coeff
-
-def coeff(mat, shape):
-    deepvec = np.vectorize(lambda ex: deepfloat(ex))
-    return deepvec(mat).astype(np.float64)
-        
 # start finding chec cohomology from sheafs
 # simplex / cocycle in this case is the direct sum
 # compute kernels, images and chec cohomologies
 # gets the kth layers kth Chomology class
 def chec_chomology(layer):
-    diff = _chec_diff(layer, 0)
-    cocycle = _chec_diff(layer, 1)
-    _, _, rrefco = linalg.lu(coeff(cocycle, (*layer.shape, 2)))
+    diff = chec_diff(layer, 0)
+    cocycle = chec_diff(layer, 1)
+    _, _, rrefco = linalg.lu(cocycle)
     im = image(rrefco)
 
     # LDU we want U (reduced row echelon form)
-    _, _, rref = linalg.lu(coeff(diff, (*layer.shape, 2)))
+    _, _, rref = linalg.lu(diff)
     ker = image(rref.transpose())
 
     # calculate chomologies
@@ -300,9 +286,9 @@ def solve_system(shapes, activations, layers):
 
     # This for loop below caclualtes all the terms lienarly so we want to add 
     # in the non linear function compositions in a liner manner
-    inputs = create_inputs(shapes)
-
+    # we want to *not* use inputs as it gums up the works
     zetas = []
+    baises = []
     for i, (layer,act) in enumerate(zip(layers, activations)):
         # add in nonlinear operator 
         # take power to remove nonlinears
@@ -316,12 +302,14 @@ def solve_system(shapes, activations, layers):
 
         # recreate zeta
         if len(zetas) < 1:
-            zetas.append(inputs * weight + bias)
+            zetas.append(weight)
         else:
-            zetas.append(inv(zetas[-1]) @ weight + bias)
+            zetas.append(inv(zetas[-1] + baises[-1]).astype(np.float64) @ weight)
 
+        baises.append(bias)
+    final = zetas[-1] + baises[-1]
     # run cohomologies
-    return cohomologies(zetas)
+    return cohomologies(final)
 
 def model_create_equation(model_dir, tex_save, training_data):
     # check optional args
@@ -366,10 +354,12 @@ def model_create_equation(model_dir, tex_save, training_data):
         shapes = complete_bias(shapes, targets) 
         # fft calculation goes through here
         solved_system = solve_system(shapes, activations, layers) 
-        # we now have a linear system of powers lets add them
+        inputs = create_inputs(shapes)
+        # lets add the input vector
+        output = np.dot(inputs, solved_system)
              
         # add em up
-        poly = np.sum(solved_system)
+        poly = np.sum(output)
 
         # simplify 
         save(tex_save, latex(poly))
