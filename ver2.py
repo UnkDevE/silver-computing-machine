@@ -246,14 +246,15 @@ def quot_space(subset, space):
     spaces = []
     for vsp in space:
         for vsub in subset:
-            spaces.append(vsp /
+            spaces.append(np.mod(vsp,
                np.pad(vsub, (space.shape[0] - subset.shape[0], 0), 'constant', 
-                      constant_values=(1,1)))
+                      constant_values=(1,1))))
 
     quot = np.reshape(np.array(spaces), (subset.shape[0], *space.shape))
     # remove infinities and nans
     quot[np.isposinf(quot)] = 1.0
     quot[np.isneginf(-quot)] = 0
+    quot[np.isnan(quot)] = 0
 
     return quot
 
@@ -269,15 +270,15 @@ def cohomologies(layers):
             # this has incorrect sizing MAYBE: guass kernel?
             cohol.append(quot_space(kerims[-1][0], linalg.inv(kerims[-2][1])))
 
-    cohol = np.array(cohol)
+    # append R space
+    cohol.append(quot_space(kerims[0][1], np.ones_like(kerims[0][1])))
+    # don't forget to roll
+    imcohol = np.roll(np.array(cohol), -1)
+    cech = np.sum(np.sum(imcohol, axis =1), axis=1)
 
-    # NOPE need to find constant sheaf
-    const_sheaf = np.multiply.reduce(cohol)
-    # append direct sum of power matricies - KINDA SUS
-    cech = np.sum(np.fmod(cohol,const_sheaf), axis=len(cohol.shape)-1)
-    return cech
+    return cech 
 
-def solve_system(shapes, activations, layers):
+def solve_system(activations, layers):
     # first dtft makes our system linear, however it's already in this form 
     # so we can ignore our transform until we finish computation
 
@@ -310,6 +311,24 @@ def solve_system(shapes, activations, layers):
     final = zetas[-1] + baises[-1]
     # run cohomologies
     return cohomologies(final)
+
+def create_sols_from_system(solved_system):
+    outdim = solved_system.shape[-1]
+
+    # create output template to be rolled
+    template = np.zeros(outdim)
+    template[0] = 1 
+
+    sols = []
+    for roll in shifts(template, 0):
+        sols.append(linalg.svd(solved_system, roll))
+
+    # what next sheafify outputs?
+    return sols
+
+def sheafify(ins):
+
+    # cartesian product? wedge product?
 
 def model_create_equation(model_dir, tex_save, training_data):
     # check optional args
@@ -353,13 +372,15 @@ def model_create_equation(model_dir, tex_save, training_data):
         targets[-1] = model.output_shape[-1] 
         shapes = complete_bias(shapes, targets) 
         # fft calculation goes through here
-        solved_system = solve_system(shapes, activations, layers) 
+        solved_system = solve_system(activations, layers) 
         inputs = create_inputs(shapes)
         # lets add the input vector
-        output = np.dot(inputs, solved_system)
+        # create solutions to output
+        output = np.dot(np.transpose(solved_system), inputs)
              
         # add em up
         poly = np.sum(output)
+        poly.simplify()
 
         # simplify 
         save(tex_save, latex(poly))
