@@ -318,17 +318,16 @@ def create_sols_from_system(solved_system):
     # create output template to be rolled
     template = np.zeros(outdim)
     template[0] = 1 
+    inv = linalg.pinv(solved_system)
 
     sols = []
     for roll in shifts(template, 0):
-        sols.append(linalg.svd(solved_system, roll))
+        # solve backwards
+        sols.append(np.dot(roll, inv))
 
     # what next sheafify outputs?
     return sols
 
-def sheafify(ins):
-
-    # cartesian product? wedge product?
 
 def model_create_equation(model_dir, tex_save, training_data):
     # check optional args
@@ -376,13 +375,15 @@ def model_create_equation(model_dir, tex_save, training_data):
         inputs = create_inputs(shapes)
         # lets add the input vector
         # create solutions to output
-        output = np.dot(np.transpose(solved_system), inputs)
+        sols = create_sols_from_system(solved_system)
              
-        # add em up
-        poly = np.sum(output)
+        # sheafify 
+        sheafs = np.dot(sols, inputs)
+        sheafifed = np.einsum("ij -> i", sheafs)
+        np.savetxt("out.csv", sols, delimiter=",")
+        poly = np.sum(sheafifed)
         poly.simplify()
 
-        # simplify 
         save(tex_save, latex(poly))
 
 if __name__=="__main__":
