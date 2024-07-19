@@ -5,3 +5,4 @@ numpy
 notebook
 pandas
 matplotlib
+sympy

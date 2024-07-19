@@ -20,25 +20,26 @@ import os
 
 import tensorflow as tf
 import tensorflow_datasets as tdfs 
-from sage.all import heaviside, var, E, matrix, latex, Expression
 
+
+from sympy import symbols
 from scipy import linalg 
 import numpy as np
-import pandas
+# import pandas
 
+"""
 # list of activation functions
-ACTIVATION_LIST = """activation;function;
+ACTIVATION_LIST = activation;function;
 linear;x;
-step;heaviside(x)
-logistic;1/(1+e^-x);
-tanh;e^x - e^-x/e^x+e^-x;
-smht;e^ax - e^-bx/e^cx + e^-dx;
-relu;max_symbolic(0, x);
-softplus;ln(1+e^x);
+step;Heaviside(x)
+logistic;1/(1+E^-x);
+tanh;E^x - E^-x/E^x+E^-x;
+smht;E^ax - E^-bx/E^cx + E^-dx;
+relu;maximum(0, x);
+softplus;ln(1+E^x);
 """
 
-INPUT_SYMBOL = var("x")
-LAPLACE_SYMBOL = var("t")
+INPUT_SYMBOL = symbols("x")
 BATCH_SIZE = 1024
 
 tf.config.run_functions_eagerly(True)
@@ -83,7 +84,6 @@ def activation_fn_lookup(activ_src, csv):
             return (csv['function'][i])
     return csv['function']['linear']
 
-"""
 def output_aggregator(model, data):
     # load and get unique features
     [dataset, test] = tdfs.load(data, download=False, split=['train', 'test'])
@@ -146,7 +146,7 @@ def output_aggregator(model, data):
     # numpy array of predictions
     inputimages = []
     tensors = []
-    for (i, dataset) in enumerate(sets):
+    for dataset in sets:
         # get the images
         batch = dataset.padded_batch(BATCH_SIZE, drop_remainder=True)
         # samples not normalized
@@ -157,8 +157,7 @@ def output_aggregator(model, data):
             # divide by 10 because output is in form n instead of 1\n
             tensors.append(np.sum(prediction, axis=0) / prediction.shape[0] / 10)
 
-    return list(zip(inputimages, tensors)) 
-"""
+    return list(zip(features, zip(inputimages, tensors)))
 
 # image in linear algebra
 def image(rref):
@@ -224,20 +223,6 @@ def chec_chomology(layer):
 
     # calculate chomologies
     return (ker, im) 
-
-# create matrix of inputs of powers len(shapes) from shape[0]
-def create_inputs(shapes):
-    # create the symbolics
-    x_input = np.empty(shapes[0], dtype=object)
-    for n, index in enumerate(np.ndindex(shapes[0])):
-        x_input[index] = var("x_" + str(n))
-    return x_input 
-
-def linsolve(layer):
-    eigs = linalg.eig(layer)
-    solves = linalg.solve(layer, np.zeros(layer.shape[0]))
-    return linalg.solve(eigs, solves) * E ** eigs
-
 
 # where space is the space in matrix format
 # plus the subset of spaces
@@ -331,8 +316,8 @@ def create_sols_from_system(solved_system):
 
 def model_create_equation(model_dir, tex_save, training_data):
     # check optional args
-    from io import StringIO
-    activ_obj = pandas.read_csv(StringIO(ACTIVATION_LIST), delimiter=';')
+    # from io import StringIO
+    # activ_obj = pandas.read_csv(StringIO(ACTIVATION_LIST), delimiter=';')
 
     # create prequesties
     model = tf.keras.models.load_model(model_dir)
@@ -347,8 +332,6 @@ def model_create_equation(model_dir, tex_save, training_data):
                 out *= y
             return out 
         
-        from sage.misc.sage_eval import sage_eval
-
         # append input shape remove None type
         shapes.append([product(model.input_shape[1:])])
         activations = []
@@ -361,8 +344,7 @@ def model_create_equation(model_dir, tex_save, training_data):
                           for layer in model.layers if len(layer.weights) > 1]:
 
             # if no activation assume linear
-            activations.append(
-                sage_eval(activation_fn_lookup(act, activ_obj), locals={'x': INPUT_SYMBOL}))
+            activations.append(lambda x: x if act is None else act(x))
             layers.append([weights, baises]) 
             shapes.append([shape, weights.shape, baises.shape])
         
@@ -372,19 +354,41 @@ def model_create_equation(model_dir, tex_save, training_data):
         shapes = complete_bias(shapes, targets) 
         # fft calculation goes through here
         solved_system = solve_system(activations, layers) 
-        inputs = create_inputs(shapes)
         # lets add the input vector
         # create solutions to output
         sols = create_sols_from_system(solved_system)
              
         # sheafify 
-        sheafs = np.dot(sols, inputs)
+        sheafs = np.dot(solved_system, sols)
         sheafifed = np.einsum("ij -> i", sheafs)
-        np.savetxt("out.csv", sols, delimiter=",")
-        poly = np.sum(sheafifed)
-        poly.simplify()
+        np.savetxt(tex_save, sheafifed, delimiter=",")
 
-        save(tex_save, latex(poly))
+        tester(model, shapes[-1], sheafifed, sheafs, training_data)
+
+def tester(model, outshape, sheafout, sheafs, training_data):
+    model_shape = [1 if x is None else x for x in model.input_shape]
+    out = np.reshape(sheafout, model_shape) 
+    final_test = model(out)
+
+    prelim_shape = model_shape
+    prelim_shape[0] *= sheafs.shape[0]
+    prelimin = np.reshape(sheafs, prelim_shape)
+    prelims = []
+    prelims.append(model.predict(prelimin))
+    # aggregate outputs
+    # and sort by feature
+    sort_avg = sorted(
+        output_aggregator(model, training_data), key= lambda tup: tup[0])
+
+    avg_outs = [avg for (_, (_, avg)) in sort_avg]
+
+    template = np.reshape(np.meshgrid(np.zeros(outshape[-1]))[0], outshape[-1])
+    import matplotlib.pyplot as plt
+    # plt.plot(prelims) 
+    plt.plot(template, final_test.numpy()) 
+    plt.plot(template, avg_outs.numpy()) 
+
+    plt.savefig("out.png")
 
 if __name__=="__main__":
     if len(sys.argv) > 2:

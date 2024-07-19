@@ -41,4 +41,8 @@ share
 stats*
 SilverBullet/model-zoo
 silver_bullet/
-out.tex
+*.png
+*.tex
+*.so
+setup.c
+ver2.c
