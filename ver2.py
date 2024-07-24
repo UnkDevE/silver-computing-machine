@@ -157,7 +157,7 @@ def output_aggregator(model, data):
             # divide by 10 because output is in form n instead of 1\n
             tensors.append(np.sum(prediction, axis=0) / prediction.shape[0] / 10)
 
-    return list(zip(features, zip(inputimages, tensors)))
+    return list(zip(labels, zip(inputimages, tensors)))
 
 # image in linear algebra
 def image(rref):
@@ -357,15 +357,44 @@ def model_create_equation(model_dir, tex_save, training_data):
         # lets add the input vector
         # create solutions to output
         sols = create_sols_from_system(solved_system)
-             
+
         # sheafify 
         sheafs = np.dot(solved_system, sols)
-        sheafifed = np.einsum("ij -> i", sheafs)
-        np.savetxt(tex_save, sheafifed, delimiter=",")
 
-        tester(model, shapes[-1], sheafifed, sheafs, training_data)
+        sort_avg = sorted(
+            output_aggregator(model, training_data), key= lambda tup: tup[0])
+ 
+        def sheafify(sheafs, forwards=True):
+            from scipy.fft import irfftn, rfftn
+            sheafifed = None
+            # either will throw error if used in wrong use case
+            if not forwards:
+                sheafifed = np.einsum("ij -> i", rfftn(sheafs))
+            elif forwards:
+                sheafifed = np.einsum("ij -> i", irfftn(sheafs))
+            return sheafifed
 
-def tester(model, outshape, sheafout, sheafs, training_data):
+        sheafifed = sheafify(sheafs)
+        data = np.array([data for (_, (data, _)) in sort_avg])
+
+        sheafs_out = []
+        for i, featdata in enumerate(data):
+            featsheaf=[]
+            for image in featdata:
+                rs_image= np.reshape(image, shapes[0][0])
+                featsheaf.append(rs_image * sheafifed * sols[i])
+            featsheaf= np.array(featsheaf)
+            feat_shape = [list(filter(None,
+                [None if sh in model.input_shape[1:] else sh for sh in featsheaf.shape]))[0]]
+            feat_shape.append(shapes[0][0])
+            sheafs_out.append(
+                sheafify(np.swapaxes(
+                    np.reshape(featsheaf, feat_shape),  0, -1)))
+        sheafs_out = np.array(sheafs_out)
+
+        tester(model, shapes[-1], sheafifed, sheafs_out, sort_avg)
+
+def tester(model, outshape, sheafout, sheafs, sort_avg):
     model_shape = [1 if x is None else x for x in model.input_shape]
     out = np.reshape(sheafout, model_shape) 
     final_test = model(out)
@@ -377,16 +406,14 @@ def tester(model, outshape, sheafout, sheafs, training_data):
     prelims.append(model.predict(prelimin))
     # aggregate outputs
     # and sort by feature
-    sort_avg = sorted(
-        output_aggregator(model, training_data), key= lambda tup: tup[0])
-
     avg_outs = [avg for (_, (_, avg)) in sort_avg]
 
-    template = np.reshape(np.meshgrid(np.zeros(outshape[-1]))[0], outshape[-1])
+    template = np.reshape(np.arange(0, len(avg_outs)), outshape[-1])
     import matplotlib.pyplot as plt
     # plt.plot(prelims) 
-    plt.plot(template, final_test.numpy()) 
-    plt.plot(template, avg_outs.numpy()) 
+    [plt.plot(template, np.transpose(avo), "bo") for avo in avg_outs]
+    [plt.plot(template, np.transpose(prelim), "g-") for prelim in prelims]
+    plt.plot(template, np.transpose(final_test.numpy()), "ro--")
 
     plt.savefig("out.png")
 
