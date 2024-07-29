@@ -243,6 +243,17 @@ def quot_space(subset, space):
 
     return quot
 
+def sheafify(sheafs, forwards=True):
+    from scipy.fft import irfftn, rfftn
+    sheafifed = None
+    # either will throw error if used in wrong use case
+    if not forwards:
+        sheafifed = np.einsum("ij -> i", rfftn(sheafs))
+    elif forwards:
+        sheafifed = np.einsum("ij -> i", irfftn(sheafs))
+    return sheafifed
+
+
 def cohomologies(layers):
     # find chomologies
     cohol = []
@@ -291,11 +302,11 @@ def solve_system(activations, layers):
             zetas.append(weight)
         else:
             zetas.append(inv(zetas[-1] + baises[-1]).astype(np.float64) @ weight)
-
         baises.append(bias)
+
     final = zetas[-1] + baises[-1]
     # run cohomologies
-    return cohomologies(final)
+    return cohomologies(final) 
 
 def create_sols_from_system(solved_system):
     outdim = solved_system.shape[-1]
@@ -311,9 +322,20 @@ def create_sols_from_system(solved_system):
         sols.append(np.dot(roll, inv))
 
     # what next sheafify outputs?
-    return sols
+    return np.array(sols)
 
 
+def sheafify(sheafs, forwards=True):
+    from scipy.fft import irfftn, rfftn
+    sheafifed = None
+    # either will throw error if used in wrong use case
+    if not forwards:
+        sheafifed = np.einsum("ij -> i", rfftn(sheafs))
+    elif forwards:
+        sheafifed = np.einsum("ij -> i", irfftn(sheafs))
+    return sheafifed
+
+ 
 def model_create_equation(model_dir, tex_save, training_data):
     # check optional args
     # from io import StringIO
@@ -353,10 +375,11 @@ def model_create_equation(model_dir, tex_save, training_data):
         targets[-1] = model.output_shape[-1] 
         shapes = complete_bias(shapes, targets) 
         # fft calculation goes through here
-        solved_system = solve_system(activations, layers) 
+        solved_system = solve_system(activations, layers)
         # lets add the input vector
         # create solutions to output
         sols = create_sols_from_system(solved_system)
+        # convert from matrix
 
         # sheafify 
         sheafs = np.dot(solved_system, sols)
@@ -364,35 +387,9 @@ def model_create_equation(model_dir, tex_save, training_data):
         sort_avg = sorted(
             output_aggregator(model, training_data), key= lambda tup: tup[0])
  
-        def sheafify(sheafs, forwards=True):
-            from scipy.fft import irfftn, rfftn
-            sheafifed = None
-            # either will throw error if used in wrong use case
-            if not forwards:
-                sheafifed = np.einsum("ij -> i", rfftn(sheafs))
-            elif forwards:
-                sheafifed = np.einsum("ij -> i", irfftn(sheafs))
-            return sheafifed
+        sheafifed = sheafify(np.swapaxes(sols, 0, -1)) * sheafify(solved_system)
 
-        sheafifed = sheafify(sheafs)
-        data = np.array([data for (_, (data, _)) in sort_avg])
-
-        sheafs_out = []
-        for i, featdata in enumerate(data):
-            featsheaf=[]
-            for image in featdata:
-                rs_image= np.reshape(image, shapes[0][0])
-                featsheaf.append(rs_image * sheafifed * sols[i])
-            featsheaf= np.array(featsheaf)
-            feat_shape = [list(filter(None,
-                [None if sh in model.input_shape[1:] else sh for sh in featsheaf.shape]))[0]]
-            feat_shape.append(shapes[0][0])
-            sheafs_out.append(
-                sheafify(np.swapaxes(
-                    np.reshape(featsheaf, feat_shape),  0, -1)))
-        sheafs_out = np.array(sheafs_out)
-
-        tester(model, shapes[-1], sheafifed, sheafs_out, sort_avg)
+        tester(model, shapes[-1], sheafifed, np.array(sheafs), sort_avg)
 
 def tester(model, outshape, sheafout, sheafs, sort_avg):
     model_shape = [1 if x is None else x for x in model.input_shape]
