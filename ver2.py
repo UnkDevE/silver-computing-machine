@@ -263,14 +263,15 @@ def cohomologies(layers):
     for funclayer in layers:
         kerims.append(chec_chomology(funclayer))
         if len(kerims) >= 2:
-            # this has incorrect sizing MAYBE: guass kernel?
             cohol.append(quot_space(kerims[-1][0], linalg.inv(kerims[-2][1])))
 
     # append R space
-    cohol.append(quot_space(kerims[0][1], np.ones_like(kerims[0][1])))
-    # don't forget to roll
-    imcohol = shifts(np.array(cohol), -1)
-    cech = np.sum(np.sum(np.sum(imcohol, axis=1), axis=1), axis=1)
+    start = [quot_space(kerims[0][1], np.ones_like(kerims[0][1]))]
+    # don't forget to reverse!
+    [start.append(c) for c in cohol]
+    imcohol = np.array(start)
+
+    cech = np.prod(np.log(np.sum(np.e ** imcohol, axis=1)),axis=1)
 
     return cech 
 
@@ -325,14 +326,15 @@ def create_sols_from_system(solved_system):
     return np.array(sols)
 
 
-def sheafify(sheafs, forwards=True):
+def sheafify(sheafs, forwards=False):
     from scipy.fft import irfftn, rfftn
+    #inverse the fourier transform domain
     sheafifed = None
     # either will throw error if used in wrong use case
     if not forwards:
-        sheafifed = np.einsum("ij -> i", rfftn(sheafs))
-    elif forwards:
         sheafifed = np.einsum("ij -> i", irfftn(sheafs))
+    elif forwards:
+        sheafifed = np.einsum("ij -> i", rfftn(sheafs))
     return sheafifed
 
  
@@ -374,6 +376,8 @@ def model_create_equation(model_dir, tex_save, training_data):
         # add output target
         targets[-1] = model.output_shape[-1] 
         shapes = complete_bias(shapes, targets) 
+
+
         # fft calculation goes through here
         solved_system = solve_system(activations, layers)
         # lets add the input vector
@@ -382,13 +386,12 @@ def model_create_equation(model_dir, tex_save, training_data):
         # convert from matrix
 
         # sheafify 
-        sheafs = np.dot(solved_system, np.roll(sols, -1))
+        sheafs = np.dot(solved_system, sols)
 
         sort_avg = sorted(
             output_aggregator(model, training_data), key= lambda tup: tup[0])
  
-        sheafifed = sheafify(np.tensordot(sols.T, solved_system.T, axes=1))
-
+        sheafifed = sheafify(sols.T * solved_system)
         tester(model, shapes[-1], sheafifed, np.array(sheafs), sort_avg)
 
 def tester(model, outshape, sheafout, sheafs, sort_avg):
@@ -409,7 +412,7 @@ def tester(model, outshape, sheafout, sheafs, sort_avg):
     import matplotlib.pyplot as plt
     # plt.plot(prelims) 
     [plt.plot(template, np.transpose(prelim), "g-") for prelim in prelims]
-    [plt.plot(template, np.transpose(avo), "bo") for avo in avg_outs]
+    [plt.plot(template, np.transpose(avo), "bo-") for avo in avg_outs]
     plt.plot(template, np.transpose(final_test.numpy()), "ro--")
 
     plt.savefig("out.png")
