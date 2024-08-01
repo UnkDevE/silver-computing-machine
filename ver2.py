@@ -269,8 +269,8 @@ def cohomologies(layers):
     # append R space
     cohol.append(quot_space(kerims[0][1], np.ones_like(kerims[0][1])))
     # don't forget to roll
-    imcohol = np.roll(np.array(cohol), -1)
-    cech = np.sum(np.sum(imcohol, axis =1), axis=1)
+    imcohol = shifts(np.array(cohol), -1)
+    cech = np.sum(np.sum(np.sum(imcohol, axis=1), axis=1), axis=1)
 
     return cech 
 
@@ -344,7 +344,7 @@ def model_create_equation(model_dir, tex_save, training_data):
     # create prequesties
     model = tf.keras.models.load_model(model_dir)
     if model is not None:
-        # calculate fft + shape
+        # calculate fft + shap
         shapes = []
         layers = []
         
@@ -382,12 +382,12 @@ def model_create_equation(model_dir, tex_save, training_data):
         # convert from matrix
 
         # sheafify 
-        sheafs = np.dot(solved_system, sols)
+        sheafs = np.dot(solved_system, np.roll(sols, -1))
 
         sort_avg = sorted(
             output_aggregator(model, training_data), key= lambda tup: tup[0])
  
-        sheafifed = sheafify(np.swapaxes(sols, 0, -1)) * sheafify(solved_system)
+        sheafifed = sheafify(np.tensordot(sols.T, solved_system.T, axes=1))
 
         tester(model, shapes[-1], sheafifed, np.array(sheafs), sort_avg)
 
@@ -408,8 +408,8 @@ def tester(model, outshape, sheafout, sheafs, sort_avg):
     template = np.reshape(np.arange(0, len(avg_outs)), outshape[-1])
     import matplotlib.pyplot as plt
     # plt.plot(prelims) 
-    [plt.plot(template, np.transpose(avo), "bo") for avo in avg_outs]
     [plt.plot(template, np.transpose(prelim), "g-") for prelim in prelims]
+    [plt.plot(template, np.transpose(avo), "bo") for avo in avg_outs]
     plt.plot(template, np.transpose(final_test.numpy()), "ro--")
 
     plt.savefig("out.png")
