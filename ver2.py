@@ -86,7 +86,7 @@ def activation_fn_lookup(activ_src, csv):
 
 def output_aggregator(model, data):
     # load and get unique features
-    [dataset, test] = tdfs.load(data, download=False, split=['train', 'test'])
+    [dataset, test] = tdfs.load(data, download=False, split=['train[:100%]', 'test'])
     
     # get label and value
     value, *features = list(list(dataset.take(1).as_numpy_iterator())[0].keys())
@@ -231,8 +231,9 @@ def quot_space(subset, space):
     spaces = []
     for vsp in space:
         for vsub in subset:
-            spaces.append(np.mod(vsp,
-               np.pad(vsub, (space.shape[0] - subset.shape[0], 0), 'constant', 
+            spaces.append(np.divide(
+                np.pad(vsp, (vsp.shape[1] - vsub.shape[1], 0), 'constant', constant_values=(1,1)),
+                       np.pad(vsub, (vsp.shape[0] - vsub.shape[0], 0), 'constant', 
                       constant_values=(1,1))))
 
     quot = np.reshape(np.array(spaces), (subset.shape[0], *space.shape))
@@ -243,27 +244,18 @@ def quot_space(subset, space):
 
     return quot
 
-def sheafify(sheafs, forwards=True):
-    from scipy.fft import irfftn, rfftn
-    sheafifed = None
-    # either will throw error if used in wrong use case
-    if not forwards:
-        sheafifed = np.einsum("ij -> i", rfftn(sheafs))
-    elif forwards:
-        sheafifed = np.einsum("ij -> i", irfftn(sheafs))
-    return sheafifed
-
-
 def cohomologies(layers):
     # find chomologies
     cohol = []
     kerims = []
 
+    from scipy.fft import irfftn
     # layer is normally nonsquare so we vectorize
     for funclayer in layers:
         kerims.append(chec_chomology(funclayer))
         if len(kerims) >= 2:
-            cohol.append(quot_space(kerims[-1][0], linalg.inv(kerims[-2][1])))
+            cohol.append(quot_space(kerims[-1][0], irfftn(
+                np.array([linalg.pinv(z) for z in kerims[-2][1]]))))
 
     # append R space
     start = [quot_space(kerims[0][1], np.ones_like(kerims[0][1]))]
@@ -271,7 +263,8 @@ def cohomologies(layers):
     [start.append(c) for c in cohol]
     imcohol = np.array(start)
 
-    cech = np.prod(np.log(np.sum(np.e ** imcohol, axis=1)),axis=1)
+
+    cech = np.prod(np.sum(irfftn(imcohol),axis=1), axis=1)
 
     return cech 
 
@@ -305,9 +298,9 @@ def solve_system(activations, layers):
             zetas.append(inv(zetas[-1] + baises[-1]).astype(np.float64) @ weight)
         baises.append(bias)
 
-    final = zetas[-1] + baises[-1]
+    zetas.append(zetas[-1] + baises[-1])
     # run cohomologies
-    return cohomologies(final) 
+    return cohomologies(zetas)
 
 def create_sols_from_system(solved_system):
     outdim = solved_system.shape[-1]
@@ -325,19 +318,6 @@ def create_sols_from_system(solved_system):
     # what next sheafify outputs?
     return np.array(sols)
 
-
-def sheafify(sheafs, forwards=False):
-    from scipy.fft import irfftn, rfftn
-    #inverse the fourier transform domain
-    sheafifed = None
-    # either will throw error if used in wrong use case
-    if not forwards:
-        sheafifed = np.einsum("ij -> i", irfftn(sheafs))
-    elif forwards:
-        sheafifed = np.einsum("ij -> i", rfftn(sheafs))
-    return sheafifed
-
- 
 def model_create_equation(model_dir, tex_save, training_data):
     # check optional args
     # from io import StringIO
@@ -390,9 +370,11 @@ def model_create_equation(model_dir, tex_save, training_data):
 
         sort_avg = sorted(
             output_aggregator(model, training_data), key= lambda tup: tup[0])
- 
-        sheafifed = sheafify(sols.T * solved_system)
-        tester(model, shapes[-1], sheafifed, np.array(sheafs), sort_avg)
+
+        from scipy.fft import irfftn 
+        sheafifed = irfftn(sols.T * solved_system)
+
+        tester(model, shapes[-1], sheafifed, sheafs, sort_avg)
 
 def tester(model, outshape, sheafout, sheafs, sort_avg):
     model_shape = [1 if x is None else x for x in model.input_shape]
