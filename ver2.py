@@ -224,24 +224,32 @@ def chec_chomology(layer):
     # calculate chomologies
     return (ker, im) 
 
+
+def sortshape(a):
+    last = (0,0)
+    shapes = list(a.shape)
+    for (i, sh) in enumerate(shapes):
+        if sh >= last[1]:
+            a = np.swapaxes(a, -i, last[0])
+            last = (i, sh)
+    return a
+    
 # where space is the space in matrix format
 # plus the subset of spaces
 def quot_space(subset, space):
-    # mutliply two matricies from subspace
-    spaces = []
-    for vsp in space:
-        for vsub in subset:
-            spaces.append(np.divide(
-                np.pad(vsp, (vsp.shape[1] - vsub.shape[1], 0), 'constant', constant_values=(1,1)),
-                       np.pad(vsub, (vsp.shape[0] - vsub.shape[0], 0), 'constant', 
-                      constant_values=(1,1))))
+    # find commonality shape and set them
+    subset = sortshape(subset)
 
-    quot = np.reshape(np.array(spaces), (subset.shape[0], *space.shape))
-    # remove infinities and nans
-    quot[np.isposinf(quot)] = 1.0
-    quot[np.isneginf(-quot)] = 0
-    quot[np.isnan(quot)] = 0
+    # set solve subset for zero 
+    zerosub = []
+    for subs in subset:
+        print(subs.shape)
+        zerosub.append(linalg.solve(subs, np.ones(subs.shape[0])))
+    zerosub = np.array(zerosub)
 
+    # sheafify with irfftn to find quotient
+    quot = np.dot(space, zerosub)
+    print(quot.shape)
     return quot
 
 def cohomologies(layers):
@@ -249,24 +257,18 @@ def cohomologies(layers):
     cohol = []
     kerims = []
 
-    from scipy.fft import irfftn
     # layer is normally nonsquare so we vectorize
     for funclayer in layers:
         kerims.append(chec_chomology(funclayer))
         if len(kerims) >= 2:
-            cohol.append(quot_space(kerims[-1][0], irfftn(
-                np.array([linalg.pinv(z) for z in kerims[-2][1]]))))
+           cohol.append(quot_space(kerims[-1][0], kerims[-2][1]))
 
     # append R space
     start = [quot_space(kerims[0][1], np.ones_like(kerims[0][1]))]
-    # don't forget to reverse!
+    # don't forget append in start in reverse!
     [start.append(c) for c in cohol]
-    imcohol = np.array(start)
 
-
-    cech = np.prod(np.sum(irfftn(imcohol),axis=1), axis=1)
-
-    return cech 
+    return start[-1]
 
 def solve_system(activations, layers):
     # first dtft makes our system linear, however it's already in this form 
