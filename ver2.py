@@ -215,14 +215,14 @@ def chec_chomology(layer):
     diff = chec_diff(layer, 0)
     cocycle = chec_diff(layer, 1)
     _, _, rrefco = linalg.lu(cocycle)
-    im = image(rrefco)
+    coboundary = image(rrefco)
 
     # LDU we want U (reduced row echelon form)
     _, _, rref = linalg.lu(diff)
-    ker = image(rref.transpose())
+    simplex = image(rref.transpose())
 
     # calculate chomologies
-    return (ker, im) 
+    return (simplex, coboundary) 
 
 
 def sortshape(a):
@@ -243,13 +243,26 @@ def quot_space(subset, space):
     # set solve subset for zero 
     zerosub = []
     for subs in subset:
-        print(subs.shape)
         zerosub.append(linalg.solve(subs, np.ones(subs.shape[0])))
     zerosub = np.array(zerosub)
 
     # sheafify with irfftn to find quotient
-    quot = np.dot(space, zerosub)
-    print(quot.shape)
+    quot = []
+    zSl, zs, ZSr = linalg.svd(zerosub)
+    diag = linalg.diagsvd(zs, zerosub.shape[0], zerosub.shape[1])
+
+    for sp in space:
+        # use svd here
+        SL, s, SR = linalg.svd(sp)
+
+        # compose both matricies 
+        new_diag = linalg.diagsvd(s, sp.shape[0], sp.shape[1]) @ diag
+        inputbasis = (zSl * SR) @ diag
+        orthsout = SL @ new_diag @ ZSr 
+
+        quot.append(inputbasis @ orthsout.T)
+    
+    quot = np.sum(np.array(quot), axis = 0)
     return quot
 
 def cohomologies(layers):
@@ -268,7 +281,16 @@ def cohomologies(layers):
     # don't forget append in start in reverse!
     [start.append(c) for c in cohol]
 
-    return start[-1]
+    from scipy.fft import rfftn
+    start.reverse()
+    sheafshape = start[0].shape 
+
+    sheaf = start[0]
+    for s in start[1:]:
+        sheaf = sheaf * rfftn(s, s=sheafshape)
+
+    return sheaf
+
 
 def solve_system(activations, layers):
     # first dtft makes our system linear, however it's already in this form 
