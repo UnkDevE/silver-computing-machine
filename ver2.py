@@ -281,16 +281,7 @@ def cohomologies(layers):
     # don't forget append in start in reverse!
     [start.append(c) for c in cohol]
 
-    from scipy.fft import rfftn
-    start.reverse()
-    sheafshape = start[0].shape 
-
-    sheaf = start[0]
-    for s in start[1:]:
-        sheaf = sheaf * rfftn(s, s=sheafshape)
-
-    return sheaf
-
+    return start[-1]
 
 def solve_system(activations, layers):
     # first dtft makes our system linear, however it's already in this form 
@@ -327,6 +318,7 @@ def solve_system(activations, layers):
     return cohomologies(zetas)
 
 def create_sols_from_system(solved_system):
+    print(solved_system.shape)
     outdim = solved_system.shape[-1]
 
     # create output template to be rolled
@@ -396,7 +388,7 @@ def model_create_equation(model_dir, tex_save, training_data):
             output_aggregator(model, training_data), key= lambda tup: tup[0])
 
         from scipy.fft import irfftn 
-        sheafifed = irfftn(sols.T * solved_system)
+        sheafifed = np.einsum("ij -> i", irfftn(sols.T * solved_system))
 
         tester(model, shapes[-1], sheafifed, sheafs, sort_avg)
 
