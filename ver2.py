@@ -281,7 +281,7 @@ def cohomologies(layers):
     # don't forget append in start in reverse!
     [start.append(c) for c in cohol]
 
-    return start[-1]
+    return start
 
 def solve_system(activations, layers):
     # first dtft makes our system linear, however it's already in this form 
@@ -318,21 +318,25 @@ def solve_system(activations, layers):
     return cohomologies(zetas)
 
 def create_sols_from_system(solved_system):
-    print(solved_system.shape)
-    outdim = solved_system.shape[-1]
+    solutions = []
+    for system in solved_system:
+        outdim = system.shape[-1]
 
-    # create output template to be rolled
-    template = np.zeros(outdim)
-    template[0] = 1 
-    inv = linalg.pinv(solved_system)
+        # create output template to be rolled
+        template = np.zeros(outdim)
+        template[0] = 1 
+        inv = linalg.pinv(system)
 
-    sols = []
-    for roll in shifts(template, 0):
         # solve backwards
-        sols.append(np.dot(roll, inv))
+        sols = []
+        for shift in shifts(template, 0):
+            print(shift.shape)
+            sols.append(linalg.solve(inv, shift))
+
+        solutions.append(np.array(sols))
 
     # what next sheafify outputs?
-    return np.array(sols)
+    return solutions
 
 def model_create_equation(model_dir, tex_save, training_data):
     # check optional args
@@ -382,15 +386,23 @@ def model_create_equation(model_dir, tex_save, training_data):
         # convert from matrix
 
         # sheafify 
-        sheafs = np.dot(solved_system, sols)
+        solution = sols[0] 
+        outward = sols[0]
+        for sheaf in sols[1:]:
+            if sheaf.shape == solution.shape:
+                solution = solution * sheaf
+                outward = solution
+            else:
+                solution = solution @ sheaf.T
 
         sort_avg = sorted(
             output_aggregator(model, training_data), key= lambda tup: tup[0])
 
-        from scipy.fft import irfftn 
-        sheafifed = np.einsum("ij -> i", irfftn(sols.T * solved_system))
+        from scipy.fft import irfftn, rfftn
+        # sheafifed = irfftn(solution, shapes[0]) 
+        sheafifed = np.imag(rfftn(solution, shapes[0]))
 
-        tester(model, shapes[-1], sheafifed, sheafs, sort_avg)
+        tester(model, shapes[-1], sheafifed, outward, sort_avg)
 
 def tester(model, outshape, sheafout, sheafs, sort_avg):
     model_shape = [1 if x is None else x for x in model.input_shape]
