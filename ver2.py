@@ -27,6 +27,9 @@ from scipy import linalg
 import numpy as np
 # import pandas
 
+
+import matplotlib.pyplot as plt
+
 """
 # list of activation functions
 ACTIVATION_LIST = activation;function;
@@ -329,13 +332,14 @@ def create_sols_from_system(solved_system):
 
         SL, s, _ = linalg.svd(inv)
 
+        outtemplate = shifts(template, 0)
         # solve backwards
         sols = []
-        for shift in shifts(template, 0):
+        for shift in outtemplate:
             # use svd with solve 
             sols.append(linalg.solve(SL, shift) * s @ inv)
 
-        solutions.append(np.array(sols))
+        solutions.append((np.array(sols), outtemplate))
 
     # what next sheafify outputs?
     return solutions
@@ -388,9 +392,10 @@ def model_create_equation(model_dir, tex_save, training_data):
         # convert from matrix
 
         # sheafify 
-        solution = sols[0] 
-        outward = sols[0]
+        solution = sols[0][0]
+        outward = sols[0][0]
         for sheaf in sols[1:]:
+            sheaf = sheaf[0]
             if sheaf.shape == solution.shape:
                 solution = solution * sheaf
                 outward = solution
@@ -400,34 +405,51 @@ def model_create_equation(model_dir, tex_save, training_data):
         sort_avg = sorted(
             output_aggregator(model, training_data), key= lambda tup: tup[0])
 
-        from scipy.fft import irfftn, rfftn
+        from scipy.fft import rfftn
         # sheafifed = irfftn(solution, shapes[0]) 
         sheafifed = np.imag(rfftn(solution, shapes[0]))
 
-        tester(model, shapes[-1], sheafifed, outward, sort_avg)
+        tester(model, shapes[-1], sheafifed, outward, sort_avg, "test.png")
 
-def tester(model, outshape, sheafout, sheafs, sort_avg):
+        model_shape = [1 if x is None else x for x in model.input_shape]
+        model.fit(x=np.reshape(sols[-1][1], [sols[-1][1].shape[0], *model_shape[1:]]), y=sols[-1][0])
+
+        sort_avg = sorted(
+            output_aggregator(model, training_data), key= lambda tup: tup[0])
+
+        tester(model, shapes[-1], sheafifed, outward, sort_avg, "withpayload.png")
+
+
+def tester(model, outshape, sheafout, sheafs, sort_avg, name):
     model_shape = [1 if x is None else x for x in model.input_shape]
     out = np.reshape(sheafout, model_shape) 
     final_test = model(out)
 
+    def bucketize(prelims):
+        arr = []
+        for ps in prelims:
+            for i, p in enumerate(ps):
+                if len(arr) <= i:
+                    arr.append([])
+                arr[i].append(p)
+        return np.array(arr)
+
     prelim_shape = model_shape
     prelim_shape[0] *= sheafs.shape[0]
     prelimin = np.reshape(sheafs, prelim_shape)
-    prelims = []
-    prelims.append(model.predict(prelimin))
+    prelims = model.predict(prelimin)
     # aggregate outputs
     # and sort by feature
     avg_outs = [avg for (_, (_, avg)) in sort_avg]
 
-    template = np.reshape(np.arange(0, len(avg_outs)), outshape[-1])
-    import matplotlib.pyplot as plt
+
+    template = np.reshape(np.arange(1, len(avg_outs)+1), outshape[-1])
     # plt.plot(prelims) 
-    [plt.plot(template, np.transpose(prelim), "g-") for prelim in prelims]
-    [plt.plot(template, np.transpose(avo), "bo-") for avo in avg_outs]
+    plt.violinplot(np.transpose(bucketize(prelims)), showmeans=True) 
+    plt.violinplot(np.transpose(avg_outs), showmeans=True) 
     plt.plot(template, np.transpose(final_test.numpy()), "ro--")
 
-    plt.savefig("out.png")
+    plt.savefig(name)
 
 if __name__=="__main__":
     if len(sys.argv) > 2:
