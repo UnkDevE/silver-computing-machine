@@ -327,11 +327,13 @@ def create_sols_from_system(solved_system):
         template[0] = 1 
         inv = linalg.pinv(system)
 
+        SL, s, _ = linalg.svd(inv)
+
         # solve backwards
         sols = []
         for shift in shifts(template, 0):
-            print(shift.shape)
-            sols.append(linalg.solve(inv, shift))
+            # use svd with solve 
+            sols.append(linalg.solve(SL, shift) * s @ inv)
 
         solutions.append(np.array(sols))
 
