@@ -22,6 +22,7 @@ import tensorflow as tf
 import tensorflow_datasets as tdfs 
 
 
+from scipy.fft import rfftn, irfftn
 from sympy import symbols
 from scipy import linalg 
 import numpy as np
@@ -48,6 +49,12 @@ BATCH_SIZE = 1024
 tf.config.run_functions_eagerly(True)
 # do not remove forces tf.data to run eagerly
 # tf.data.experimental.enable_debug_mode()
+
+def product(x):
+    out = 1
+    for y in x:
+        out *= y
+    return out 
 
 # saver function helper
 def save(filename, write):
@@ -344,6 +351,19 @@ def create_sols_from_system(solved_system):
     # what next sheafify outputs?
     return solutions
 
+def ceildiv(a, b):
+    return -(a // -b)
+
+def interpolate_fft_train(sols, size):
+    newsols = []
+    for sol in sols:
+        data = sol[0]
+        out = sol[1]
+        print([*size, *sol[0].shape])
+        newsols.append(irfftn(data, product(size)*product(data.shape), out))
+
+    return newsols
+
 def model_create_equation(model_dir, tex_save, training_data):
     # check optional args
     # from io import StringIO
@@ -356,13 +376,8 @@ def model_create_equation(model_dir, tex_save, training_data):
         shapes = []
         layers = []
         
-        def product(x):
-            out = 1
-            for y in x:
-                out *= y
-            return out 
-        
-        # append input shape remove None type
+       
+        # append input shape remove None typp/e
         shapes.append([product(model.input_shape[1:])])
         activations = []
 
@@ -405,22 +420,24 @@ def model_create_equation(model_dir, tex_save, training_data):
         sort_avg = sorted(
             output_aggregator(model, training_data), key= lambda tup: tup[0])
 
-        from scipy.fft import rfftn
         # sheafifed = irfftn(solution, shapes[0]) 
         sheafifed = np.imag(rfftn(solution, shapes[0]))
 
-        tester(model, shapes[-1], sheafifed, outward, sort_avg, "test.png")
+        tester(model, shapes[-1], sheafifed, outward, sort_avg, "test.png", False)
 
         model_shape = [1 if x is None else x for x in model.input_shape]
-        model.fit(x=np.reshape(sols[-1][1], [sols[-1][1].shape[0], *model_shape[1:]]), y=sols[-1][0])
+        expanded = list(zip(*interpolate_fft_train(sols[-1], [BATCH_SIZE * len(sols[-1][1]), *model_shape[1:]])))
+
+        model.fit(x=np.reshape(expanded[0], [BATCH_SIZE * len(sols[-1][1]), *model_shape[1:]]), y=expanded[1])
 
         sort_avg = sorted(
             output_aggregator(model, training_data), key= lambda tup: tup[0])
 
-        tester(model, shapes[-1], sheafifed, outward, sort_avg, "withpayload.png")
+        tester(model, shapes[-1], sheafifed, outward, sort_avg, "withpayload.png", True)
 
 
-def tester(model, outshape, sheafout, sheafs, sort_avg, name):
+
+def tester(model, outshape, sheafout, sheafs, sort_avg, name, payload):
     model_shape = [1 if x is None else x for x in model.input_shape]
     out = np.reshape(sheafout, model_shape) 
     final_test = model(out)
@@ -445,8 +462,11 @@ def tester(model, outshape, sheafout, sheafs, sort_avg, name):
 
     template = np.reshape(np.arange(1, len(avg_outs)+1), outshape[-1])
     # plt.plot(prelims) 
-    plt.violinplot(np.transpose(bucketize(prelims)), showmeans=True) 
-    plt.violinplot(np.transpose(avg_outs), showmeans=True) 
+    if not payload:
+        plt.violinplot(np.transpose(avg_outs), showmeans=True) 
+    else:
+        plt.violinplot(np.transpose(bucketize(prelims)), showmeans=True) 
+
     plt.plot(template, np.transpose(final_test.numpy()), "ro--")
 
     plt.savefig(name)
