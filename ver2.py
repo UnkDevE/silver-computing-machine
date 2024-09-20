@@ -356,11 +356,12 @@ def ceildiv(a, b):
 
 def interpolate_fft_train(sols, size):
     newsols = []
-    for sol in sols:
-        data = sol[0]
-        out = sol[1]
-        print([*size, *sol[0].shape])
-        newsols.append(irfftn(data, product(size)*product(data.shape), out))
+    data = sols[0]
+    out = sols[1]
+    size = ceildiv(product(size), len(out))
+    for (inner, outer) in zip(data, out):
+        newsols.append((irfftn(inner, size * product(inner.shape)), 
+                        np.repeat(outer, size)))
 
     return newsols
 
@@ -425,10 +426,12 @@ def model_create_equation(model_dir, tex_save, training_data):
 
         tester(model, shapes[-1], sheafifed, outward, sort_avg, "test.png", False)
 
+        # def trainmodel(size)
+        size=BATCH_SIZE
         model_shape = [1 if x is None else x for x in model.input_shape]
-        expanded = list(zip(*interpolate_fft_train(sols[-1], [BATCH_SIZE * len(sols[-1][1]), *model_shape[1:]])))
+        expanded = list(zip(*interpolate_fft_train(sols[-1], [size*BATCH_SIZE, len(sols[-1][1])])))
 
-        model.fit(x=np.reshape(expanded[0], [BATCH_SIZE * len(sols[-1][1]), *model_shape[1:]]), y=expanded[1])
+        model.fit(x=np.reshape(expanded[0], [size*BATCH_SIZE * len(sols[-1][1]), *model_shape[1:]]), y=expanded[1])
 
         sort_avg = sorted(
             output_aggregator(model, training_data), key= lambda tup: tup[0])
