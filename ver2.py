@@ -45,6 +45,7 @@ softplus;ln(1+E^x);
 
 INPUT_SYMBOL = symbols("x")
 BATCH_SIZE = 1024
+TRAIN_SIZE=16
 
 tf.config.run_functions_eagerly(True)
 # do not remove forces tf.data to run eagerly
@@ -354,14 +355,15 @@ def create_sols_from_system(solved_system):
 def ceildiv(a, b):
     return -(a // -b)
 
-def interpolate_fft_train(sols, size):
+def interpolate_fft_train(sols, size, train):
     newsols = []
     data = sols[0]
     out = sols[1]
-    size = ceildiv(product(size), len(out))
+    size = ceildiv(train * product(size), len(out))
     for (inner, outer) in zip(data, out):
-        newsols.append((irfftn(inner, size * product(inner.shape)), 
-                        np.repeat(outer, size)))
+        iftn = irfftn(inner, s=(size * product(inner.shape)))
+        # upscaling
+        newsols.append((iftn, np.repeat(outer, size)))
 
     return newsols
 
@@ -427,18 +429,16 @@ def model_create_equation(model_dir, tex_save, training_data):
         tester(model, shapes[-1], sheafifed, outward, sort_avg, "test.png", False)
 
         # def trainmodel(size)
-        size=BATCH_SIZE
         model_shape = [1 if x is None else x for x in model.input_shape]
-        expanded = list(zip(*interpolate_fft_train(sols[-1], [size*BATCH_SIZE, len(sols[-1][1])])))
+        # this causes an error
+        expanded = list(zip(*interpolate_fft_train(sols[-1], [BATCH_SIZE, len(sols[-1][1])], TRAIN_SIZE)))
 
-        model.fit(x=np.reshape(expanded[0], [size*BATCH_SIZE * len(sols[-1][1]), *model_shape[1:]]), y=expanded[1])
+        model.fit(x=np.reshape(expanded[0], [TRAIN_SIZE*BATCH_SIZE * len(sols[-1][1]), *model_shape[1:]]), y=expanded[1])
 
         sort_avg = sorted(
             output_aggregator(model, training_data), key= lambda tup: tup[0])
 
         tester(model, shapes[-1], sheafifed, outward, sort_avg, "withpayload.png", True)
-
-
 
 def tester(model, outshape, sheafout, sheafs, sort_avg, name, payload):
     model_shape = [1 if x is None else x for x in model.input_shape]
