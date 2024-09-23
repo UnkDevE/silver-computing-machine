@@ -356,16 +356,28 @@ def ceildiv(a, b):
     return -(a // -b)
 
 def interpolate_fft_train(sols, size, train):
-    newsols = []
+    from scipy.interpolate import RBFInterpolator 
+
+    iftnsols = []
     data = sols[0]
     out = sols[1]
-    size = ceildiv(train * product(size), len(out))
+    # ceildiv as whole numbers only rounds up
+    size = len(out) * product(size)
     for (inner, outer) in zip(data, out):
         iftn = irfftn(inner, s=(size * product(inner.shape)))
-        # upscaling
-        newsols.append((iftn, np.repeat(outer, size)))
+        iftnsols.append((iftn, np.repeat(outer, size)))
 
-    return newsols
+    iftnsols = [np.array(list(t)) for t in zip(*iftnsols)]
+    insstacked = np.stack(iftnsols[0], axis=-1)
+    outsstacked = np.stack(iftnsols[1], axis=-1)
+    # this is too heavy duty on preformance using more than 32GB of RAM
+    tointer = np.stack(insstacked.ravel(), outsstacked.ravel(), -1)
+
+    new_y = np.array(shifts(np.linspace(0, 1, train * size), 0))
+    rbf = RBFInterpolator(tointer, new_y.ravel(), neighbors=BATCH_SIZE)
+    inter = rbf(new_y)
+
+    return inter 
 
 def model_create_equation(model_dir, tex_save, training_data):
     # check optional args
@@ -431,7 +443,7 @@ def model_create_equation(model_dir, tex_save, training_data):
         # def trainmodel(size)
         model_shape = [1 if x is None else x for x in model.input_shape]
         # this causes an error
-        expanded = list(zip(*interpolate_fft_train(sols[-1], [BATCH_SIZE, len(sols[-1][1])], TRAIN_SIZE)))
+        expanded = interpolate_fft_train(sols[-1], [BATCH_SIZE, len(sols[-1][1])], TRAIN_SIZE)
 
         model.fit(x=np.reshape(expanded[0], [TRAIN_SIZE*BATCH_SIZE * len(sols[-1][1]), *model_shape[1:]]), y=expanded[1])
 
