@@ -43,9 +43,13 @@ relu;maximum(0, x);
 softplus;ln(1+E^x);
 """
 
+#TUNE THEESE INPUT PARAMS
 INPUT_SYMBOL = symbols("x")
 BATCH_SIZE = 1024
 TRAIN_SIZE=16
+RBF_BOUND_MIN=1e-9
+RBF_BOUND_MAX=1e15
+RBF_SCALE=1
 
 tf.config.run_functions_eagerly(True)
 # do not remove forces tf.data to run eagerly
@@ -191,11 +195,10 @@ def _chec_diff(x, start):
 
 #rolls a 1D array
 def shifts(x, start):
-    y = []
+    y = np.zeros([x.shape[0], *x.shape])
     for i in range(-start, x.shape[0] - start):
-        y.append(np.roll(x, i))
+        y[i] = np.roll(x, i)
     return y
-
     
 def chec_diff(x, start):
     permutes = shifts(x, start)
@@ -356,28 +359,28 @@ def ceildiv(a, b):
     return -(a // -b)
 
 def interpolate_fft_train(sols, size, train):
-    from scipy.interpolate import RBFInterpolator 
+    from sklearn.gaussian_process import GaussianProcessRegressor
+    from sklearn.gaussian_process.kernels import RationalQuadratic 
 
-    iftnsols = []
     data = sols[0]
     out = sols[1]
-    # ceildiv as whole numbers only rounds up
-    size = len(out) * product(size)
-    for (inner, outer) in zip(data, out):
-        iftn = irfftn(inner, s=(size * product(inner.shape)))
-        iftnsols.append((iftn, np.repeat(outer, size)))
+    # need this for later
+    outshape = len(out)
+    inshape=sols[0][0].shape
 
-    iftnsols = [np.array(list(t)) for t in zip(*iftnsols)]
-    insstacked = np.stack(iftnsols[0], axis=-1)
-    outsstacked = np.stack(iftnsols[1], axis=-1)
+    kernel = RationalQuadratic(length_scale=RBF_SCALE, 
+        length_scale_bounds=(RBF_BOUND_MIN, RBF_BOUND_MAX))
+    gaussian_process = GaussianProcessRegressor(kernel=kernel, n_restarts_optimizer=9)
+    # we invert here to get a lookup of images from the output
+    gaussian_process.fit(out, data)
+
     # this is too heavy duty on preformance using more than 32GB of RAM
-    tointer = np.stack(insstacked.ravel(), outsstacked.ravel(), -1)
+    size_woinput = size[0]
+    new_y = np.array(shifts(np.linspace(0, 1, outshape * train * size_woinput), 0))
+    y = np.reshape(new_y, [outshape, product(new_y.shape)//outshape])
+    inter = gaussian_process.predict(new_y)
 
-    new_y = np.array(shifts(np.linspace(0, 1, train * size), 0))
-    rbf = RBFInterpolator(tointer, new_y.ravel(), neighbors=BATCH_SIZE)
-    inter = rbf(new_y)
-
-    return inter 
+    return np.reshape(inter, (*inshape, *size, len(out)))
 
 def model_create_equation(model_dir, tex_save, training_data):
     # check optional args

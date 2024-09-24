@@ -1,8 +1,8 @@
-tf-nightly
+tensorflow-rocm
 tensorflow_datasets
 scipy
-numpy
+numpy<2
 notebook
 pandas
 matplotlib
-sympy
+scikit-learn
