@@ -22,7 +22,7 @@ import tensorflow as tf
 import tensorflow_datasets as tdfs 
 
 
-from scipy.fft import rfftn, irfftn
+from scipy.fft import rfftn 
 from sympy import symbols
 from scipy import linalg 
 import numpy as np
@@ -358,7 +358,7 @@ def create_sols_from_system(solved_system):
 def ceildiv(a, b):
     return -(a // -b)
 
-def interpolate_fft_train(sols, size, train):
+def interpolate_fft_train(sols, model):
     from sklearn.gaussian_process import GaussianProcessRegressor
     from sklearn.gaussian_process.kernels import RationalQuadratic 
 
@@ -366,7 +366,6 @@ def interpolate_fft_train(sols, size, train):
     out = sols[1]
     # need this for later
     outshape = len(out)
-    inshape=sols[0][0].shape
 
     kernel = RationalQuadratic(length_scale=RBF_SCALE, 
         length_scale_bounds=(RBF_BOUND_MIN, RBF_BOUND_MAX))
@@ -374,13 +373,14 @@ def interpolate_fft_train(sols, size, train):
     # we invert here to get a lookup of images from the output
     gaussian_process.fit(out, data)
 
+    model_shape = [1 if x is None else x for x in model.input_shape]
     # this is too heavy duty on preformance using more than 32GB of RAM
-    size_woinput = size[0]
-    new_y = np.array(shifts(np.linspace(0, 1, outshape * train * size_woinput), 0))
-    y = np.reshape(new_y, [outshape, product(new_y.shape)//outshape])
-    inter = gaussian_process.predict(new_y)
+    for i in range(TRAIN_SIZE):
+        sample = np.random.random_sample([outshape, BATCH_SIZE])
+        inter = gaussian_process.sample_y(sample, n_samples=BATCH_SIZE)
+        model.fit(x=np.reshape(inter, [BATCH_SIZE, *model_shape[1:]]), y=sample)
 
-    return np.reshape(inter, (*inshape, *size, len(out)))
+    return model
 
 def model_create_equation(model_dir, tex_save, training_data):
     # check optional args
@@ -394,7 +394,6 @@ def model_create_equation(model_dir, tex_save, training_data):
         shapes = []
         layers = []
         
-       
         # append input shape remove None typp/e
         shapes.append([product(model.input_shape[1:])])
         activations = []
@@ -444,11 +443,8 @@ def model_create_equation(model_dir, tex_save, training_data):
         tester(model, shapes[-1], sheafifed, outward, sort_avg, "test.png", False)
 
         # def trainmodel(size)
-        model_shape = [1 if x is None else x for x in model.input_shape]
         # this causes an error
-        expanded = interpolate_fft_train(sols[-1], [BATCH_SIZE, len(sols[-1][1])], TRAIN_SIZE)
-
-        model.fit(x=np.reshape(expanded[0], [TRAIN_SIZE*BATCH_SIZE * len(sols[-1][1]), *model_shape[1:]]), y=expanded[1])
+        model = interpolate_fft_train(sols[-1], model)
 
         sort_avg = sorted(
             output_aggregator(model, training_data), key= lambda tup: tup[0])
