@@ -362,10 +362,10 @@ def interpolate_fft_train(sols, model):
     from sklearn.gaussian_process import GaussianProcessRegressor
     from sklearn.gaussian_process.kernels import RationalQuadratic 
 
-    data = sols[0]
-    out = sols[1]
+    data = np.array(sols[0])
+    out = np.array(sols[1])
     # need this for later
-    outshape = len(out)
+    outshape = len(sols[1])
 
     kernel = RationalQuadratic(length_scale=RBF_SCALE, 
         length_scale_bounds=(RBF_BOUND_MIN, RBF_BOUND_MAX))
@@ -375,10 +375,12 @@ def interpolate_fft_train(sols, model):
 
     model_shape = [1 if x is None else x for x in model.input_shape]
     # this is too heavy duty on preformance using more than 32GB of RAM
+    print([BATCH_SIZE, *model_shape[1:]])
     for i in range(TRAIN_SIZE):
-        sample = np.random.random_sample([outshape, BATCH_SIZE])
-        inter = gaussian_process.sample_y(sample, n_samples=BATCH_SIZE)
-        model.fit(x=np.reshape(inter, [BATCH_SIZE, *model_shape[1:]]), y=sample)
+        sample = np.random.random_sample([BATCH_SIZE, outshape])
+        inter = gaussian_process.predict(sample)
+        x=np.reshape(inter, [BATCH_SIZE, *model_shape[1:]])
+        model.fit(x=x, y=sample)
 
     return model
 
