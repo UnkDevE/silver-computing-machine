@@ -375,12 +375,11 @@ def interpolate_fft_train(sols, model):
 
     model_shape = [1 if x is None else x for x in model.input_shape]
     # this is too heavy duty on preformance using more than 32GB of RAM
-    print([BATCH_SIZE, *model_shape[1:]])
     for i in range(TRAIN_SIZE):
-        sample = np.random.random_sample([BATCH_SIZE, outshape])
-        inter = gaussian_process.predict(sample)
-        x=np.reshape(inter, [BATCH_SIZE, *model_shape[1:]])
-        model.fit(x=x, y=sample)
+        sample = np.reshape(np.random.random_sample(BATCH_SIZE * outshape), [BATCH_SIZE, outshape])
+        print(sample.shape)
+        inter = np.reshape(gaussian_process.sample_y(sample), [BATCH_SIZE, *model_shape[1:]])
+        model.fit(x=inter, y=sample)
 
     return model
 
