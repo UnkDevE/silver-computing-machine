@@ -373,13 +373,15 @@ def interpolate_fft_train(sols, model):
     # we invert here to get a lookup of images from the output
     gaussian_process.fit(out, data)
 
+    onehottmp = np.arange(10)
+
     model_shape = [1 if x is None else x for x in model.input_shape]
     # this is too heavy duty on preformance using more than 32GB of RAM
     for i in range(TRAIN_SIZE):
         sample = np.reshape(np.random.random_sample(BATCH_SIZE * outshape), [BATCH_SIZE, outshape])
-        print(sample.shape)
         inter = np.reshape(gaussian_process.sample_y(sample), [BATCH_SIZE, *model_shape[1:]])
-        model.fit(x=inter, y=sample)
+        outonehot = np.sum(np.where(sample.astype(bool), np.repeat(onehottmp)), axis=-1)
+        model.fit(x=inter, y=outonehot)
 
     return model
 
