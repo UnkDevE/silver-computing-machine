@@ -452,8 +452,6 @@ def tester(model, outshape, sheafout, sheafs, sort_avg, name):
 
     plt.savefig(name)
 
-
-
 def model_create_equation(model_dir, training_data):
     # check optional args
     # from io import StringIO
