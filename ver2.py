@@ -417,7 +417,7 @@ def interpolate_fft_train(sols, model):
     samples = np.random.randint(np.min(onehotout), np.max(onehotout), BATCH_SIZE).reshape(-1, 1)
     inter = np.reshape(gaussian_process.sample_y(samples), [BATCH_SIZE, *model_shape[1:]])
     model.fit(x=inter, y=samples)
-
+    
     return model
 
 def bucketize(prelims):
