@@ -412,11 +412,11 @@ def interpolate_fft_train(sols, model):
     gaussian_process.fit(onehotout, data)
 
     model_shape = [1 if x is None else x for x in model.input_shape]
+
     # this is slow but it's better than allocating 1.53 TiB of RAM
-    for i in range(TRAIN_SIZE):
-        samples = np.random.randint(np.min(onehotout), np.max(onehotout), BATCH_SIZE).reshape(-1, 1)
-        inter = np.reshape(gaussian_process.sample_y(samples), [BATCH_SIZE, *model_shape[1:]])
-        model.fit(x=inter, y=samples)
+    samples = np.random.randint(np.min(onehotout), np.max(onehotout), BATCH_SIZE).reshape(-1, 1)
+    inter = np.reshape(gaussian_process.sample_y(samples), [BATCH_SIZE, *model_shape[1:]])
+    model.fit(x=inter, y=samples)
 
     return model
 
@@ -483,10 +483,10 @@ def model_create_equation(model_dir, training_data):
         [sheaf, sols, outward, sort_avg] = graph_model(model, training_data, activations, shapes, layers)        
         tester(model, shapes[-1], sheaf, outward, sort_avg, "in.png")
 
-        model = interpolate_fft_train(sols[-1], model)
-    
-        [sheaf, sols, outward, sort_avg] = graph_model(model, training_data, activations, shapes, layers)        
-        tester(model, shapes[-1], sheaf, outward, sort_avg, "out.png")
+        for i in range(TRAIN_SIZE):
+            model = interpolate_fft_train(sols[-1], model)
+            [sheaf, sols, outward, sort_avg] = graph_model(model, training_data, activations, shapes, layers)        
+            tester(model, shapes[-1], sheaf, outward, sort_avg, "out-epoch-"+str(i)+".png")
 
 if __name__=="__main__":
     if len(sys.argv) > 2:
