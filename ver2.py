@@ -46,8 +46,8 @@ softplus;ln(1+E^x);
 #TUNE THEESE INPUT PARAMS
 INPUT_SYMBOL = symbols("x")
 BATCH_SIZE = 1024
-TRAIN_SIZE=16
-RBF_BOUND_MIN=1e-9
+TRAIN_SIZE=1
+RBF_BOUND_MIN=1e-3
 RBF_BOUND_MAX=1e15
 RBF_SCALE=1
 
@@ -358,6 +358,40 @@ def create_sols_from_system(solved_system):
 def ceildiv(a, b):
     return -(a // -b)
 
+def graph_model(model, training_data, activations, shapes, layers):
+    targets = [1] * len(shapes)
+    # add output target
+    targets[-1] = model.output_shape[-1] 
+
+    shapes = complete_bias(shapes, targets) 
+
+    # fft calculation goes through here
+    solved_system = solve_system(activations, layers)
+    # lets add the input vector
+    # create solutions to output
+    sols = create_sols_from_system(solved_system)
+    # convert from matrix
+
+    # sheafify 
+    solution = sols[0][0]
+    outward = sols[0][0]
+    for sheaf in sols[1:]:
+        sheaf = sheaf[0]
+        if sheaf.shape == solution.shape:
+            solution = solution * sheaf
+            outward = solution
+        else:
+            solution = solution @ sheaf.T
+
+    sort_avg = sorted(
+        output_aggregator(model, training_data), key= lambda tup: tup[0])
+
+    # sheafifed = irfftn(solution, shapes[0]) 
+    sheafifed = np.imag(rfftn(solution, shapes[0]))
+    
+    ret = [sheafifed, sols, outward, sort_avg]
+    return ret
+
 def interpolate_fft_train(sols, model):
     from sklearn.gaussian_process import GaussianProcessRegressor
     from sklearn.gaussian_process.kernels import RationalQuadratic 
@@ -367,25 +401,60 @@ def interpolate_fft_train(sols, model):
     # need this for later
     outshape = len(sols[1])
 
+    # one hot encode the outputs
+    onehottmp = np.reshape(np.tile(np.arange(outshape), out.shape[0]), out.shape)
+    onehotout = np.reshape(onehottmp[out==1], out.shape[0]).reshape(-1, 1)
+    # create guass kernel for interpolation
     kernel = RationalQuadratic(length_scale=RBF_SCALE, 
         length_scale_bounds=(RBF_BOUND_MIN, RBF_BOUND_MAX))
     gaussian_process = GaussianProcessRegressor(kernel=kernel, n_restarts_optimizer=9)
     # we invert here to get a lookup of images from the output
-    gaussian_process.fit(out, data)
-
-    onehottmp = np.arange(10)
+    gaussian_process.fit(onehotout, data)
 
     model_shape = [1 if x is None else x for x in model.input_shape]
-    # this is too heavy duty on preformance using more than 32GB of RAM
+    # this is slow but it's better than allocating 1.53 TiB of RAM
     for i in range(TRAIN_SIZE):
-        sample = np.reshape(np.random.random_sample(BATCH_SIZE * outshape), [BATCH_SIZE, outshape])
-        inter = np.reshape(gaussian_process.sample_y(sample), [BATCH_SIZE, *model_shape[1:]])
-        outonehot = np.sum(np.where(sample.astype(bool), np.repeat(onehottmp)), axis=-1)
-        model.fit(x=inter, y=outonehot)
+        samples = np.random.randint(np.min(onehotout), np.max(onehotout), BATCH_SIZE).reshape(-1, 1)
+        inter = np.reshape(gaussian_process.sample_y(samples), [BATCH_SIZE, *model_shape[1:]])
+        model.fit(x=inter, y=samples)
 
     return model
 
-def model_create_equation(model_dir, tex_save, training_data):
+def tester(model, outshape, sheafout, sheafs, sort_avg, name):
+    model_shape = [1 if x is None else x for x in model.input_shape]
+    out = np.reshape(sheafout, model_shape) 
+    final_test = model(out)
+
+    def bucketize(prelims):
+        arr = []
+        for ps in prelims:
+            for i, p in enumerate(ps):
+                if len(arr) <= i:
+                    arr.append([])
+                arr[i].append(p)
+        return np.array(arr)
+
+    prelim_shape = model_shape
+    prelim_shape[0] *= sheafs.shape[0]
+    prelimin = np.reshape(sheafs, prelim_shape)
+    prelims = model.predict(prelimin)
+    # aggregate outputs
+    # and sort by feature
+    avg_outs = [avg for (_, (_, avg)) in sort_avg]
+
+
+    template = np.reshape(np.arange(1, len(avg_outs)+1), outshape[-1])
+    # plt.plot(prelims) 
+    plt.violinplot(np.transpose(avg_outs), showmeans=True) 
+    plt.violinplot(np.transpose(bucketize(prelims)), showmeans=True) 
+
+    plt.plot(template, np.transpose(final_test.numpy()), "ro--")
+
+    plt.savefig(name)
+
+
+
+def model_create_equation(model_dir, training_data):
     # check optional args
     # from io import StringIO
     # activ_obj = pandas.read_csv(StringIO(ACTIVATION_LIST), delimiter=';')
@@ -412,81 +481,14 @@ def model_create_equation(model_dir, tex_save, training_data):
             activations.append(lambda x: x if act is None else act(x))
             layers.append([weights, baises]) 
             shapes.append([shape, weights.shape, baises.shape])
-        
-        targets = [1] * len(shapes)
-        # add output target
-        targets[-1] = model.output_shape[-1] 
-        shapes = complete_bias(shapes, targets) 
 
+        [sheaf, sols, outward, sort_avg] = graph_model(model, training_data, activations, shapes, layers)        
+        tester(model, shapes[-1], sheaf, outward, sort_avg, "in.png")
 
-        # fft calculation goes through here
-        solved_system = solve_system(activations, layers)
-        # lets add the input vector
-        # create solutions to output
-        sols = create_sols_from_system(solved_system)
-        # convert from matrix
-
-        # sheafify 
-        solution = sols[0][0]
-        outward = sols[0][0]
-        for sheaf in sols[1:]:
-            sheaf = sheaf[0]
-            if sheaf.shape == solution.shape:
-                solution = solution * sheaf
-                outward = solution
-            else:
-                solution = solution @ sheaf.T
-
-        sort_avg = sorted(
-            output_aggregator(model, training_data), key= lambda tup: tup[0])
-
-        # sheafifed = irfftn(solution, shapes[0]) 
-        sheafifed = np.imag(rfftn(solution, shapes[0]))
-
-        tester(model, shapes[-1], sheafifed, outward, sort_avg, "test.png", False)
-
-        # def trainmodel(size)
-        # this causes an error
         model = interpolate_fft_train(sols[-1], model)
-
-        sort_avg = sorted(
-            output_aggregator(model, training_data), key= lambda tup: tup[0])
-
-        tester(model, shapes[-1], sheafifed, outward, sort_avg, "withpayload.png", True)
-
-def tester(model, outshape, sheafout, sheafs, sort_avg, name, payload):
-    model_shape = [1 if x is None else x for x in model.input_shape]
-    out = np.reshape(sheafout, model_shape) 
-    final_test = model(out)
-
-    def bucketize(prelims):
-        arr = []
-        for ps in prelims:
-            for i, p in enumerate(ps):
-                if len(arr) <= i:
-                    arr.append([])
-                arr[i].append(p)
-        return np.array(arr)
-
-    prelim_shape = model_shape
-    prelim_shape[0] *= sheafs.shape[0]
-    prelimin = np.reshape(sheafs, prelim_shape)
-    prelims = model.predict(prelimin)
-    # aggregate outputs
-    # and sort by feature
-    avg_outs = [avg for (_, (_, avg)) in sort_avg]
-
-
-    template = np.reshape(np.arange(1, len(avg_outs)+1), outshape[-1])
-    # plt.plot(prelims) 
-    if not payload:
-        plt.violinplot(np.transpose(avg_outs), showmeans=True) 
-    else:
-        plt.violinplot(np.transpose(bucketize(prelims)), showmeans=True) 
-
-    plt.plot(template, np.transpose(final_test.numpy()), "ro--")
-
-    plt.savefig(name)
+    
+        [sheaf, sols, outward, sort_avg] = graph_model(model, training_data, activations, shapes, layers)        
+        tester(model, shapes[-1], sheaf, outward, sort_avg, "out.png")
 
 if __name__=="__main__":
     if len(sys.argv) > 2:
@@ -494,8 +496,8 @@ if __name__=="__main__":
         model = os.path.join(path, sys.argv[1]) 
         try:
             print(os.path.abspath(model))
-            if len(sys.argv) > 3:
-                model_create_equation(os.path.abspath(model), sys.argv[3], sys.argv[2])
+            if len(sys.argv) > 2:
+                model_create_equation(os.path.abspath(model), sys.argv[2])
             else:
                 print("""not enough commands, please give a filename of a model to extract, it's training dataset (which may be altered at future date)
                 output for a tex file, and a csv file containing each type of acitvation used delimitered by ; (optional)""")
