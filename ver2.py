@@ -46,8 +46,8 @@ softplus;ln(1+E^x);
 #TUNE THEESE INPUT PARAMS
 INPUT_SYMBOL = symbols("x")
 BATCH_SIZE = 1024
-TRAIN_SIZE=1
-RBF_BOUND_MIN=1e-3
+TRAIN_SIZE=16
+RBF_BOUND_MIN=1e-5
 RBF_BOUND_MAX=1e15
 RBF_SCALE=1
 
@@ -420,37 +420,46 @@ def interpolate_fft_train(sols, model):
 
     return model
 
-def tester(model, outshape, sheafout, sheafs, sort_avg, name):
+def bucketize(prelims):
+    arr = []
+    for ps in prelims:
+        for i, p in enumerate(ps):
+            if len(arr) <= i:
+                arr.append([])
+            arr[i].append(p)
+    return np.array(arr)
+
+def tester(model, outshape, sheafout, sheafs, sort_avg):
     model_shape = [1 if x is None else x for x in model.input_shape]
     out = np.reshape(sheafout, model_shape) 
     final_test = model(out)
-
-    def bucketize(prelims):
-        arr = []
-        for ps in prelims:
-            for i, p in enumerate(ps):
-                if len(arr) <= i:
-                    arr.append([])
-                arr[i].append(p)
-        return np.array(arr)
 
     prelim_shape = model_shape
     prelim_shape[0] *= sheafs.shape[0]
     prelimin = np.reshape(sheafs, prelim_shape)
     prelims = model.predict(prelimin)
-    # aggregate outputs
-    # and sort by feature
+    
     avg_outs = [avg for (_, (_, avg)) in sort_avg]
+    return [avg_outs, bucketize(prelims), final_test.numpy()]
 
+def plot_test(starttest, endtest, outshape, name):
+    tests = [starttest, endtest] 
+    plt.xlabel("features")
+    plt.ylabel("activation")
 
-    template = np.reshape(np.arange(1, len(avg_outs)+1), outshape[-1])
-    # plt.plot(prelims) 
-    plt.violinplot(np.transpose(avg_outs), showmeans=True) 
-    plt.violinplot(np.transpose(bucketize(prelims)), showmeans=True) 
+    colours = ["ro--", "go--"]
 
-    plt.plot(template, np.transpose(final_test.numpy()), "ro--")
+    for i, [avg_outs, prelims, final_test] in enumerate(tests):
+        template = np.reshape(np.arange(1, len(avg_outs)+1), outshape[-1])
+        # plot our test
+        plt.violinplot(np.transpose(avg_outs), showmeans=True)
+        plt.violinplot(np.transpose(prelims), showmeans=True) 
+        plt.plot(template, np.transpose(final_test), colours[i])
 
     plt.savefig(name)
+    # clear figures and axes
+    plt.cla()
+    plt.clf()
 
 def model_create_equation(model_dir, training_data):
     # check optional args
@@ -481,12 +490,14 @@ def model_create_equation(model_dir, training_data):
             shapes.append([shape, weights.shape, baises.shape])
 
         [sheaf, sols, outward, sort_avg] = graph_model(model, training_data, activations, shapes, layers)        
-        tester(model, shapes[-1], sheaf, outward, sort_avg, "in.png")
+        control = tester(model, shapes[-1], sheaf, outward, sort_avg)
 
         for i in range(TRAIN_SIZE):
             model = interpolate_fft_train(sols[-1], model)
             [sheaf, sols, outward, sort_avg] = graph_model(model, training_data, activations, shapes, layers)        
-            tester(model, shapes[-1], sheaf, outward, sort_avg, "out-epoch-"+str(i)+".png")
+            test = tester(model, shapes[-1], sheaf, outward, sort_avg)
+            plot_test(control, test, shapes[-1], "out-epoch-"+str(i)+".png")
+
 
 if __name__=="__main__":
     if len(sys.argv) > 2:
