@@ -414,7 +414,7 @@ def interpolate_fft_train(sols, model):
     model_shape = [1 if x is None else x for x in model.input_shape]
 
     # this is slow but it's better than allocating 1.53 TiB of RAM
-    samples = np.random.randint(np.min(onehotout), np.max(onehotout), BATCH_SIZE).reshape(-1, 1)
+    samples = np.random.randint(np.min(onehotout), np.max(onehotout)+1, BATCH_SIZE).reshape(-1, 1)
     inter = np.reshape(gaussian_process.sample_y(samples), [BATCH_SIZE, *model_shape[1:]])
     model.fit(x=inter, y=samples)
     
