@@ -191,7 +191,12 @@ def image(rref):
 # calculates the chec differential
 def _chec_diff(x, start):
     shape = np.roll(np.reshape(np.meshgrid(x)[0], x.shape), start)
-    return np.reshape(np.cumsum(x * (-np.ones_like(x)**shape)), x.shape)
+    reshape = np.reshape(np.arange(product(shape.shape)), shape.shape)
+    pow = np.float_power(-np.ones_like(x), reshape)
+    s=(x * pow)
+    #memory leak here
+    sum = np.cumsum(s)
+    return np.reshape(sum, x.shape)
 
 #rolls a 1D array
 def shifts(x, start):
@@ -447,7 +452,7 @@ def plot_test(starttest, endtest, outshape, name):
     plt.xlabel("features")
     plt.ylabel("activation")
 
-    colours = ["ro--", "go--"]
+    colours = ["ro--", "bo--"]
 
     for i, [avg_outs, prelims, final_test] in enumerate(tests):
         template = np.reshape(np.arange(1, len(avg_outs)+1), outshape[-1])
