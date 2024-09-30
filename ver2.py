@@ -193,7 +193,7 @@ def _chec_diff(x, start):
     shape = np.roll(np.reshape(np.meshgrid(x)[0], x.shape), start)
     reshape = np.reshape(np.arange(product(shape.shape)), shape.shape)
     pow = np.float_power(-np.ones_like(x), reshape)
-    s=(x * pow)
+    s=x * pow
     #memory leak here
     sum = np.cumsum(s)
     return np.reshape(sum, x.shape)
