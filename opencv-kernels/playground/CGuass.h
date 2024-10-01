@@ -8,12 +8,12 @@
 
 #include <python3.12/Python.h>
 
-static PyObject*
-nokeyword (PyArrayObject *dummy, PyObject *args)
+static PyObject* nokeyword (PyArrayObject *dummy, PyObject *args)
 {
     /* convert Python arguments */
     /* do function */
     /* return something */
+    return NULL;
 }
 
 int tryout()
