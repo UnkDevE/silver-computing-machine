@@ -1,6 +1,7 @@
 project('cguass', 'c')
 pymod = import('python')
 opencl = dependency('libclc')
+clblas = dependency('clblast')
 py3=pymod.find_installation('python3', required:true, modules: ['numpy'])
 py_dep = py3.dependency()
 
@@ -31,5 +32,5 @@ else
   _incdir_numpy_abs = incdir_numpy
 endif
 
-include_directories(incdir_numpy)
-py3.extension_module('cguass', ['Main.c'])
+inc = include_directories(incdir_numpy)
+py3.extension_module('cguass', ['Main.c'], include_directories: inc)

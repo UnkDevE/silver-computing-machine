@@ -1,32 +1,51 @@
-#pragma once 
+#pragma once
 // C standard includes
-#include <CL/cl_platform.h>
-#include <stdio.h>
-
 // OpenCL includes
 #include <CL/cl.h>
+#include <CL/cl_platform.h>
 
+// clBLAST matrix for efficient matrix ops
+#include <clblast_c.h>
+
+// python 
 #include <python3.12/Python.h>
 
-static PyObject* nokeyword (PyArrayObject *dummy, PyObject *args)
-{
-    /* convert Python arguments */
-    /* do function */
-    /* return something */
-    return NULL;
+// numpy includes
+#include <numpy/ndarrayobject.h>
+#include <numpy/ndarraytypes.h>
+
+// error helper function
+#include "err_code.h"
+
+
+const char RBF_KERNEL_SOURCE[] = ""; 
+
+void CLSetupAndRun() {
+  cl_uint err;
+  cl_uint num_platforms;
+  err = clGetPlatformIDs(0, NULL, &num_platforms);
+  checkError(err, "Finding Platforms");
+  
+  if(num_platforms == 0){
+    fprintf(stderr, "No platforms found please install a openCL vendor");
+  }
 }
 
-int tryout()
-{
-    cl_int CL_err = CL_SUCCESS;
-    cl_uint numPlatforms = 0;
+// should return matrix of cl_floats in CLBLAST, will change in future
+cl_float* ConverNDArray(PyArrayObject *ndarray){
+  // placeholder
+  return NULL;
+}
 
-    CL_err = clGetPlatformIDs( 0, NULL, &numPlatforms );
+PyArrayObject* ToNDArray(cl_float* cmatrix) {
+  // placeholder
+  return NULL;
+}
 
-    if (CL_err == CL_SUCCESS)
-        printf("%u platform(s) found\n", numPlatforms);
-    else
-        printf("clGetPlatformIDs(%i)\n", CL_err);
-
-    return 0;
+PyObject* RBFInterpolateCL(PyArrayObject *dummy, PyObject *args) {
+  /* convert Python arguments */
+  /* do function */
+  /* return something */
+  // placeholder
+  return NULL;
 }
