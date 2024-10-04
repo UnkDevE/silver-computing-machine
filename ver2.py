@@ -23,7 +23,6 @@ import tensorflow_datasets as tdfs
 
 
 from scipy.fft import rfftn 
-from sympy import symbols
 from scipy import linalg 
 import numpy as np
 # import pandas
@@ -44,7 +43,7 @@ softplus;ln(1+E^x);
 """
 
 #TUNE THEESE INPUT PARAMS
-INPUT_SYMBOL = symbols("x")
+MAX_ITER=2048
 BATCH_SIZE = 1024
 TRAIN_SIZE=16
 RBF_BOUND_MIN=1e-5
@@ -398,8 +397,8 @@ def graph_model(model, training_data, activations, shapes, layers):
     return ret
 
 def interpolate_fft_train(sols, model):
-    from sklearn.gaussian_process import GaussianProcessRegressor
-    from sklearn.gaussian_process.kernels import RationalQuadratic 
+    import gpflow as gpf
+    gpf.config.set_default_float(np.float64)
 
     data = np.array(sols[0])
     out = np.array(sols[1])
@@ -410,17 +409,36 @@ def interpolate_fft_train(sols, model):
     onehottmp = np.reshape(np.tile(np.arange(outshape), out.shape[0]), out.shape)
     onehotout = np.reshape(onehottmp[out==1], out.shape[0]).reshape(-1, 1)
     # create guass kernel for interpolation
-    kernel = RationalQuadratic(length_scale=RBF_SCALE, 
-        length_scale_bounds=(RBF_BOUND_MIN, RBF_BOUND_MAX))
-    gaussian_process = GaussianProcessRegressor(kernel=kernel, n_restarts_optimizer=9)
-    # we invert here to get a lookup of images from the output
-    gaussian_process.fit(onehotout, data)
 
+    OUTDIMS = 2
+    # create multi-output kernel
+    kernel = gpf.kernels.SharedIndependent(
+        gpf.kernels.SquaredExponential() + gpf.kernels.Linear(), output_dim=OUTDIMS
+    )
+    # initialization of inducing input locations (M random points from the training inputs)
+    datacpy = data.copy()
+    # create multi-output inducing variables from Z
+    iv = gpf.inducing_variables.SharedIndependentInducingVariables(
+        gpf.inducing_variables.InducingPoints(datacpy)
+    )
+    m = gpf.models.SVGP(
+        kernel, gpf.likelihoods.Gaussian(), inducing_variable=iv, num_latent_gps=OUTDIMS
+    )
+    def optimize_model_with_scipy(model):
+        optimizer = gpf.optimizers.Scipy()
+        optimizer.minimize(
+            model.training_loss_closure(data),
+            variables=model.trainable_variables,
+            method="l-bfgs-b",
+            options={"disp": 50, "maxiter": MAX_ITER},
+        )
+
+    optimize_model_with_scipy(m)
     model_shape = [1 if x is None else x for x in model.input_shape]
 
     # this is slow but it's better than allocating 1.53 TiB of RAM
     samples = np.random.randint(np.min(onehotout), np.max(onehotout)+1, BATCH_SIZE).reshape(-1, 1)
-    inter = np.reshape(gaussian_process.sample_y(samples), [BATCH_SIZE, *model_shape[1:]])
+    inter = np.reshape(m.sample_y(samples), [BATCH_SIZE, *model_shape[1:]])
     model.fit(x=inter, y=samples)
     
     return model
