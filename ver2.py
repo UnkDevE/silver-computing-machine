@@ -48,7 +48,9 @@ BATCH_SIZE = 1024
 TRAIN_SIZE=16
 RBF_BOUND_MIN=1e-5
 RBF_BOUND_MAX=1e15
-RBF_SCALE=1
+GP_SCALE=0.1
+GP_VAR=0.01
+
 
 tf.config.run_functions_eagerly(True)
 # do not remove forces tf.data to run eagerly
@@ -398,9 +400,7 @@ def graph_model(model, training_data, activations, shapes, layers):
 
 def interpolate_fft_train(sols, model):
     import gpflow
-    gpf.config.set_default_float(np.float64)
-
-    data = np.array(sols[0])
+    ins = np.array(sols[0])
     out = np.array(sols[1])
     # need this for later
     outshape = len(sols[1])
@@ -408,16 +408,65 @@ def interpolate_fft_train(sols, model):
     # one hot encode the outputs
     onehottmp = np.reshape(np.tile(np.arange(outshape), out.shape[0]), out.shape)
     onehotout = np.reshape(onehottmp[out==1], out.shape[0]).reshape(-1, 1)
+    ivt = (np.min(onehotout), np.max(onehotout)+1)
+
+    kernel = gpflow.kernels.Matern32(lengthscales=GP_SCALE) + gpflow.kernels.White(variance=GP_VAR)
+    data = (ins, out)
+    Z = ins.reshape(-1, 1)[:outshape, ].copy()
+
     # create guass kernel for interpolation
-    gp_model = gpflow.models.GPR((onehotout, data), kernel=gpflow.kernels.RationalQuadratic)
+    invlink = gpflow.likelihoods.RobustMax(outshape)  # Robustmax inverse link function
+    likelihood = gpflow.likelihoods.MultiClass(outshape, invlink=invlink)
+    gp_model = gpflow.models.SGPMC(kernel=kernel, likelihood=likelihood, 
+           inducing_variable=Z, num_latent_gps=outshape)
+
+    from gpflow.utilities import set_trainable 
+    set_trainable(gp_model.kernel.kernels[1].variance, False)
+    set_trainable(gp_model.inducing_variable, False)
+
+    from gpflow.ci_utils import ci_niter
     opt = gpflow.optimizers.Scipy()
-    opt.minimize(model.training_loss, model.trainable_variables)
+    _opt_logs = opt.minimize(gp_model.training_loss,
+                             gp_model.trainable_variables,
+                              options={"maxiter": 20})
+
+    num_burnin_steps = ci_niter(outshape ** 2)
+    num_samples = ci_niter(BATCH_SIZE)
+
+    import tensorflow_probability as tfp
+    # Note that here we need model.trainable_parameters, not trainable_variables - only parameters can have priors!
+    hmc_helper = gpflow.optimizers.SamplingHelper(
+        model.log_posterior_density, model.trainable_parameters
+    )
+
+    hmc = tfp.mcmc.HamiltonianMonteCarlo(
+        target_log_prob_fn=hmc_helper.target_log_prob_fn, num_leapfrog_steps=10, step_size=0.01
+    )
+
+    adaptive_hmc = tfp.mcmc.SimpleStepSizeAdaptation(
+        hmc, num_adaptation_steps=10, target_accept_prob=f64(0.75), adaptation_rate=0.1
+    )
+
+    @tf.function
+    def run_chain_fn():
+        return tfp.mcmc.sample_chain(
+            num_results=num_samples,
+            num_burnin_steps=num_burnin_steps,
+            current_state=hmc_helper.current_state,
+            kernel=adaptive_hmc,
+            trace_fn=lambda _, pkr: pkr.inner_results.is_accepted,
+        )
+
+    unc_samples, _ = run_chain_fn()
+    samples = hmc_helper.convert_to_constrained_values(unc_samples)
 
     model_shape = [1 if x is None else x for x in model.input_shape]
 
-    # this is slow but it's better than allocating 1.53 TiB of RAM
-    samples = np.random.randint(np.min(onehotout), np.max(onehotout)+1, BATCH_SIZE).reshape(-1, 1)
-    inter = np.reshape(gp_model.sample_y(samples), [BATCH_SIZE, *model_shape[1:]])
+    # allocating a sample from classification is not possible atm
+    # so we allocate a image and then classify it?
+    samples = np.random.randint(ivt[0], ivt[1], BATCH_SIZE).reshape(-1, 1)
+    one_hot = np.reshape(tf.one_hot(samples, 10), [BATCH_SIZE,outshape, 1])
+    inter = np.reshape(gp_model.predict_f_samples(one_hot), [BATCH_SIZE, *model_shape[1:]])
     model.fit(x=inter, y=samples)
 
     return model
