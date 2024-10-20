@@ -398,21 +398,20 @@ def run_chain_fn(num_samples, num_burnin_steps, hmc_helper, adaptive_hmc):
     ))
 
 
-def gp_train(ins, out, train):
+def gp_train(inducingset, outshape, train):
     # out is square so len does the job
-    outshape = len(out)
-
     kernel = gpflow.kernels.Matern32(lengthscales=GP_SCALE) + gpflow.kernels.White(variance=GP_VAR)
-    data = (train, out)
-    Z = ins.copy()
 
     # create guass kernel for interpolation
     likelihood = gpflow.likelihoods.MultiClass(outshape)
-    gp_model = gpflow.models.SGPMC(data, kernel=kernel, likelihood=likelihood, 
-           inducing_variable=Z, num_latent_gps=outshape)
+    gp_model = gpflow.models.SGPMC(train, kernel=kernel, likelihood=likelihood, 
+           inducing_variable=inducingset, num_latent_gps=outshape)
 
     from gpflow.utilities import set_trainable 
-    set_trainable(gp_model.inducing_variable, False)
+    from tensorflow_probability import distributions as tfd 
+    gp_model.kernel.kernels[0].variance.prior = tfd.Gamma(f64(1.0), f64(1.0))
+    gp_model.kernel.kernels[0].lengthscales.prior = tfd.Gamma(f64(1.0), f64(1.0))
+    set_trainable(gp_model.kernel.kernels[1].variance, False)
 
     from gpflow.ci_utils import reduce_in_tests 
     opt = gpflow.optimizers.Scipy()
@@ -440,14 +439,15 @@ def gp_train(ins, out, train):
 def interpolate_fft_train(sols, model, train):
     # hang on about this 
     ins = np.array(sols[0])
-    out = np.array(sols[1])
-    # outshape = len(out)
+    # out = np.array(sols[1])
+    outshape = len(sols[1])
     # need this for later
     model_shape = [1 if x is None else x for x in model.input_shape]
     Tout = model.predict(train.reshape([product(train.shape) // product(model_shape), *model_shape[1:]]))
-    Tdata = list(zip(out, Tout))
+    Tdata = (train, Tout)
 
-    hmc_helper, (unc_samples, _)= run_chain_fn(*gp_train(ins, out,Tdata)) 
+    # use output from sheafifcation for inducing vars
+    hmc_helper, (unc_samples, _)= run_chain_fn(*gp_train(ins, outshape, Tdata)) 
     samples = hmc_helper.convert_to_constrained_values(unc_samples)
 
     # inverse one hot the outputs
