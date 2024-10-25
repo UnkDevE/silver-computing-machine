@@ -442,17 +442,19 @@ def interpolate_fft_train(sols, model, train):
     # out = np.array(sols[1])
     outshape = len(sols[1])
     # need this for later
+    # inverse one hot the outputs
+    # onehottmp = np.reshape(np.tile(np.arange(outshape), out.shape[0]), out.shape)
+    # onehotout = np.reshape(onehottmp[out==1], out.shape[0]).reshape(-1, 1)
+
     model_shape = [1 if x is None else x for x in model.input_shape]
     Tout = model.predict(train.reshape([product(train.shape) // product(model_shape), *model_shape[1:]]))
     Tdata = (train, Tout)
 
     # use output from sheafifcation for inducing vars
-    hmc_helper, (unc_samples, _)= run_chain_fn(*gp_train(ins, outshape, Tdata)) 
+    out = model.predict(ins.reshape([outshape, *model_shape[1:]]))
+    indu = (ins, out)
+    hmc_helper, (unc_samples, _)= run_chain_fn(*gp_train(indu, outshape, Tdata)) 
     samples = hmc_helper.convert_to_constrained_values(unc_samples)
-
-    # inverse one hot the outputs
-    # onehottmp = np.reshape(np.tile(np.arange(outshape), out.shape[0]), out.shape)
-    # onehotout = np.reshape(onehottmp[out==1], out.shape[0]).reshape(-1, 1)
 
     # allocating a sample from classification is not possible atm
     # so we allocate a image and then classify it?
