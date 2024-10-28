@@ -21,17 +21,12 @@ import os
 
 import tensorflow as tf
 import tensorflow_datasets as tdfs 
-import tensorflow_probability as tfp
 import keras as K
 
-import gpflow
 from scipy.fft import rfftn 
 from scipy import linalg 
 import numpy as np
 import matplotlib.pyplot as plt
-
-# convert to float64 for tfp to play nicely with gpflow in 64
-f64 = gpflow.utilities.to_default_float
 
 #TUNE THEESE INPUT PARAMS
 MAX_ITER=2048
@@ -388,24 +383,17 @@ def graph_model(model, training_data, activations, shapes, layers):
     ret = [sheafifed, sols, outward, sort_avg]
     return ret
 
-@tf.function
-def run_chain_fn(num_samples, num_burnin_steps, hmc_helper, adaptive_hmc):
-    return (hmc_helper, tfp.mcmc.sample_chain(
-        num_results=num_samples,
-        num_burnin_steps=num_burnin_steps,
-        current_state=hmc_helper.current_state,
-        kernel=adaptive_hmc,
-        trace_fn=lambda _, pkr: pkr.inner_results.is_accepted,
-    ))
-
 def invert_model(model, outshape):
     input_layer = K.Input(shape=outshape) 
     layers = model.layers
     layers.reverse()
 
-    output = layers[0](input_layer)
-    for layer in layers[1:]:
-        output = layer(input_layer)
+    output = layers[0].__class__(input_layer, shape=outshape)
+    for i, layer in enumerate(layers[1:]):
+        shape = layer.kernel.shape_as_list()
+        shape = [1 if x is None else x for x in shape]
+        shape.reverse()
+        output = layer.__class__(output, shape=shape)
 
     invmodel = K.Model(inputs=input_layer, output=output)
     return invmodel
