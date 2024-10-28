@@ -22,6 +22,7 @@ import os
 import tensorflow as tf
 import tensorflow_datasets as tdfs 
 import tensorflow_probability as tfp
+import keras as K
 
 import gpflow
 from scipy.fft import rfftn 
@@ -397,68 +398,40 @@ def run_chain_fn(num_samples, num_burnin_steps, hmc_helper, adaptive_hmc):
         trace_fn=lambda _, pkr: pkr.inner_results.is_accepted,
     ))
 
+def invert_model(model, outshape):
+    input_layer = K.Input(shape=outshape) 
+    layers = model.layers
+    layers.reverse()
 
-def gp_train(inducingset, outshape, train):
-    # out is square so len does the job
-    kernel = gpflow.kernels.Matern32(lengthscales=GP_SCALE) + gpflow.kernels.White(variance=GP_VAR)
+    output = layers[0](input_layer)
+    for layer in layers[1:]:
+        output = layer(input_layer)
 
-    # create guass kernel for interpolation
-    likelihood = gpflow.likelihoods.MultiClass(outshape)
-    gp_model = gpflow.models.SGPMC(train, kernel=kernel, likelihood=likelihood, 
-           inducing_variable=inducingset, num_latent_gps=outshape)
+    invmodel = K.Model(inputs=input_layer, output=output)
+    return invmodel
 
-    from gpflow.utilities import set_trainable 
-    from tensorflow_probability import distributions as tfd 
-    gp_model.kernel.kernels[0].variance.prior = tfd.Gamma(f64(1.0), f64(1.0))
-    gp_model.kernel.kernels[0].lengthscales.prior = tfd.Gamma(f64(1.0), f64(1.0))
-    set_trainable(gp_model.kernel.kernels[1].variance, False)
-
-    from gpflow.ci_utils import reduce_in_tests 
-    opt = gpflow.optimizers.Scipy()
-    _opt_logs = opt.minimize(gp_model.training_loss,
-                             gp_model.trainable_variables,
-                              options={"maxiter": 20})
-
-    num_burnin_steps = reduce_in_tests(outshape ** 2)
-    num_samples = reduce_in_tests(BATCH_SIZE)
-
-    # Note that here we need model.trainable_parameters, not trainable_variables - only parameters can have priors!
-    hmc_helper = gpflow.optimizers.SamplingHelper(
-        model.log_posterior_density, model.trainable_parameters
-    )
-
-    hmc = tfp.mcmc.HamiltonianMonteCarlo(
-        target_log_prob_fn=hmc_helper.target_log_prob_fn, num_leapfrog_steps=10, step_size=0.01
-    )
-    adaptive_hmc = tfp.mcmc.SimpleStepSizeAdaptation(
-        hmc, num_adaptation_steps=10, target_accept_prob=f64(0.75), adaptation_rate=0.1
-    )
-
-    return (num_samples, num_burnin_steps, hmc_helper, adaptive_hmc) 
-
-def interpolate_fft_train(sols, model, train):
+def interpolate_model_train(sols, model, train):
     # hang on about this 
     ins = np.array(sols[0])
     # out = np.array(sols[1])
     outshape = len(sols[1])
     # need this for later
-    # inverse one hot the outputs
-    # onehottmp = np.reshape(np.tile(np.arange(outshape), out.shape[0]), out.shape)
-    # onehotout = np.reshape(onehottmp[out==1], out.shape[0]).reshape(-1, 1)
-
     model_shape = [1 if x is None else x for x in model.input_shape]
     Tout = model.predict(train.reshape([product(train.shape) // product(model_shape), *model_shape[1:]]))
-    Tdata = (train, Tout)
 
-    # use output from sheafifcation for inducing vars
-    out = model.predict(ins.reshape([outshape, *model_shape[1:]]))
-    indu = (ins, out)
-    hmc_helper, (unc_samples, _)= run_chain_fn(*gp_train(indu, outshape, Tdata)) 
-    samples = hmc_helper.convert_to_constrained_values(unc_samples)
+    invmodel = invert_model(model, [outshape])
+    invmodel.fit(Tout, train)
+    invmodel.fit(sols[1], ins)
+
+    # inverse one hot the outputs
+    randbatch = np.random.random_sample([TRAIN_SIZE, BATCH_SIZE, *model_shape[1:]])
+    out = invmodel.predict(randbatch)
+    onehottmp = np.reshape(np.tile(np.arange(outshape), out.shape[0]), out.shape)
+    onehotout = np.reshape(onehottmp[np.max(out)], out.shape[0]).reshape(-1, 1)
 
     # allocating a sample from classification is not possible atm
     # so we allocate a image and then classify it?
-    model.fit(samples)
+    model.fit(randbatch, onehotout)
     return model
 
 def bucketize(prelims):
@@ -534,7 +507,7 @@ def model_create_equation(model_dir, training_data):
         control = tester(model, sheaf, outward, sort_avg)
 
         for i in range(TRAIN_SIZE):
-            model = interpolate_fft_train(sols[-1], model, outward)
+            model = interpolate_model_train(sols[-1], model, outward)
             [sheaf, sols, outward, sort_avg] = graph_model(model, training_data, activations, shapes, layers)        
             test = tester(model, sheaf, outward, sort_avg)
             plot_test(control, test, shapes[-1], "out-epoch-"+str(i)+".png")
