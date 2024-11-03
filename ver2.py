@@ -384,16 +384,16 @@ def graph_model(model, training_data, activations, shapes, layers):
     return ret
 
 def invert_model(model, outshape):
-    input_layer = K.Input(shape=outshape) 
+    input_layer = K.Input(outshape) 
     layers = model.layers
     layers.reverse()
 
-    output = layers[0].__class__(input_layer, shape=outshape)
+    output = layers[0].__class__(input_layer,outshape)
     for i, layer in enumerate(layers[1:]):
         shape = layer.kernel.shape_as_list()
         shape = [1 if x is None else x for x in shape]
         shape.reverse()
-        output = layer.__class__(output, shape=shape)
+        output = layer.__class__(output, shape)
 
     invmodel = K.Model(inputs=input_layer, output=output)
     return invmodel
