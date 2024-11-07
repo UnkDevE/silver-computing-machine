@@ -34,6 +34,7 @@ BATCH_SIZE = 1024
 TRAIN_SIZE=16
 RBF_BOUND_MIN=1e-5
 RBF_BOUND_MAX=1e15
+NEIGHBOURS_DOT=3
 GP_SCALE=0.1
 GP_VAR=0.01
 
@@ -383,43 +384,33 @@ def graph_model(model, training_data, activations, shapes, layers):
     ret = [sheafifed, sols, outward, sort_avg]
     return ret
 
-def invert_model(model, outshape):
-    input_layer = K.Input(outshape) 
-    layers = model.layers
-    layers.reverse()
-
-    output = layers[0].__class__(input_layer,outshape)
-    for i, layer in enumerate(layers[1:]):
-        shape = layer.kernel.shape_as_list()
-        shape = [1 if x is None else x for x in shape]
-        shape.reverse()
-        output = layer.__class__(output, shape)
-
-    invmodel = K.Model(inputs=input_layer, output=output)
-    return invmodel
 
 def interpolate_model_train(sols, model, train):
     # hang on about this 
     ins = np.array(sols[0])
     # out = np.array(sols[1])
     outshape = len(sols[1])
+    out = sols[1]
+
     # need this for later
     model_shape = [1 if x is None else x for x in model.input_shape]
     Tout = model.predict(train.reshape([product(train.shape) // product(model_shape), *model_shape[1:]]))
+    CTin = np.concatenate([ins, train])
+    CTout = np.concatenate([out, Tout])
 
-    invmodel = invert_model(model, [outshape])
-    invmodel.fit(Tout, train)
-    invmodel.fit(sols[1], ins)
+    from scipy.decomposition import PCA
+    from scipy.stats import gaussian_kde 
+    # this is too heavy duty on preformance using more than 32GB of RAM
+    guass = gaussian_kde([CTin,CTout])
+    sample = guass.resample(BATCH_SIZE)
+    sampleout = guass.evaluate(sample)
 
     # inverse one hot the outputs
-    randbatch = np.random.random_sample([TRAIN_SIZE, BATCH_SIZE, *model_shape[1:]])
-    out = invmodel.predict(randbatch)
     onehottmp = np.reshape(np.tile(np.arange(outshape), out.shape[0]), out.shape)
-    onehotout = np.reshape(onehottmp[np.max(out)], out.shape[0]).reshape(-1, 1)
-
+    onehotout = np.reshape(onehottmp[np.max(sampleout)], out.shape[0]).reshape(-1, 1)
     # allocating a sample from classification is not possible atm
     # so we allocate a image and then classify it?
-    model.fit(randbatch, onehotout)
+    model.fit(sample, onehotout)
     return model
 
 def bucketize(prelims):
