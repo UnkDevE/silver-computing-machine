@@ -405,7 +405,7 @@ def gp_train(inducingset, outshape, train):
     # create guass kernel for interpolation
     likelihood = gpflow.likelihoods.MultiClass(outshape)
     gp_model = gpflow.models.SGPMC(train, kernel=kernel, likelihood=likelihood, 
-           inducing_variable=inducingset, num_latent_gps=outshape)
+           inducing_variable=inducingset[0], num_latent_gps=outshape)
 
     from gpflow.utilities import set_trainable 
     from tensorflow_probability import distributions as tfd 
@@ -417,7 +417,7 @@ def gp_train(inducingset, outshape, train):
     opt = gpflow.optimizers.Scipy()
     _opt_logs = opt.minimize(gp_model.training_loss,
                              gp_model.trainable_variables,
-                              options={"maxiter": 20})
+                              options={"maxiter": MAX_ITER})
 
     num_burnin_steps = reduce_in_tests(outshape ** 2)
     num_samples = reduce_in_tests(BATCH_SIZE)
@@ -441,14 +441,17 @@ def interpolate_fft_train(sols, model, train):
     ins = np.array(sols[0])
     # out = np.array(sols[1])
     outshape = len(sols[1])
+ 
     # need this for later
-    # inverse one hot the outputs
-    # onehottmp = np.reshape(np.tile(np.arange(outshape), out.shape[0]), out.shape)
-    # onehotout = np.reshape(onehottmp[out==1], out.shape[0]).reshape(-1, 1)
+    def onecool(out):
+        onehottmp = np.reshape(np.tile(np.arange(outshape), out.shape[0]), out.shape)
+        onehotout = np.reshape(onehottmp[out == np.max(out)], out.shape[0]).reshape(-1, 1)
+        return onehotout
 
+    # inverse one hot the outputs
     model_shape = [1 if x is None else x for x in model.input_shape]
     Tout = model.predict(train.reshape([product(train.shape) // product(model_shape), *model_shape[1:]]))
-    Tdata = (train, Tout)
+    Tdata = (train, onecool(Tout))
 
     # use output from sheafifcation for inducing vars
     out = model.predict(ins.reshape([outshape, *model_shape[1:]]))
