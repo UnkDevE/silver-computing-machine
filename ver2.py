@@ -409,9 +409,10 @@ def gp_train(inducingset, outshape, train):
 
     from gpflow.utilities import set_trainable 
     from tensorflow_probability import distributions as tfd 
-    gp_model.kernel.kernels[0].variance.prior = tfd.Gamma(f64(1.0), f64(1.0))
-    gp_model.kernel.kernels[0].lengthscales.prior = tfd.Gamma(f64(1.0), f64(1.0))
+    gp_model.kernel.kernels[0].variance.prior = tfd.Gamma(f64(0.0), f64(1.0))
+    gp_model.kernel.kernels[0].lengthscales.prior = tfd.Gamma(f64(0.0), f64(1.0))
     set_trainable(gp_model.kernel.kernels[1].variance, False)
+    set_trainable(gp_model.inducing_variable, False)
 
     from gpflow.ci_utils import reduce_in_tests 
     opt = gpflow.optimizers.Scipy()
@@ -424,7 +425,7 @@ def gp_train(inducingset, outshape, train):
 
     # Note that here we need model.trainable_parameters, not trainable_variables - only parameters can have priors!
     hmc_helper = gpflow.optimizers.SamplingHelper(
-        model.log_posterior_density, model.trainable_parameters
+        gp_model.log_posterior_density, gp_model.trainable_parameters
     )
 
     hmc = tfp.mcmc.HamiltonianMonteCarlo(
