@@ -35,11 +35,14 @@ f64 = gpflow.utilities.to_default_float
 #TUNE THEESE INPUT PARAMS
 BATCH_SIZE = 1024
 TRAIN_SIZE=16
-MAX_ITER=BATCH_SIZE*2
+# was BATCH_SIZE * 2 when GP_MODEL_TRAIN
+MAX_ITER=TRAIN_SIZE // 4
 RBF_BOUND_MIN=1e-5
 RBF_BOUND_MAX=1e15
 GP_SCALE=0.1
 GP_VAR=0.01
+CORE_COUNT=32
+CORE_COUNT_MCMC=CORE_COUNT*4
 
 # tf.data.experimental.enable_debug_mode()
 # do not remove forces tf.data to run eagerly
@@ -394,7 +397,8 @@ def run_chain_fn(num_samples, num_burnin_steps, hmc_helper, adaptive_hmc):
         num_burnin_steps=num_burnin_steps,
         current_state=hmc_helper.current_state,
         kernel=adaptive_hmc,
-        trace_fn=None,
+        parallel_iterations=CORE_COUNT_MCMC,
+        trace_fn=lambda cs, kr: kr,
     ))
 
 
@@ -416,8 +420,8 @@ def gp_train(inducingset, outshape, train):
 
         from gpflow.utilities import set_trainable 
         from tensorflow_probability import distributions as tfd 
-        gp_model.kernel.kernels[0].variance.prior = tfd.Gamma(f64(0.0), f64(1.0))
-        gp_model.kernel.kernels[0].lengthscales.prior = tfd.Gamma(f64(0.0), f64(1.0))
+        gp_model.kernel.kernels[0].variance.prior = tfd.Gamma(f64(1.0), f64(1.0))
+        gp_model.kernel.kernels[0].lengthscales.prior = tfd.Gamma(f64(1.0), f64(1.0))
         set_trainable(gp_model.kernel.kernels[1].variance, False)
         set_trainable(gp_model.inducing_variable, False)
 
@@ -430,7 +434,7 @@ def gp_train(inducingset, outshape, train):
         tf.saved_model.save(gp_model, "cache.gpflow")
         
     num_burnin_steps = reduce_in_tests(outshape ** 2)
-    num_samples = reduce_in_tests(BATCH_SIZE * product(inducingset[0].shape[:-1]))
+    num_samples = reduce_in_tests(BATCH_SIZE * product(inducingset[0].shape[1:]))
 
     # Note that here we need model.trainable_parameters, not trainable_variables - only parameters can have priors!
     hmc_helper = gpflow.optimizers.SamplingHelper(
