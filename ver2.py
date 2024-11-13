@@ -33,9 +33,9 @@ import matplotlib.pyplot as plt
 f64 = gpflow.utilities.to_default_float
 
 #TUNE THEESE INPUT PARAMS
-MAX_ITER=2048
 BATCH_SIZE = 1024
 TRAIN_SIZE=16
+MAX_ITER=BATCH_SIZE*2
 RBF_BOUND_MIN=1e-5
 RBF_BOUND_MAX=1e15
 GP_SCALE=0.1
@@ -421,7 +421,7 @@ def gp_train(inducingset, outshape, train):
                               options={"maxiter": MAX_ITER})
 
     num_burnin_steps = reduce_in_tests(outshape ** 2)
-    num_samples = reduce_in_tests(BATCH_SIZE)
+    num_samples = reduce_in_tests(BATCH_SIZE * product(inducingset[0].shape[:-1]))
 
     # Note that here we need model.trainable_parameters, not trainable_variables - only parameters can have priors!
     hmc_helper = gpflow.optimizers.SamplingHelper(
