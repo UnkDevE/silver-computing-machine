@@ -394,32 +394,41 @@ def run_chain_fn(num_samples, num_burnin_steps, hmc_helper, adaptive_hmc):
         num_burnin_steps=num_burnin_steps,
         current_state=hmc_helper.current_state,
         kernel=adaptive_hmc,
-        trace_fn=lambda _, pkr: pkr.inner_results.is_accepted,
+        trace_fn=None,
     ))
 
 
 def gp_train(inducingset, outshape, train):
-    # out is square so len does the job
-    kernel = gpflow.kernels.Matern32(lengthscales=GP_SCALE) + gpflow.kernels.White(variance=GP_VAR)
+    # this should be preprocessed out in C but it's python so :/
+    gp_model = None
+    import os.path
+    if os.path.isfile("cache.gpflow"):
+        gp_model = tf.saved_model.load("cache.gpflow")
+    else:
+        # out is square so len does the job
+        kernel = gpflow.kernels.Matern32(lengthscales=GP_SCALE) + gpflow.kernels.White(variance=GP_VAR)
 
-    # create guass kernel for interpolation
-    likelihood = gpflow.likelihoods.MultiClass(outshape)
-    gp_model = gpflow.models.SGPMC(train, kernel=kernel, likelihood=likelihood, 
-           inducing_variable=inducingset[0], num_latent_gps=outshape)
+        # create guass kernel for interpolation
+        likelihood = gpflow.likelihoods.MultiClass(outshape)
+        gp_model = gpflow.models.SGPMC(train, kernel=kernel, likelihood=likelihood, 
+               inducing_variable=inducingset[0], num_latent_gps=outshape)
 
-    from gpflow.utilities import set_trainable 
-    from tensorflow_probability import distributions as tfd 
-    gp_model.kernel.kernels[0].variance.prior = tfd.Gamma(f64(0.0), f64(1.0))
-    gp_model.kernel.kernels[0].lengthscales.prior = tfd.Gamma(f64(0.0), f64(1.0))
-    set_trainable(gp_model.kernel.kernels[1].variance, False)
-    set_trainable(gp_model.inducing_variable, False)
 
-    from gpflow.ci_utils import reduce_in_tests 
-    opt = gpflow.optimizers.Scipy()
-    _opt_logs = opt.minimize(gp_model.training_loss,
-                             gp_model.trainable_variables,
-                              options={"maxiter": MAX_ITER})
+        from gpflow.utilities import set_trainable 
+        from tensorflow_probability import distributions as tfd 
+        gp_model.kernel.kernels[0].variance.prior = tfd.Gamma(f64(0.0), f64(1.0))
+        gp_model.kernel.kernels[0].lengthscales.prior = tfd.Gamma(f64(0.0), f64(1.0))
+        set_trainable(gp_model.kernel.kernels[1].variance, False)
+        set_trainable(gp_model.inducing_variable, False)
 
+        from gpflow.ci_utils import reduce_in_tests 
+        opt = gpflow.optimizers.Scipy()
+        _opt_logs = opt.minimize(gp_model.training_loss,
+                                 gp_model.trainable_variables,
+                                  options={"maxiter": MAX_ITER})
+        
+        tf.saved_model.save(gp_model, "cache.gpflow")
+        
     num_burnin_steps = reduce_in_tests(outshape ** 2)
     num_samples = reduce_in_tests(BATCH_SIZE * product(inducingset[0].shape[:-1]))
 
