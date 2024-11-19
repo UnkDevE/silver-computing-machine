@@ -42,7 +42,7 @@ RBF_BOUND_MAX=1e15
 GP_SCALE=0.1
 GP_VAR=0.01
 CORE_COUNT=32
-CORE_COUNT_MCMC=CORE_COUNT*4
+CORE_COUNT_MCMC=CORE_COUNT*MAX_ITER
 
 # tf.data.experimental.enable_debug_mode()
 # do not remove forces tf.data to run eagerly

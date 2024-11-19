@@ -1,3 +1,0 @@
-#/bin/bash
-
-gcc -Os -I/home/ethanr/miniforge3/include/python3.10 -I/home/ethanr/miniforge3/include/python3.10  -Wno-unused-result -Wsign-compare -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O3 -pipe -isystem /home/ethanr/miniforge3/include -fdebug-prefix-map=/home/conda/feedstock_root/build_artifacts/python-split_1710970839359/work=/usr/local/src/conda/python-3.10.14 -fdebug-prefix-map=/home/ethanr/miniforge3=/usr/local/src/conda-prefix -DNDEBUG -fwrapv -O3 -Wall ver2.c -L/home/ethanr/miniforge3/lib/python3.10/config-3.10-aarch64-linux-gnu -L/home/ethanr/miniforge3/lib -lpython3 -lcrypt -lpthread -ldl  -lutil -lm -lm -o silver-compute-machine

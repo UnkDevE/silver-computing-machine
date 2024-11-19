@@ -1,4 +1,3 @@
-tensorflow >= 2.18
 tensorflow_datasets
 scipy
 numpy<2
