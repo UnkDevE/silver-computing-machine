@@ -403,16 +403,22 @@ def run_chain_fn(num_samples, num_burnin_steps, hmc_helper, adaptive_hmc):
 
 
 def gp_train(inducingset, outshape, train):
-    # out is square so len does the job
-    kernel = gpflow.kernels.Matern32(lengthscales=GP_SCALE) + gpflow.kernels.White(variance=GP_VAR)
+    # create multi-output kernel
+    kernel = gpflow.kernels.SharedIndependent(
+        gpflow.kernels.SquaredExponential() + gpflow.kernels.Linear(), output_dim=outshape
+    )
+    # initialization of inducing input locations (M random points from the training inputs)
+    # create multi-output inducing variables from Z
+    iv = gpflow.inducing_variables.SharedIndependentInducingVariables(
+        gpflow.inducing_variables.InducingPoints(inducingset)
+    )
+    
+    gp_model = gpflow.models.SVGP(
+        kernel, gpflow.likelihoods.Gaussian(), inducing_variable=iv, num_latent_gps=P
+    )
+    from gpflow.utilities import set_trainable, print_summary
+    print_summary(gp_model)
 
-    # create guass kernel for interpolation
-    likelihood = gpflow.likelihoods.MultiClass(outshape)
-    gp_model = gpflow.models.SGPMC(train, kernel=kernel, likelihood=likelihood, 
-           inducing_variable=inducingset[0], num_latent_gps=outshape)
-
-
-    from gpflow.utilities import set_trainable 
     from tensorflow_probability import distributions as tfd 
     gp_model.kernel.kernels[0].variance.prior = tfd.Gamma(f64(1.0), f64(1.0))
     gp_model.kernel.kernels[0].lengthscales.prior = tfd.Gamma(f64(1.0), f64(1.0))
