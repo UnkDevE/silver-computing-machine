@@ -18,6 +18,8 @@
 
 import sys
 import os
+import time
+import itertools
 
 import tensorflow as tf
 import tensorflow_datasets as tdfs 
@@ -42,7 +44,7 @@ RBF_BOUND_MAX=1e15
 GP_SCALE=0.1
 GP_VAR=0.01
 CORE_COUNT=32
-CORE_COUNT_MCMC=CORE_COUNT*MAX_ITER
+CORE_COUNT_MCMC=CORE_COUNT
 
 # tf.data.experimental.enable_debug_mode()
 # do not remove forces tf.data to run eagerly
@@ -210,7 +212,7 @@ def chec_diff(x, start):
 """
 def pad_coeff_output(coeff):
     last = 0
-    arr = []
+    arr = [] 
     for [x, i] in coeff:
         if i-1 >= last:
             [arr.append(0) for _ in range(i-1)]
@@ -390,57 +392,65 @@ def graph_model(model, training_data, activations, shapes, layers):
     ret = [sheafifed, sols, outward, sort_avg]
     return ret
 
-@tf.function
-def run_chain_fn(num_samples, num_burnin_steps, hmc_helper, adaptive_hmc):
-    return (hmc_helper, tfp.mcmc.sample_chain(
-        num_results=num_samples,
-        num_burnin_steps=num_burnin_steps,
-        current_state=hmc_helper.current_state,
-        kernel=adaptive_hmc,
-        parallel_iterations=CORE_COUNT_MCMC,
-        trace_fn=lambda cs, kr: cs,
-    ))
-
-
-def gp_train(inducingset, outshape, train):
+def gp_train(inducingset, outshape, train, model_shape):
     # out is square so len does the job
-    kernel = gpflow.kernels.Matern32(lengthscales=GP_SCALE) + gpflow.kernels.White(variance=GP_VAR)
+    kernel = gpflow.kernels.SquaredExponential()
 
     # create guass kernel for interpolation
-    likelihood = gpflow.likelihoods.MultiClass(outshape)
-    gp_model = gpflow.models.SGPMC(train, kernel=kernel, likelihood=likelihood, 
-           inducing_variable=inducingset[0], num_latent_gps=outshape)
+    gp_model = gpflow.models.SVGP(kernel=kernel, likelihood=gpflow.likelihoods.Gaussian(), 
+           inducing_variable=inducingset[1], num_data=train[0].shape[-1])
 
 
     from gpflow.utilities import set_trainable 
     from tensorflow_probability import distributions as tfd 
-    gp_model.kernel.kernels[0].variance.prior = tfd.Gamma(f64(1.0), f64(1.0))
-    gp_model.kernel.kernels[0].lengthscales.prior = tfd.Gamma(f64(1.0), f64(1.0))
-    set_trainable(gp_model.kernel.kernels[1].variance, False)
-    set_trainable(gp_model.inducing_variable, False)
+   
+    tensor_data = tf.data.Dataset.from_tensor_slices(train).repeat().shuffle(train[0].shape[-1])
+    minibatch_size = outshape ** 2
 
-    from gpflow.ci_utils import reduce_in_tests 
-    opt = gpflow.optimizers.Scipy()
-    _opt_logs = opt.minimize(gp_model.training_loss,
-                             gp_model.trainable_variables,
-                              options={"maxiter": MAX_ITER})
+    elbo = tf.function(gp_model.elbo)
+    # Evaluate objective for different minibatch sizes
+    minibatch_proportions = np.logspace(-2, 0, 10)
+    times = []
+    objs = []
+    for mbp in minibatch_proportions:
+        batchsize = int(outshape * mbp)
+        train_iter = iter(tensor_data.batch(minibatch_size))
+        start_time = time.time()
+        objs.append(
+            [elbo(minibatch) for minibatch in itertools.islice(train_iter, 20)]
+        )
+        times.append(time.time() - start_time)
+ 
+    # We turn off training for inducing point locations
+    gpflow.set_trainable(m.inducing_variable, False)
+
+    def run_adam(model, iterations):
+        """
+        Utility function running the Adam optimizer
+
+        :param model: GPflow model
+        :param interations: number of iterations
+        """
+        # Create an Adam Optimizer action
+        logf = []
+        train_iter = iter(train_dataset.batch(minibatch_size))
+        training_loss = model.training_loss_closure(train_iter, compile=True)
+        optimizer = tf.optimizers.Adam()
+
+        @tf.function
+        def optimization_step():
+            optimizer.minimize(training_loss, model.trainable_variables)
+
+        for step in range(iterations):
+            optimization_step()
+            if step % 10 == 0:
+                elbo = -training_loss().numpy()
+                logf.append(elbo)
+        return logf
+
+    max_iter = reduce_in_tests(BATCH_SIZE * outshape ** 2)
+    logf = run_adam(gp_model, maxiter)
     
-    num_burnin_steps = reduce_in_tests(outshape ** 2)
-    num_samples = reduce_in_tests(BATCH_SIZE // 4)
-
-    # Note that here we need model.trainable_parameters, not trainable_variables - only parameters can have priors!
-    hmc_helper = gpflow.optimizers.SamplingHelper(
-        gp_model.log_posterior_density, gp_model.trainable_parameters
-    )
-
-    hmc = tfp.mcmc.HamiltonianMonteCarlo(
-        target_log_prob_fn=hmc_helper.target_log_prob_fn, num_leapfrog_steps=10, step_size=0.01
-    )
-    adaptive_hmc = tfp.mcmc.SimpleStepSizeAdaptation(
-        hmc, num_adaptation_steps=10, target_accept_prob=f64(0.75), adaptation_rate=0.1
-    )
-    return (num_samples, num_burnin_steps, hmc_helper, adaptive_hmc) 
-
 def interpolate_fft_train(sols, model, train):
     # hang on about this 
     ins = np.array(sols[0])
@@ -456,13 +466,13 @@ def interpolate_fft_train(sols, model, train):
     # inverse one hot the outputs
     model_shape = [1 if x is None else x for x in model.input_shape]
     Tout = model.predict(train.reshape([product(train.shape) // product(model_shape), *model_shape[1:]]))
-    Tdata = (train, onecool(Tout))
+    Tdata = (train, onecool(Tout).astype(np.int64))
 
     # use output from sheafifcation for inducing vars
     out = model.predict(ins.reshape([outshape, *model_shape[1:]]))
-    indu = (ins, out)
-    hmc_helper, (unc_samples, _)= run_chain_fn(*gp_train(indu, outshape, Tdata)) 
-    samples = hmc_helper.convert_to_constrained_values(unc_samples)
+    indu = (out, ins)
+    gp_model = gp_train(indu, outshape, Tdata, model_shape)
+    samples = gp_model.predict() 
 
     # allocating a sample from classification is not possible atm
     # so we allocate a image and then classify it?
