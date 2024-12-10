@@ -400,30 +400,19 @@ def gp_train(inducingset, outshape, train, model_shape):
     gp_model = gpflow.models.SVGP(kernel=kernel, likelihood=gpflow.likelihoods.Gaussian(), 
            inducing_variable=inducingset[1], num_data=train[0].shape[-1])
 
-
-    from gpflow.utilities import set_trainable 
+    from gpflow.utilities import set_trainable
     from tensorflow_probability import distributions as tfd 
-   
-    tensor_data = tf.data.Dataset.from_tensor_slices(train).repeat().shuffle(train[0].shape[-1])
+
+    tensor_data = (tf.convert_to_tensor(train[0]), tf.convert_to_tensor(train[1], dtype=tf.float64))
+    dataset = tf.data.Dataset.from_tensor_slices(tensor_data).repeat().shuffle(train[0].shape[-1])
     minibatch_size = outshape ** 2
 
     elbo = tf.function(gp_model.elbo)
     # Evaluate objective for different minibatch sizes
-    minibatch_proportions = np.logspace(-2, 0, 10)
-    times = []
-    objs = []
-    for mbp in minibatch_proportions:
-        batchsize = int(outshape * mbp)
-        train_iter = iter(tensor_data.batch(minibatch_size))
-        start_time = time.time()
-        objs.append(
-            [elbo(minibatch) for minibatch in itertools.islice(train_iter, 20)]
-        )
-        times.append(time.time() - start_time)
- 
     # We turn off training for inducing point locations
-    gpflow.set_trainable(m.inducing_variable, False)
+    gpflow.set_trainable(gp_model.inducing_variable, False)
 
+    # gpflow adam optimizer from tut
     def run_adam(model, iterations):
         """
         Utility function running the Adam optimizer
@@ -433,23 +422,39 @@ def gp_train(inducingset, outshape, train, model_shape):
         """
         # Create an Adam Optimizer action
         logf = []
-        train_iter = iter(train_dataset.batch(minibatch_size))
+        train_iter = iter(dataset.batch(minibatch_size))
         training_loss = model.training_loss_closure(train_iter, compile=True)
-        optimizer = tf.optimizers.Adam()
+        optimizer_adam = tf.keras.optimizers.Adam(RBF_BOUND_MIN)
 
         @tf.function
-        def optimization_step():
-            optimizer.minimize(training_loss, model.trainable_variables)
+        def train_step(inputs):
+            batch_data, labels = inputs
+            with tf.GradientTape() as tape:
+                predict = model(batch_data, training=True)
+                loss = tf.keras.losses.CategoricalCrossentropy(
+                    reduction=tf.keras.losses.Reduction.NONE)(labels, predictions)
+            gradients = tape.gradient(loss, model.trainable_variables)
+            optimizer.apply_gradients(zip(gradients, model.trainable_variables))
 
-        for step in range(iterations):
-            optimization_step()
+        @tf.function
+        def optimization_step(train_iter):
+            train_step(train_iter)
+            optimizer_adam.apply_gradients(training_loss, gp_model.trainable_variables)
+
+        minibatch_proportions = np.logspace(-2, 0, outshape)
+        for mbp in minibatch_proportions:
+            batchsize = int(outshape * mbp)
+            optimization_step(next(train_iter))
             if step % 10 == 0:
                 elbo = -training_loss().numpy()
                 logf.append(elbo)
         return logf
 
+    from gpflow.ci_utils import reduce_in_tests
     max_iter = reduce_in_tests(BATCH_SIZE * outshape ** 2)
-    logf = run_adam(gp_model, maxiter)
+    logf = run_adam(gp_model, max_iter)
+    
+    return gp_model
     
 def interpolate_fft_train(sols, model, train):
     # hang on about this 
@@ -466,17 +471,19 @@ def interpolate_fft_train(sols, model, train):
     # inverse one hot the outputs
     model_shape = [1 if x is None else x for x in model.input_shape]
     Tout = model.predict(train.reshape([product(train.shape) // product(model_shape), *model_shape[1:]]))
-    Tdata = (train, onecool(Tout).astype(np.int64))
+    Tdata = (train, onecool(Tout))
 
     # use output from sheafifcation for inducing vars
     out = model.predict(ins.reshape([outshape, *model_shape[1:]]))
     indu = (out, ins)
     gp_model = gp_train(indu, outshape, Tdata, model_shape)
-    samples = gp_model.predict() 
+    
+    reg_outs = np.random.random_integers(0, 10, BATCH_SIZE)
+    samples = gp_model.predict(reg_outs) 
 
     # allocating a sample from classification is not possible atm
     # so we allocate a image and then classify it?
-    model.fit(samples)
+    model.fit((samples, reg_outs))
     return model
 
 def bucketize(prelims):
