@@ -428,22 +428,22 @@ def gp_train(inducingset, outshape, train, model_shape):
         @tf.function
         def train_step(inputs):
             batch_data, labels = inputs
+            labels = tf.cast(labels, tf.uint8)
             with tf.GradientTape() as tape:
-                predict = model.training_loss(inputs)
+                predict = model.posterior().predict_f(batch_data)
+                predict = tf.cast(predict, tf.uint8)
                 loss = tf.keras.losses.CategoricalCrossentropy(
-                    reduction=tf.keras.losses.Reduction.NONE)(labels, predict)
-            gradients = tape.gradient(loss, model.trainable_variables)
-            optimizer.apply_gradients(zip(gradients, model.trainable_variables))
+                    reduction=tf.keras.losses.Reduction.NONE)(
+                        tf.one_hot(labels, outshape), tf.one_hot(predict[0], outshape))
+            gradients = tape.gradient(loss[0], inputs)
+            optimizer_adam.apply_gradients(zip(gradients, model.trainable_variables))
+            return loss
 
-        @tf.function
-        def optimization_step():
-            train_step(next(train_iter))
-            optimizer_adam.apply_gradients(training_loss, gp_model.trainable_variables)
-
-        minibatch_proportions = np.logspace(-2, 0, len(list(train_iter))) 
-        for mbp in minibatch_proportions:
-            batchsize = int(outshape * mbp)
-            optimization_step()
+        for i, t in enumerate(train_iter):
+            loss = train_step(t)
+            if i % 10 == 0:
+                elbo = -loss.numpy()
+            
 
     from gpflow.ci_utils import reduce_in_tests
     max_iter = reduce_in_tests(BATCH_SIZE * outshape ** 2)
@@ -474,7 +474,7 @@ def interpolate_fft_train(sols, model, train):
     gp_model = gp_train(indu, outshape, Tdata, model_shape)
     
     reg_outs = np.random.random_integers(0, 10, BATCH_SIZE)
-    samples = gp_model.predict(reg_outs) 
+    samples = gp_model.posterior.predict_f(reg_outs) 
 
     # allocating a sample from classification is not possible atm
     # so we allocate a image and then classify it?
