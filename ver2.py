@@ -421,7 +421,6 @@ def gp_train(inducingset, outshape, train, model_shape):
         :param interations: number of iterations
         """
         # Create an Adam Optimizer action
-        logf = []
         train_iter = iter(dataset.batch(minibatch_size))
         training_loss = model.training_loss_closure(train_iter, compile=True)
         optimizer_adam = tf.keras.optimizers.Adam(RBF_BOUND_MIN)
@@ -430,9 +429,9 @@ def gp_train(inducingset, outshape, train, model_shape):
         def train_step(inputs):
             batch_data, labels = inputs
             with tf.GradientTape() as tape:
-                predict = model.training_loss_closure(batch_data, compile=True)
+                predict = model.training_loss(inputs)
                 loss = tf.keras.losses.CategoricalCrossentropy(
-                    reduction=tf.keras.losses.Reduction.NONE)(labels, model.trainable_variables)
+                    reduction=tf.keras.losses.Reduction.NONE)(labels, predict)
             gradients = tape.gradient(loss, model.trainable_variables)
             optimizer.apply_gradients(zip(gradients, model.trainable_variables))
 
@@ -441,18 +440,14 @@ def gp_train(inducingset, outshape, train, model_shape):
             train_step(next(train_iter))
             optimizer_adam.apply_gradients(training_loss, gp_model.trainable_variables)
 
-        minibatch_proportions = np.logspace(-2, 0, outshape)
+        minibatch_proportions = np.logspace(-2, 0, len(list(train_iter))) 
         for mbp in minibatch_proportions:
             batchsize = int(outshape * mbp)
             optimization_step()
-            if step % 10 == 0:
-                elbo = -training_loss().numpy()
-                logf.append(elbo)
-        return logf
 
     from gpflow.ci_utils import reduce_in_tests
     max_iter = reduce_in_tests(BATCH_SIZE * outshape ** 2)
-    logf = run_adam(gp_model, max_iter)
+    run_adam(gp_model, max_iter)
     
     return gp_model
     
