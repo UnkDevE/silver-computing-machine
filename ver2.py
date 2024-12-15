@@ -428,23 +428,28 @@ def gp_train(inducingset, outshape, train, model_shape):
         @tf.function
         def train_step(inputs):
             batch_data, labels = inputs
-            labels = tf.cast(labels, tf.uint8)
+            labels = tf.squeeze(tf.cast(tf.one_hot(tf.cast(labels, tf.uint8), 
+                          outshape), tf.float64))
             with tf.GradientTape() as tape:
-                predict = model.posterior().predict_f(batch_data)
-                predict = tf.cast(predict, tf.uint8)
+                tape.watch(model.trainable_variables)
+                predict = model.posterior().predict_f(labels)
+                predict = tf.squeeze(tf.cast(predict, tf.uint8))
                 loss = tf.keras.losses.CategoricalCrossentropy(
                     reduction=tf.keras.losses.Reduction.NONE)(
-                        tf.one_hot(labels, outshape), tf.one_hot(predict[0], outshape))
-            gradients = tape.gradient(loss[0], inputs)
-            optimizer_adam.apply_gradients(zip(gradients, model.trainable_variables))
-            return loss
+                        labels, tf.one_hot(predict[0], outshape))
+                gradients = tape.gradient(loss, model.trainable_variables)
+            if len([g is None for g in gradients]) != len(gradients):
+                optimizer_adam.apply_gradients(zip(gradients, model.trainable_variables))
+                return loss
+            else:
+                return None
 
         for i, t in enumerate(train_iter):
             loss = train_step(t)
             if i % 10 == 0:
-                elbo = -loss.numpy()
+                if loss is not None:
+                    elbo = -loss.numpy()
             
-
     from gpflow.ci_utils import reduce_in_tests
     max_iter = reduce_in_tests(BATCH_SIZE * outshape ** 2)
     run_adam(gp_model, max_iter)
@@ -470,7 +475,7 @@ def interpolate_fft_train(sols, model, train):
 
     # use output from sheafifcation for inducing vars
     out = model.predict(ins.reshape([outshape, *model_shape[1:]]))
-    indu = (out, ins)
+    indu = (out.T, ins.T)
     gp_model = gp_train(indu, outshape, Tdata, model_shape)
     
     reg_outs = np.random.random_integers(0, 10, BATCH_SIZE)
