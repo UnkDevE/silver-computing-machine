@@ -395,10 +395,14 @@ def graph_model(model, training_data, activations, shapes, layers):
 def gp_train(inducingset, outshape, train, model_shape):
     # out is square so len does the job
     kernel = gpflow.kernels.SquaredExponential()
+    
+    iv = gpflow.inducing_variables.SharedIndependentInducingVariables(
+        gpflow.inducing_variables.InducingPoints(inducingset)
+    )
 
     # create guass kernel for interpolation
     gp_model = gpflow.models.SVGP(kernel=kernel, likelihood=gpflow.likelihoods.Gaussian(), 
-           inducing_variable=inducingset[1], num_data=train[0].shape[-1])
+           inducing_variable=iv, num_data=train[0].shape[-1])
 
     from gpflow.utilities import set_trainable
     from tensorflow_probability import distributions as tfd 
@@ -427,29 +431,15 @@ def gp_train(inducingset, outshape, train, model_shape):
 
         @tf.function
         def train_step(inputs):
-            batch_data, labels = inputs
-            labels = tf.squeeze(tf.cast(tf.one_hot(tf.cast(labels, tf.uint8), 
-                          outshape), tf.float64))
-            with tf.GradientTape() as tape:
-                tape.watch(model.trainable_variables)
-                predict = model.posterior().predict_f(labels)
-                predict = tf.squeeze(tf.cast(predict, tf.uint8))
-                loss = tf.keras.losses.CategoricalCrossentropy(
-                    reduction=tf.keras.losses.Reduction.NONE)(
-                        labels, tf.one_hot(predict[0], outshape))
-                gradients = tape.gradient(loss, model.trainable_variables)
-            if len([g is None for g in gradients]) != len(gradients):
-                optimizer_adam.apply_gradients(zip(gradients, model.trainable_variables))
-                return loss
-            else:
-                return None
-
+            tfp.math.minimize(training_loss, outshape**2, optimizer_adam, 
+                trainable_variables=model.trainable_variables) 
+         
         for i, t in enumerate(train_iter):
             loss = train_step(t)
             if i % 10 == 0:
                 if loss is not None:
                     elbo = -loss.numpy()
-            
+
     from gpflow.ci_utils import reduce_in_tests
     max_iter = reduce_in_tests(BATCH_SIZE * outshape ** 2)
     run_adam(gp_model, max_iter)
@@ -475,12 +465,11 @@ def interpolate_fft_train(sols, model, train):
 
     # use output from sheafifcation for inducing vars
     out = model.predict(ins.reshape([outshape, *model_shape[1:]]))
-    indu = (out.T, ins.T)
+    indu =(out.T, ins.T)
     gp_model = gp_train(indu, outshape, Tdata, model_shape)
     
     reg_outs = np.random.random_integers(0, 10, BATCH_SIZE)
     samples = gp_model.posterior.predict_f(reg_outs) 
-
     # allocating a sample from classification is not possible atm
     # so we allocate a image and then classify it?
     model.fit((samples, reg_outs))
