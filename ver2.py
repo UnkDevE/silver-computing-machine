@@ -396,8 +396,13 @@ def gp_train(inducingset, outshape, train, model_shape):
     # out is square so len does the job
     kernel = gpflow.kernels.SquaredExponential()
     
-    iv = gpflow.inducing_variables.SharedIndependentInducingVariables(
-        gpflow.inducing_variables.InducingPoints(inducingset)
+    indupower = []
+    for j in range(outshape):
+        indushift = shifts(inducingset[0], j)
+        indupower.append(np.array([indushift[i] @ inducingset[1] @ inducingset[1][i] for i in range(outshape)]))
+
+    iv = gpflow.inducing_variables.SeparateIndependentInducingVariables(
+        [gpflow.inducing_variables.InducingPoints(indu) for indu in indupower]
     )
 
     # create guass kernel for interpolation
@@ -465,7 +470,7 @@ def interpolate_fft_train(sols, model, train):
 
     # use output from sheafifcation for inducing vars
     out = model.predict(ins.reshape([outshape, *model_shape[1:]]))
-    indu =(out.T, ins.T)
+    indu =(ins.T, out.T) 
     gp_model = gp_train(indu, outshape, Tdata, model_shape)
     
     reg_outs = np.random.random_integers(0, 10, BATCH_SIZE)
