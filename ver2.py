@@ -392,16 +392,22 @@ def graph_model(model, training_data, activations, shapes, layers):
     ret = [sheafifed, sols, outward, sort_avg]
     return ret
 
+
 def gp_train(inducingset, outshape, train, model_shape):
     # out is square so len does the job
-    kernel = gpflow.kernels.SquaredExponential()
+    kernel = gpflow.kernels.SharedIndependent(
+        gpflow.kernels.SquaredExponential() + gpflow.kernels.Linear(),
+            train[0].shape[-1])
     
     indupower = []
     for j in range(outshape):
         indushift = shifts(inducingset[0], j)
-        indupower.append(np.array([indushift[i] @ inducingset[1] @ inducingset[1][i] for i in range(outshape)]))
+        indupower.append(np.array(
+            [indushift[i] @ inducingset[1] @ inducingset[0][(i+1)%outshape] for i in range(outshape)]))
+            
+    indupower = np.array(indupower).reshape([train[0].shape[-1], outshape ** 2])
 
-    iv = gpflow.inducing_variables.SeparateIndependentInducingVariables(
+    iv = gpflow.inducing_variables.SharedIndependentInducingVariables(
         [gpflow.inducing_variables.InducingPoints(indu) for indu in indupower]
     )
 
@@ -412,7 +418,7 @@ def gp_train(inducingset, outshape, train, model_shape):
     from gpflow.utilities import set_trainable
     from tensorflow_probability import distributions as tfd 
 
-    tensor_data = (tf.convert_to_tensor(train[0]), tf.convert_to_tensor(train[1], dtype=tf.float64))
+    tensor_data = (tf.convert_to_tensor(train[0]), tf.squeeze(tf.one_hot(train[1], outshape)))
     dataset = tf.data.Dataset.from_tensor_slices(tensor_data).repeat().shuffle(train[0].shape[-1])
     minibatch_size = outshape ** 2
 
@@ -470,7 +476,7 @@ def interpolate_fft_train(sols, model, train):
 
     # use output from sheafifcation for inducing vars
     out = model.predict(ins.reshape([outshape, *model_shape[1:]]))
-    indu =(ins.T, out.T) 
+    indu = (ins.T, out.T) 
     gp_model = gp_train(indu, outshape, Tdata, model_shape)
     
     reg_outs = np.random.random_integers(0, 10, BATCH_SIZE)
