@@ -435,13 +435,17 @@ def gp_train(inducingset, outshape, train, model_shape):
     
     induset = generate_ivs(in_shape, inducingset, outshape)
     
+    # var init for kernel
+    q_mu = np.zeros((in_shape, outshape))
+    q_sqrt = np.copy(q_mu)
+    
     iv = gpflow.inducing_variables.SeparateIndependentInducingVariables(
         [gpflow.inducing_variables.InducingPoints(indu.T) for indu in induset])
 
     # create guass kernel for interpolation
     gp_model = gpflow.models.SVGP(kernel=kernel, likelihood=gpflow.likelihoods.Gaussian(), 
            inducing_variable=iv, num_data=outshape, 
-                num_latent_gps=in_shape) 
+                num_latent_gps=in_shape, q_mu=q_mu, q_sqrt=q_sqrt, q_diag=False) 
 
     from gpflow.utilities import set_trainable
     from tensorflow_probability import distributions as tfd 
