@@ -31,14 +31,17 @@ from scipy import linalg
 import numpy as np
 import matplotlib.pyplot as plt
 
-# convert to float64 for tfp to play nicely with gpflow in 64
-f64 = gpflow.utilities.to_default_float
+# convert to float32 for tfp to play nicely with gpflow in 64
+# float32 execution needs to be enabled in tf
+gpflow.config.set_default_float(np.float32)
+tf.config.experimental.enable_tensor_float_32_execution(True)
 
 #TUNE THEESE INPUT PARAMS
 BATCH_SIZE = 1024
 TRAIN_SIZE=16
-# was BATCH_SIZE * 2 when GP_MODEL_TRAIN
 MAX_ITER=TRAIN_SIZE // 4
+ELBO_ITER=BATCH_SIZE // (TRAIN_SIZE * MAX_ITER)
+# was BATCH_SIZE * 2 when GP_MODEL_TRAIN
 RBF_BOUND_MIN=1e-5
 RBF_BOUND_MAX=1e15
 GP_SCALE=0.1
@@ -50,6 +53,7 @@ CORE_COUNT_MCMC=CORE_COUNT
 # do not remove forces tf.data to run eagerly
 tf.config.run_functions_eagerly(True)
 
+@tf.function
 def product(x):
     out = 1
     for y in x:
@@ -178,7 +182,7 @@ def image(rref):
     # row reducing compute
     for row in np.flip(cref):
         # split by zero row
-        if np.all(row == np.zeros_like(cref[0]).astype(np.float64)):
+        if np.all(row == np.zeros_like(cref[0]).astype(np.float32)):
             return np.stack(cstack)
         cstack.append(row)
     return np.stack(cstack) 
@@ -194,6 +198,7 @@ def _chec_diff(x, start):
     return np.reshape(sum, x.shape)
 
 #rolls a 1D array
+@tf.function
 def shifts(x, start):
     y = np.zeros([x.shape[0], *x.shape])
     for i in range(-start, x.shape[0] - start):
@@ -324,7 +329,7 @@ def solve_system(activations, layers):
         if len(zetas) < 1:
             zetas.append(weight)
         else:
-            zetas.append(inv(zetas[-1] + baises[-1]).astype(np.float64) @ weight)
+            zetas.append(inv(zetas[-1] + baises[-1]).astype(np.float32) @ weight)
         baises.append(bias)
 
     zetas.append(zetas[-1] + baises[-1])
@@ -393,33 +398,58 @@ def graph_model(model, training_data, activations, shapes, layers):
     return ret
 
 
-def gp_train(inducingset, outshape, train, model_shape):
-    # out is square so len does the job
-    kernel = gpflow.kernels.SharedIndependent(
-        gpflow.kernels.SquaredExponential() + gpflow.kernels.Linear(),
-            train[0].shape[-1])
-    
+# needs rewrite in numpy terms
+def generate_ivs(in_shape, inducingset, outshape):
+    # create power set
     indupower = []
-    for j in range(outshape):
-        indushift = shifts(inducingset[0], j)
+    # inducingset is a tuple
+    for i in range(outshape):
+        indushift = shifts(inducingset[0], outshape)
         indupower.append(np.array(
             [indushift[i] @ inducingset[1] @ inducingset[0][(i+1)%outshape] for i in range(outshape)]))
-            
-    indupower = np.array(indupower).reshape([train[0].shape[-1], outshape ** 2])
+        
+    """
+    # sort the arrays by magnitude
+    indusort = list(zip(*sorted([(idx, max([np.sum(indupower[j] - indupower[i]) 
+        for i in range(outshape)])) for idx, j in enumerate(range(outshape))], key=lambda kv: kv[1])))[0]
 
-    iv = gpflow.inducing_variables.SharedIndependentInducingVariables(
-        [gpflow.inducing_variables.InducingPoints(indu) for indu in indupower]
-    )
+    # mutliply the matricies with the greatest variance 
+    xs = []
+    for i, k in enumerate(indusort):
+        # bucketize indusort to outshape, get iterated sample from bucket
+        xs.append(indupower[indusort[i]] * indupower[indusort[-i]] + 
+            indupower[indusort[(i + i % outshape) % outshape]]) 
+    """
+    
+    return indupower
+
+def gp_train(inducingset, outshape, train, model_shape):
+    kern_list = [gpflow.kernels.SquaredExponential() + gpflow.kernels.Linear() for _ in range(outshape)]
+    
+    # input shape of target training model
+    in_shape = train[0].shape[-1]
+
+    # mutli output kernel 
+    kernel = gpflow.kernels.LinearCoregionalization(
+        kern_list, W=np.random.randn(outshape, outshape))
+    
+    induset = generate_ivs(in_shape, inducingset, outshape)
+    
+    iv = gpflow.inducing_variables.SeparateIndependentInducingVariables(
+        [gpflow.inducing_variables.InducingPoints(indu.T) for indu in induset])
 
     # create guass kernel for interpolation
     gp_model = gpflow.models.SVGP(kernel=kernel, likelihood=gpflow.likelihoods.Gaussian(), 
-           inducing_variable=iv, num_data=train[0].shape[-1])
+           inducing_variable=iv, num_data=in_shape, 
+                num_latent_gps=outshape) 
 
     from gpflow.utilities import set_trainable
     from tensorflow_probability import distributions as tfd 
 
+    # keep types consistent as float32 because tfp has bug with float32 becoming a double
+    train = tuple(map(lambda x : x.astype(np.float32), train))
     tensor_data = (tf.convert_to_tensor(train[0]), tf.squeeze(tf.one_hot(train[1], outshape)))
-    dataset = tf.data.Dataset.from_tensor_slices(tensor_data).repeat().shuffle(train[0].shape[-1])
+    dataset = tf.data.Dataset.from_tensor_slices(tensor_data).repeat().shuffle(BATCH_SIZE)
     minibatch_size = outshape ** 2
 
     elbo = tf.function(gp_model.elbo)
@@ -440,19 +470,44 @@ def gp_train(inducingset, outshape, train, model_shape):
         training_loss = model.training_loss_closure(train_iter, compile=True)
         optimizer_adam = tf.keras.optimizers.Adam(RBF_BOUND_MIN)
 
+        """
+        tensorflow is not optimizing this right 
+        so we'll write our own optimized code.
+        this optmized code should have same functionality 
+        as this code
         @tf.function
-        def train_step(inputs):
-            tfp.math.minimize(training_loss, outshape**2, optimizer_adam, 
-                trainable_variables=model.trainable_variables) 
-         
-        for i, t in enumerate(train_iter):
-            loss = train_step(t)
-            if i % 10 == 0:
+        def train_loop():
+            for i, t in enumerate(train_iter):
+                loss = tfp.math.minimize(training_loss, outshape**2, optimizer_adam, 
+                    trainable_variables=model.trainable_variables)
+                # this should calculate as 16 if train size is 16 and batch size is 1024
+                if i % BATCH_SIZE // (TRAIN_SIZE * MAX_ITER) == 0:
+                    if loss is not None:
+                        elbo = -loss.numpy()
+        """
+        def inner_train_fn(i, elbo):
+            # allow for minimize
+            loss = tfp.math.minimize(training_loss, outshape**2, optimizer_adam, 
+                trainable_variables=model.trainable_variables)
+
+            # check if reached the requested iterations
+            if i % ELBO_ITER == 0:
                 if loss is not None:
                     elbo = -loss.numpy()
+                    
+            # return loss
+            # iterate i
+            i+=1
+            return (i, elbo)
+        
+        # this iterates in batch of ELBO_ITER
+        def train_loop():
+            return tf.while_loop(lambda i: i < iterations, 
+                inner_train_fn, loop_vars=[0, elbo], parallel_iterations=ELBO_ITER)
 
     from gpflow.ci_utils import reduce_in_tests
-    max_iter = reduce_in_tests(BATCH_SIZE * outshape ** 2)
+    max_iter = reduce_in_tests(BATCH_SIZE // MAX_ITER)
+    # this is slow due to running max_iter at BATCH_SIZE
     run_adam(gp_model, max_iter)
     
     return gp_model
@@ -479,11 +534,25 @@ def interpolate_fft_train(sols, model, train):
     indu = (ins.T, out.T) 
     gp_model = gp_train(indu, outshape, Tdata, model_shape)
     
-    reg_outs = np.random.random_integers(0, 10, BATCH_SIZE)
-    samples = gp_model.posterior.predict_f(reg_outs) 
+    # create gpflow sample params
+    rand_outs = np.repeat(tf.one_hot(np.random.randint(0, 10 + 1, BATCH_SIZE), 
+        outshape).numpy(),outshape)
+    # reshape
+    rand_outs = np.reshape(rand_outs, [BATCH_SIZE, outshape, outshape])
+
+    """
+    predict_space = np.repeat(np.linspace(0, 1, product(model_shape)), 
+       product([outshape, BATCH_SIZE])).reshape([BATCH_SIZE, outshape, product(model_shape)])
+    sample_payload = np.hstack([rand_outs, predict_space]).reshape([BATCH_SIZE, product(model_shape), outshape])
+    
+    # convert to float32 so that tf compatiable 
+    predict_space = predict_space.astype(np.float32)
+    """
+
+    samples = gp_model.predict_f_samples(rand_outs, BATCH_SIZE, full_cov=False)
     # allocating a sample from classification is not possible atm
     # so we allocate a image and then classify it?
-    model.fit((samples, reg_outs))
+    model.fit((samples, rand_outs))
     return model
 
 def bucketize(prelims):

@@ -7,3 +7,4 @@ matplotlib
 scikit-learn
 tfp-nightly
 gpflow
+tensorboard
