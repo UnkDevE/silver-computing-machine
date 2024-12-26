@@ -440,8 +440,8 @@ def gp_train(inducingset, outshape, train, model_shape):
 
     # create guass kernel for interpolation
     gp_model = gpflow.models.SVGP(kernel=kernel, likelihood=gpflow.likelihoods.Gaussian(), 
-           inducing_variable=iv, num_data=in_shape, 
-                num_latent_gps=outshape) 
+           inducing_variable=iv, num_data=outshape, 
+                num_latent_gps=in_shape) 
 
     from gpflow.utilities import set_trainable
     from tensorflow_probability import distributions as tfd 
@@ -537,8 +537,8 @@ def interpolate_fft_train(sols, model, train):
     # create gpflow sample params
     rand_outs = np.repeat(tf.one_hot(np.random.randint(0, 10 + 1, BATCH_SIZE), 
         outshape).numpy(),outshape)
-    # reshape
-    rand_outs = np.reshape(rand_outs, [BATCH_SIZE, outshape, outshape])
+    # reshape and transpose to create diag matrix
+    rand_outs = np.reshape(rand_outs.T, [BATCH_SIZE, outshape, outshape])
 
     """
     predict_space = np.repeat(np.linspace(0, 1, product(model_shape)), 
@@ -549,7 +549,7 @@ def interpolate_fft_train(sols, model, train):
     predict_space = predict_space.astype(np.float32)
     """
 
-    samples = gp_model.predict_f_samples(rand_outs, BATCH_SIZE, full_cov=False)
+    samples = gp_model.predict_f(rand_outs,full_cov=False)
     # allocating a sample from classification is not possible atm
     # so we allocate a image and then classify it?
     model.fit((samples, rand_outs))
