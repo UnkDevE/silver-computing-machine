@@ -437,7 +437,7 @@ def gp_train(inducingset, outshape, train, model_shape):
     
     # var init for kernel
     q_mu = np.zeros((in_shape, outshape))
-    q_sqrt = np.copy(q_mu)
+    q_sqrt = np.repeat(np.eye(in_shape)[None, ...], outshape, axis=0) * 1.0
     
     iv = gpflow.inducing_variables.SeparateIndependentInducingVariables(
         [gpflow.inducing_variables.InducingPoints(indu.T) for indu in induset])
