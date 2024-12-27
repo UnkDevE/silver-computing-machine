@@ -553,7 +553,7 @@ def interpolate_fft_train(sols, model, train):
     predict_space = predict_space.astype(np.float32)
     """
 
-    samples = gp_model.predict_f(rand_outs,full_cov=False)
+    samples = gp_model.predict_f_samples(rand_outs,full_cov=False)
     # allocating a sample from classification is not possible atm
     # so we allocate a image and then classify it?
     model.fit((samples, rand_outs))
