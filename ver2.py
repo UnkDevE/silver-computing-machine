@@ -40,7 +40,7 @@ tf.config.experimental.enable_tensor_float_32_execution(True)
 BATCH_SIZE = 1024
 TRAIN_SIZE=16
 MAX_ITER=TRAIN_SIZE // 4
-ELBO_ITER=BATCH_SIZE // (TRAIN_SIZE * MAX_ITER)
+TRAIN_ITER=BATCH_SIZE // (TRAIN_SIZE * MAX_ITER)
 # was BATCH_SIZE * 2 when GP_MODEL_TRAIN
 RBF_BOUND_MIN=1e-5
 RBF_BOUND_MAX=1e15
@@ -400,6 +400,7 @@ def graph_model(model, training_data, activations, shapes, layers):
 
 # needs rewrite in numpy terms
 def generate_ivs(in_shape, inducingset, outshape):
+    inducingset = (inducingset[0].T, inducingset[1].T)
     # create power set
     indupower = []
     # inducingset is a tuple
@@ -430,36 +431,37 @@ def gp_train(inducingset, outshape, train, model_shape):
     in_shape = train[0].shape[-1]
 
     # mutli output kernel 
-    kernel = gpflow.kernels.LinearCoregionalization(
-        kern_list, W=np.random.randn(outshape, outshape))
+    kernel = gpflow.kernels.SharedIndependent(
+         gpflow.kernels.LinearCoregionalization(kern_list, W=np.random.randn(outshape, outshape)) 
+            + gpflow.kernels.SquaredExponential(), in_shape)
     
     induset = generate_ivs(in_shape, inducingset, outshape)
     
     # var init for kernel
-    q_mu = np.zeros((in_shape, outshape))
-    q_sqrt = np.repeat(np.eye(in_shape)[None, ...], outshape, axis=0) * 1.0
+    # q_mu = np.zeros((in_shape, outshape))
+    # q_sqrt = np.repeat(np.eye(in_shape)[None, ...], outshape, axis=0) * 1.0
     
     iv = gpflow.inducing_variables.SeparateIndependentInducingVariables(
-        [gpflow.inducing_variables.InducingPoints(indu.T) for indu in induset])
-
-    # create guass kernel for interpolation
-    gp_model = gpflow.models.SVGP(kernel=kernel, likelihood=gpflow.likelihoods.Gaussian(), 
-           inducing_variable=iv, num_data=outshape, 
-                num_latent_gps=in_shape, q_mu=q_mu, q_sqrt=q_sqrt, q_diag=False) 
-
-    from gpflow.utilities import set_trainable
-    from tensorflow_probability import distributions as tfd 
+       [gpflow.inducing_variables.InducingPoints(indu.T) for indu in induset])
 
     # keep types consistent as float32 because tfp has bug with float32 becoming a double
     train = tuple(map(lambda x : x.astype(np.float32), train))
     tensor_data = (tf.convert_to_tensor(train[0]), tf.squeeze(tf.one_hot(train[1], outshape)))
     dataset = tf.data.Dataset.from_tensor_slices(tensor_data).repeat().shuffle(BATCH_SIZE)
-    minibatch_size = outshape ** 2
+    # create guass kernel for interpolation
+    gp_model = gpflow.models.SGPMC(tensor_data, kernel=kernel, 
+        likelihood=gpflow.likelihoods.Gaussian(), inducing_variable=iv) 
+    
+    from tensorflow_probability import distributions as tfd
 
-    elbo = tf.function(gp_model.elbo)
+    gp_model.kernel.lengthscales.prior = tfd.Gamma(np.float32(1.0), np.float32(1.0))
+    gp_model.kernel.variance.prior = tfd.Gamma(np.float32(1.0), np.float32(1.0))
+
+ 
     # Evaluate objective for different minibatch sizes
     # We turn off training for inducing point locations
-    gpflow.set_trainable(gp_model.inducing_variable, False)
+    from gpflow.utilities import set_trainable
+    set_trainable(gp_model.inducing_variable, False)
 
     # gpflow adam optimizer from tut
     def run_adam(model, iterations):
@@ -469,9 +471,13 @@ def gp_train(inducingset, outshape, train, model_shape):
         :param model: GPflow model
         :param interations: number of iterations
         """
+        
+        # NatGrads and Adam for SVGP
+        # Stop Adam from optimizing the variational parameters
+        # create the natural gradient
+
         # Create an Adam Optimizer action
-        train_iter = iter(dataset.batch(minibatch_size))
-        training_loss = model.training_loss_closure(train_iter, compile=True)
+        training_loss = model.training_loss_closure()
         optimizer_adam = tf.keras.optimizers.Adam(RBF_BOUND_MIN)
 
         """
@@ -489,25 +495,29 @@ def gp_train(inducingset, outshape, train, model_shape):
                     if loss is not None:
                         elbo = -loss.numpy()
         """
-        def inner_train_fn(i, elbo):
+        minibatch_size = outshape ** 2
+        def inner_train_fn(i):
             # allow for minimize
-            loss = tfp.math.minimize(training_loss, outshape**2, optimizer_adam, 
+            loss = tfp.math.minimize(training_loss, minibatch_size, optimizer_adam, 
                 trainable_variables=model.trainable_variables)
 
+            """
+            no need for elbo in mcmc
             # check if reached the requested iterations
-            if i % ELBO_ITER == 0:
+            if i % TRAIN_ITER == 0:
                 if loss is not None:
                     elbo = -loss.numpy()
                     
             # return loss
+            """
             # iterate i
             i+=1
-            return (i, elbo)
-        
-        # this iterates in batch of ELBO_ITER
+            return i
+
+        # this iterates in batch of TRAIN_ITER
         def train_loop():
             return tf.while_loop(lambda i: i < iterations, 
-                inner_train_fn, loop_vars=[0, elbo], parallel_iterations=ELBO_ITER)
+                inner_train_fn, loop_vars=[0], parallel_iterations=TRAIN_ITER)
 
     from gpflow.ci_utils import reduce_in_tests
     max_iter = reduce_in_tests(BATCH_SIZE // MAX_ITER)
@@ -515,6 +525,44 @@ def gp_train(inducingset, outshape, train, model_shape):
     run_adam(gp_model, max_iter)
     
     return gp_model
+
+def monte_carlo_sim(model, num_samples, num_burnin_steps):
+    from gpflow.ci_utils import reduce_in_tests
+    num_burnin_steps = reduce_in_tests(num_burnin_steps)
+    num_samples = reduce_in_tests(num_samples)
+
+    # Note that here we need model.trainable_parameters, not trainable_variables - only parameters can have priors!
+    hmc_helper = gpflow.optimizers.SamplingHelper(
+        model.log_posterior_density, model.trainable_parameters
+    )
+
+    hmc = tfp.mcmc.HamiltonianMonteCarlo(
+        target_log_prob_fn=hmc_helper.target_log_prob_fn,
+        num_leapfrog_steps=10,
+        step_size=0.01,
+    )
+
+    adaptive_hmc = tfp.mcmc.SimpleStepSizeAdaptation(
+        hmc,
+        num_adaptation_steps=10,
+        target_accept_prob=np.float64(0.75),
+        adaptation_rate=0.1,
+    )
+
+
+    @tf.function
+    def run_chain_fn():
+        return tfp.mcmc.sample_chain(
+            num_results=num_samples,
+            num_burnin_steps=num_burnin_steps,
+            current_state=hmc_helper.current_state,
+            kernel=adaptive_hmc,
+            trace_fn=lambda _, pkr: pkr.inner_results.is_accepted,
+        )
+
+
+    samples, _ = run_chain_fn()
+    return hmc_helper.convert_to_constrained_values(samples)
     
 def interpolate_fft_train(sols, model, train):
     # hang on about this 
@@ -535,7 +583,7 @@ def interpolate_fft_train(sols, model, train):
 
     # use output from sheafifcation for inducing vars
     out = model.predict(ins.reshape([outshape, *model_shape[1:]]))
-    indu = (ins.T, out.T) 
+    indu = (ins, out) 
     gp_model = gp_train(indu, outshape, Tdata, model_shape)
     
     # create gpflow sample params
@@ -553,7 +601,9 @@ def interpolate_fft_train(sols, model, train):
     predict_space = predict_space.astype(np.float32)
     """
 
-    samples = gp_model.predict_f_samples(rand_outs,full_cov=False)
+    # num_burnin should be similar to minibatch_size as above
+    samples = monte_carlo_sim(gp_model, BATCH_SIZE, outshape ** 2)
+
     # allocating a sample from classification is not possible atm
     # so we allocate a image and then classify it?
     model.fit((samples, rand_outs))
