@@ -37,6 +37,7 @@ gpflow.config.set_default_float(np.float32)
 tf.config.experimental.enable_tensor_float_32_execution(True)
 
 #TUNE THEESE INPUT PARAMS
+GP_MEAN_FUNC = gpflow.mean_functions.Linear 
 BATCH_SIZE = 1024
 TRAIN_SIZE=16
 MAX_ITER=TRAIN_SIZE // 4
@@ -430,43 +431,54 @@ def gp_train(inducingset, outshape, train, model_shape):
 
     # mutli output kernel 
     kernel = gpflow.kernels.Coregion(output_dim=outshape, 
-        rank=len(model_shape), active_dims=[0]) * gpflow.kernels.Matern52(active_dims=[1])
-     
+        rank=len(model_shape), active_dims=[0] 
+            ) * gpflow.kernels.Matern52(active_dims=[1])
+    
     # set all exterior priors to gamma
     from tensorflow_probability import distributions as tfd
+
+    # have to punch in var names directly to create priors
     """
-    for sum_ker in kernel.kernels:
-        for k in sum_ker.kernels:
-            k.variance.prior = tfd.Gamma(np.float32(1.0), np.float32(1.0))
-            k.lengthscales.prior = tfd.Gamma(np.float32(1.0), np.float32(1.0))
+    for k in [kernel.kernels[1]]:
+        k.variance.prior = tfd.Gamma(np.float32(1.0), np.float32(1.0))
+        k.lengthscales.prior = tfd.Gamma(np.float32(1.0), np.float32(1.0))
     """
     
     induset = generate_ivs(in_shape, inducingset, outshape)
     
     # var init for kernel
-    # q_mu = np.zeros((in_shape, outshape))
-
-    # q_sqrt = np.repeat(np.eye(in_shape)[None, ...], outshape, axis=0) * 1.0
-    
     iv = gpflow.inducing_variables.SeparateIndependentInducingVariables(
        [gpflow.inducing_variables.InducingPoints(indu.T) for indu in induset])
 
-    # keep types consistent as float32 because tfp has bug with float32 becoming a double
-    train = tuple(map(lambda x : x.astype(np.float32), train))
-    tensor_data = (tf.convert_to_tensor(train[0]), tf.squeeze(tf.one_hot(train[1], outshape)))
-    dataset = tf.data.Dataset.from_tensor_slices(tensor_data).repeat().shuffle(BATCH_SIZE)
-
-    # initialize \sqrt(Σ) of variational posterior to be of shape LxMxM
-    q_sqrt = np.repeat(np.eye(in_shape)[None, ...], outshape, axis=0) * 1.0
+    lik = gpflow.likelihoods.SwitchedLikelihood(
+    [gpflow.likelihoods.Gaussian() for _ in range(outshape)])
+    
+    # create mean function 
     # create guass kernel for interpolation
+    # polynomial compute powers is slow as heck
     gp_model = gpflow.models.SVGP(kernel=kernel, 
-        likelihood=gpflow.likelihoods.Gaussian(), inducing_variable=iv)
-        #        q_sqrt=q_sqrt) 
+        likelihood=lik, inducing_variable=iv, 
+            mean_function=GP_MEAN_FUNC(np.ones(outshape), np.zeros(outshape)))
+    
+    # tfp.distributions dtype is inferred from parameters - so convert to 64-bit
+    # gp_model.kernel.lengthscales.prior = tfd.Gamma(np.float32(1.0), np.float32(1.0))
+    # gp_model.kernel.variance.prior = tfd.Gamma(np.float32(1.0), np.float32(1.0))
+    """
+    for liks in gp_model.likelihood.likelihoods:
+        liks.variance.prior = tfd.Gamma(np.float32(1.0), np.float32(1.0))
+    """
+    
+    gp_model.q_mu.prior = tfd.Normal(np.float32(0.0), np.float32(1.0))
+    gp_model.q_sqrt.prior = tfd.Normal(np.float32(0.0), np.float32(1.0))
+
 
     # Evaluate objective for different minibatch sizes
     # We turn off training for inducing point locations
     from gpflow.utilities import set_trainable
     set_trainable(gp_model.inducing_variable, False)
+
+    train = tuple(map(lambda x : x.astype(np.float32), train))
+    elbo = tf.function(gp_model.elbo)
 
     # gpflow adam optimizer from tut
     def run_adam(model, iterations):
@@ -481,11 +493,15 @@ def gp_train(inducingset, outshape, train, model_shape):
         # Stop Adam from optimizing the variational parameters
         # create the natural gradient
 
+        # keep types consistent as float32 because tfp has bug with float32 becoming a double
+        tensor_data = (tf.convert_to_tensor(train[0]), tf.squeeze(tf.one_hot(train[1], outshape)))
+        dataset = tf.data.Dataset.from_tensor_slices(tensor_data).repeat().shuffle(BATCH_SIZE)
+
         # Create an Adam Optimizer action
         train_iter = iter(dataset)
         training_loss = model.training_loss_closure(dataset)
         optimizer_adam = tf.keras.optimizers.Adam(RBF_BOUND_MIN)
-
+        
         """
         tensorflow is not optimizing this right 
         so we'll write our own optimized code.
@@ -507,29 +523,28 @@ def gp_train(inducingset, outshape, train, model_shape):
             loss = tfp.math.minimize(training_loss, minibatch_size, optimizer_adam, 
                 trainable_variables=model.trainable_variables)
 
-            """
-            no need for elbo in mcmc
             # check if reached the requested iterations
             if i % TRAIN_ITER == 0:
                 if loss is not None:
                     elbo = -loss.numpy()
                     
             # return loss
-            """
             # iterate i
             i+=1
-            return i
+            return (loss, i)
 
         # this iterates in batch of TRAIN_ITER
         def train_loop():
             return tf.while_loop(lambda i: i < iterations, 
-                inner_train_fn, loop_vars=[0], parallel_iterations=TRAIN_ITER)
+                inner_train_fn, loop_vars=[elbo, 0], parallel_iterations=TRAIN_ITER)
 
     from gpflow.ci_utils import reduce_in_tests
     max_iter = reduce_in_tests(BATCH_SIZE // MAX_ITER)
     # this is slow due to running max_iter at BATCH_SIZE
     run_adam(gp_model, max_iter)
     
+    
+    gpflow.utilities.print_summary(gp_model)
     return gp_model
 
 def filter_for_priors(paramaters):
