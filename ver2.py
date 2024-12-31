@@ -422,23 +422,30 @@ def generate_ivs(in_shape, inducingset, outshape):
             indupower[indusort[(i + i % outshape) % outshape]]) 
     """
     
-    return indupower
+    return np.array(indupower)
 
 def gp_train(inducingset, outshape, train, model_shape):
-    kern_list = [gpflow.kernels.SquaredExponential() + gpflow.kernels.Linear() for _ in range(outshape)]
-    
     # input shape of target training model
     in_shape = train[0].shape[-1]
 
     # mutli output kernel 
-    kernel = gpflow.kernels.SharedIndependent(
-         gpflow.kernels.LinearCoregionalization(kern_list, W=np.random.randn(outshape, outshape)) 
-            + gpflow.kernels.SquaredExponential(), in_shape)
+    kernel = gpflow.kernels.Coregion(output_dim=outshape, 
+        rank=len(model_shape), active_dims=[0]) * gpflow.kernels.Matern52(active_dims=[1])
+     
+    # set all exterior priors to gamma
+    from tensorflow_probability import distributions as tfd
+    """
+    for sum_ker in kernel.kernels:
+        for k in sum_ker.kernels:
+            k.variance.prior = tfd.Gamma(np.float32(1.0), np.float32(1.0))
+            k.lengthscales.prior = tfd.Gamma(np.float32(1.0), np.float32(1.0))
+    """
     
     induset = generate_ivs(in_shape, inducingset, outshape)
     
     # var init for kernel
     # q_mu = np.zeros((in_shape, outshape))
+
     # q_sqrt = np.repeat(np.eye(in_shape)[None, ...], outshape, axis=0) * 1.0
     
     iv = gpflow.inducing_variables.SeparateIndependentInducingVariables(
@@ -448,16 +455,14 @@ def gp_train(inducingset, outshape, train, model_shape):
     train = tuple(map(lambda x : x.astype(np.float32), train))
     tensor_data = (tf.convert_to_tensor(train[0]), tf.squeeze(tf.one_hot(train[1], outshape)))
     dataset = tf.data.Dataset.from_tensor_slices(tensor_data).repeat().shuffle(BATCH_SIZE)
+
+    # initialize \sqrt(Σ) of variational posterior to be of shape LxMxM
+    q_sqrt = np.repeat(np.eye(in_shape)[None, ...], outshape, axis=0) * 1.0
     # create guass kernel for interpolation
-    gp_model = gpflow.models.SGPMC(tensor_data, kernel=kernel, 
-        likelihood=gpflow.likelihoods.Gaussian(), inducing_variable=iv) 
-    
-    from tensorflow_probability import distributions as tfd
+    gp_model = gpflow.models.SVGP(kernel=kernel, 
+        likelihood=gpflow.likelihoods.Gaussian(), inducing_variable=iv)
+        #        q_sqrt=q_sqrt) 
 
-    gp_model.kernel.lengthscales.prior = tfd.Gamma(np.float32(1.0), np.float32(1.0))
-    gp_model.kernel.variance.prior = tfd.Gamma(np.float32(1.0), np.float32(1.0))
-
- 
     # Evaluate objective for different minibatch sizes
     # We turn off training for inducing point locations
     from gpflow.utilities import set_trainable
@@ -477,7 +482,8 @@ def gp_train(inducingset, outshape, train, model_shape):
         # create the natural gradient
 
         # Create an Adam Optimizer action
-        training_loss = model.training_loss_closure()
+        train_iter = iter(dataset)
+        training_loss = model.training_loss_closure(dataset)
         optimizer_adam = tf.keras.optimizers.Adam(RBF_BOUND_MIN)
 
         """
@@ -526,15 +532,24 @@ def gp_train(inducingset, outshape, train, model_shape):
     
     return gp_model
 
+def filter_for_priors(paramaters):
+    priors = []
+    for p in paramaters:
+        if "prior" in vars(p):
+            if p.prior is not None:
+                priors.append(p)
+    
+    return priors
+
 def monte_carlo_sim(model, num_samples, num_burnin_steps):
     from gpflow.ci_utils import reduce_in_tests
     num_burnin_steps = reduce_in_tests(num_burnin_steps)
     num_samples = reduce_in_tests(num_samples)
 
     # Note that here we need model.trainable_parameters, not trainable_variables - only parameters can have priors!
+    priors = filter_for_priors(model.trainable_parameters)
     hmc_helper = gpflow.optimizers.SamplingHelper(
-        model.log_posterior_density, model.trainable_parameters
-    )
+        model.log_posterior_density, priors)
 
     hmc = tfp.mcmc.HamiltonianMonteCarlo(
         target_log_prob_fn=hmc_helper.target_log_prob_fn,
