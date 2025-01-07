@@ -419,8 +419,7 @@ def gp_train(inducingset, outshape, train, model_shape, minibatch_size):
             k.prior = tfd.Gamma(np.float32(1.0), np.float32(1.0))
         
     # var init for kernel
-    iv = gpflow.inducing_variables.SeparateIndependentInducingVariables(
-      [gpflow.inducing_variables.InducingPoints(inducingset[0].T) for _ in range(outshape)])
+    iv = gpflow.inducing_variables.InducingPoints(inducingset[0].T) 
 
     lik = gpflow.likelihoods.SwitchedLikelihood(
     [gpflow.likelihoods.Gaussian() for _ in range(outshape)])
@@ -452,63 +451,14 @@ def gp_train(inducingset, outshape, train, model_shape, minibatch_size):
     from gpflow.utilities import set_trainable
     set_trainable(gp_model.inducing_variable, False)
 
-    elbo = tf.function(gp_model.elbo)
-
-    # gpflow adam optimizer from tut
-    def run_adam(model, iterations):
-        """
-        Utility function running the Adam optimizer
-
-        :param model: GPflow model
-        :param interations: number of iterations
-        """
-        
-        # NatGrads and Adam for SVGP
-        # Stop Adam from optimizing the variational parameters
-        # create the natural gradient
-        training_loss = gp_model.training_loss_closure(train, compile=True)
-        optimizer_adam = tf.keras.optimizers.Adam(RBF_BOUND_MIN)
-        
-        """
-        tensorflow is not optimizing this right 
-        so we'll write our own optimized code.
-        Code should have same functionality 
-        as this code
-        @tf.function
-        def train_loop():
-            for i, t in enumerate(train_iter):
-                loss = tfp.math.minimize(training_loss, outshape**2, optimizer_adam, 
-                    trainable_variables=model.trainable_variables)
-                # this should calculate as 16 if train size is 16 and batch size is 1024
-                if i % BATCH_SIZE // (TRAIN_SIZE * MAX_ITER) == 0:
-                    if loss is not None:
-                        elbo = -loss.numpy()
-        """
-        def inner_train_fn(i):
-            # allow for minimize
-            loss = tfp.math.minimize(training_loss, minibatch_size, optimizer_adam, 
-                trainable_variables=model.trainable_variables)
-
-            # check if reached the requested iterations
-            if i % TRAIN_ITER == 0:
-                if loss is not None:
-                    elbo = -loss.numpy()
-                    
-            # return loss
-            # iterate i
-            i+=1
-            return (loss, i)
-
-        # this iterates in batch of TRAIN_ITER
-        def train_loop():
-            return tf.while_loop(lambda i: i < iterations, 
-                inner_train_fn, loop_vars=[elbo, 0], parallel_iterations=TRAIN_ITER)
+    training_loss = gp_model.training_loss_closure(train, compile=True)
+    optimizer_sci = gpflow.optimizers.Scipy()
+    loss = tfp.math.minimize(training_loss, minibatch_size, optimizer_sci, 
+            trainable_variables=gp_model.trainable_variables)
 
     from gpflow.ci_utils import reduce_in_tests
     max_iter = reduce_in_tests(BATCH_SIZE // MAX_ITER)
-    # this is slow due to running max_iter at BATCH_SIZE
-    run_adam(gp_model, max_iter)
-    
+
     gpflow.utilities.print_summary(gp_model)
     return gp_model
 
