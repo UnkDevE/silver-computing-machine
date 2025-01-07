@@ -403,23 +403,24 @@ def gp_train(inducingset, outshape, train, model_shape, minibatch_size):
     in_shape = product(model_shape)
 
     # mutli output kernel 
-    kernel = [gpflow.kernels.Coregion(output_dim=outshape, 
-        rank=len(model_shape), active_dims=[0] 
-            ) * gpflow.kernels.Matern52(active_dims=[1]) for _ in range(outshape)] 
+    kernel = gpflow.kernels.LinearCoregionalization(
+        [gpflow.kernels.Coregion(output_dim=outshape, 
+        rank=len(model_shape), active_dims=[0]
+        ) * gpflow.kernels.Matern52(active_dims=[1]) for _ in range(outshape)],
+            W=np.random.rand(in_shape,outshape).reshape([in_shape, outshape]))
     
     # set all exterior priors to gamma
     from tensorflow_probability import distributions as tfd
 
     # have to punch in var names directly to create priors
-    for mk in kernel:
+    for mk in kernel.kernels:
         for k in [mk.kernels[0].W, mk.kernels[0].kappa, 
                 mk.kernels[1].variance, mk.kernels[1].lengthscales]: 
             k.prior = tfd.Gamma(np.float32(1.0), np.float32(1.0))
         
     # var init for kernel
     iv = gpflow.inducing_variables.SeparateIndependentInducingVariables(
-       [gpflow.inducing_variables.InducingPoints(indu.reshape([in_shape, 1])) for 
-        indu in inducingset[0]])
+      [gpflow.inducing_variables.InducingPoints(inducingset[0]) for _ in range(outshape)])
 
     lik = gpflow.likelihoods.SwitchedLikelihood(
     [gpflow.likelihoods.Gaussian() for _ in range(outshape)])
@@ -434,7 +435,7 @@ def gp_train(inducingset, outshape, train, model_shape, minibatch_size):
     gp_model = gpflow.models.SVGP(kernel=kernel, 
         likelihood=lik, inducing_variable=iv, 
             mean_function=GP_MEAN_FUNC(np.ones(outshape), np.zeros(outshape)),
-            q_mu=q_mu, q_sqrt=q_sqrt)
+            q_mu=q_mu, q_sqrt=q_sqrt, q_diag=False)
     
     # tfp.distributions dtype is inferred from parameters - so convert to 64-bit
     gp_model.mean_function.A.prior = tfd.Gamma(np.float32(1.0), np.float32(1.0))
@@ -443,6 +444,7 @@ def gp_train(inducingset, outshape, train, model_shape, minibatch_size):
         liks.variance.prior = tfd.Gamma(np.float32(1.0), np.float32(1.0))
     
     gp_model.q_mu.prior = tfd.Normal(np.float32(0.0), np.float32(1.0))
+    gp_model.kernel.W.prior = tfd.Normal(np.float32(0.0), np.float32(1.0))
     gp_model.q_sqrt.prior = tfd.Normal(np.float32(0.0), np.float32(1.0))
 
     # Evaluate objective for different minibatch sizes
@@ -524,10 +526,15 @@ def monte_carlo_sim(model, num_samples, num_burnin_steps, training_data):
     num_burnin_steps = reduce_in_tests(num_burnin_steps)
     num_samples = reduce_in_tests(num_samples)
 
+    # correct shapes for mcmc
+    data = training_data[0].reshape(
+            [*training_data[0].shape, 1])
+
     # Note that here we need model.trainable_parameters, not trainable_variables - only parameters can have priors!
     priors = filter_for_priors(model.trainable_parameters)
+
     hmc_helper = gpflow.optimizers.SamplingHelper(
-        model.log_posterior_density(training_data), priors)
+        model.log_posterior_density((data, training_data[1])), priors)
 
     hmc = tfp.mcmc.HamiltonianMonteCarlo(
         target_log_prob_fn=hmc_helper.target_log_prob_fn,
@@ -541,8 +548,7 @@ def monte_carlo_sim(model, num_samples, num_burnin_steps, training_data):
         target_accept_prob=np.float64(0.75),
         adaptation_rate=0.1,
     )
-
-    #@tf.function
+    @tf.function
     def run_chain_fn():
         return tfp.mcmc.sample_chain(
             num_results=num_samples,
@@ -555,7 +561,12 @@ def monte_carlo_sim(model, num_samples, num_burnin_steps, training_data):
 
     samples, _ = run_chain_fn()
     return hmc_helper.convert_to_constrained_values(samples)
-    
+ 
+"""
+def normalize(v):
+    return v/np.linalg.norm(v)
+"""
+   
 def interpolate_fft_train(sols, model, train):
     # hang on about this 
     ins = np.array(sols[0])
