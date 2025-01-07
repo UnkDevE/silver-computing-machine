@@ -36,6 +36,8 @@ import matplotlib.pyplot as plt
 gpflow.config.set_default_float(np.float32)
 tf.config.experimental.enable_tensor_float_32_execution(True)
 
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+
 #TUNE THEESE INPUT PARAMS
 GP_MEAN_FUNC = gpflow.mean_functions.Linear 
 BATCH_SIZE = 1024
@@ -404,9 +406,7 @@ def gp_train(inducingset, outshape, train, model_shape, minibatch_size):
 
     # mutli output kernel 
     kernel = gpflow.kernels.LinearCoregionalization(
-        [gpflow.kernels.Coregion(output_dim=outshape, 
-        rank=len(model_shape), active_dims=[0]
-        ) * gpflow.kernels.Matern52(active_dims=[1]) for _ in range(outshape)],
+        [gpflow.kernels.Matern52(active_dims=[1]) for _ in range(outshape)],
             W=np.random.rand(in_shape,outshape).reshape([in_shape, outshape]))
     
     # set all exterior priors to gamma
@@ -414,13 +414,13 @@ def gp_train(inducingset, outshape, train, model_shape, minibatch_size):
 
     # have to punch in var names directly to create priors
     for mk in kernel.kernels:
-        for k in [mk.kernels[0].W, mk.kernels[0].kappa, 
-                mk.kernels[1].variance, mk.kernels[1].lengthscales]: 
+        for k in [# mk.kernels[0].W, mk.kernels[0].kappa, 
+                mk.variance, mk.lengthscales]: 
             k.prior = tfd.Gamma(np.float32(1.0), np.float32(1.0))
         
     # var init for kernel
     iv = gpflow.inducing_variables.SeparateIndependentInducingVariables(
-      [gpflow.inducing_variables.InducingPoints(inducingset[0]) for _ in range(outshape)])
+      [gpflow.inducing_variables.InducingPoints(inducingset[0].T) for _ in range(outshape)])
 
     lik = gpflow.likelihoods.SwitchedLikelihood(
     [gpflow.likelihoods.Gaussian() for _ in range(outshape)])
@@ -521,20 +521,20 @@ def filter_for_priors(paramaters):
     
     return tuple(priors)
 
-def monte_carlo_sim(model, num_samples, num_burnin_steps, training_data):
+def monte_carlo_sim(model, num_samples, num_burnin_steps, training_data, outdim):
     from gpflow.ci_utils import reduce_in_tests
     num_burnin_steps = reduce_in_tests(num_burnin_steps)
     num_samples = reduce_in_tests(num_samples)
 
     # correct shapes for mcmc
-    data = training_data[0].reshape(
-            [*training_data[0].shape, 1])
-
+    out = np.repeat(tf.one_hot(training_data[1], outdim), outdim, axis=1)
+    data = training_data[0].repeat(outdim, axis=1).reshape(
+            [*training_data[0].shape, outdim])
     # Note that here we need model.trainable_parameters, not trainable_variables - only parameters can have priors!
     priors = filter_for_priors(model.trainable_parameters)
 
     hmc_helper = gpflow.optimizers.SamplingHelper(
-        model.log_posterior_density((data, training_data[1])), priors)
+        model.log_posterior_density((data, out)), priors)
 
     hmc = tfp.mcmc.HamiltonianMonteCarlo(
         target_log_prob_fn=hmc_helper.target_log_prob_fn,
@@ -617,7 +617,7 @@ def interpolate_fft_train(sols, model, train):
     """
 
     # num_burnin should be similar to minibatch_size as above
-    samples = monte_carlo_sim(gp_model, BATCH_SIZE, outshape ** 2, train)
+    samples = monte_carlo_sim(gp_model, BATCH_SIZE, outshape ** 2, train, outshape)
 
     # allocating a sample from classification is not possible atm
     # so we allocate a image and then classify it?
