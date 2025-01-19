@@ -395,15 +395,17 @@ def interpolate_model_train(sols, model, train):
     # need this for later
     model_shape = [1 if x is None else x for x in model.input_shape]
     Tout = model.predict(train.reshape([product(train.shape) // product(model_shape), *model_shape[1:]]))
-    CTin = np.concatenate([ins, train])
-    CTout = np.concatenate([out, Tout])
+    
+    from itertools import batched
 
-    from scipy.decomposition import PCA
-    from scipy.stats import gaussian_kde 
-    # this is too heavy duty on preformance using more than 32GB of RAM
-    guass = gaussian_kde([CTin,CTout])
-    sample = guass.resample(BATCH_SIZE)
-    sampleout = guass.evaluate(sample)
+    quart_out = list(batched(Tout, n=(outshape * 4)))
+    quart_in = list(batched(train, n=(outshape * 4)))
+
+    from rbf.interpolate import RBFInterpolant
+    ins_with_quart = np.concatenate([ins, np.array(quart_in[0])])
+    out_with_quart = np.concatenate([ins, np.array(quart_out[0])])
+    rbf = RBFInterpolant(out_with_quart,ins_with_quart)
+    sample = [rbf(s_out) for sout in quart_out[1:]] 
 
     # inverse one hot the outputs
     onehottmp = np.reshape(np.tile(np.arange(outshape), out.shape[0]), out.shape)
