@@ -28,7 +28,7 @@ from scipy import linalg
 import numpy as np
 import matplotlib.pyplot as plt
 
-#TUNE THEESE INPUT PARAMS
+#TUNE THESE INPUT PARAMS
 MAX_ITER=2048
 BATCH_SIZE = 1024
 TRAIN_SIZE=16
@@ -401,12 +401,21 @@ def interpolate_model_train(sols, model, train):
     quart_out = list(batched(Tout, n=(outshape * 4)))
     quart_in = list(batched(train, n=(outshape * 4)))
 
-    from rbf.interpolate import RBFInterpolant
-    ins_with_quart = np.concatenate([ins, np.array(quart_in[0])])
-    out_with_quart = np.concatenate([ins, np.array(quart_out[0])])
-    rbf = RBFInterpolant(out_with_quart,ins_with_quart)
-    sample = [rbf(s_out) for sout in quart_out[1:]] 
+    first_quarts = (np.array(quart_in[0]), np.array(quart_out[0]))
+    out_with_quart = np.concatenate([out, first_quarts[1]])
 
+    from rbf.gproc import gpiso, gppoly 
+
+    # use Gaussian basis
+    priors = gpiso('ga', eps=0.5, var=1.0) 
+    priors += gppoly(2)
+    inout = np.stack([ins, out])
+    gp_post = priors.condition(inout, out_with_quart[0]) 
+    for i_in, outs in enumerate(out_with_quart[1:], start=1):
+        priors += gppoly(2)
+        gp_post += priors.condition(ins, outs) 
+
+    sample = [gp_post(s_out) for sout in quart_out[1:]] 
     # inverse one hot the outputs
     onehottmp = np.reshape(np.tile(np.arange(outshape), out.shape[0]), out.shape)
     onehotout = np.reshape(onehottmp[np.max(sampleout)], out.shape[0]).reshape(-1, 1)
