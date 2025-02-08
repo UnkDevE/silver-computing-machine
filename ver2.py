@@ -405,9 +405,7 @@ def gp_train(inducingset, outshape, train, model_shape, minibatch_size):
     in_shape = product(model_shape)
 
     # mutli output kernel 
-    kernel = gpflow.kernels.LinearCoregionalization(
-        [gpflow.kernels.Matern52(active_dims=[1]) for _ in range(outshape)],
-            W=np.random.rand(in_shape,outshape).reshape([in_shape, outshape]))
+    kernel = gpflow.kernels.Sum([gpflow.kernels.Matern52() for _ in range(outshape)])
     
     # set all exterior priors to gamma
     from tensorflow_probability import distributions as tfd
@@ -419,43 +417,40 @@ def gp_train(inducingset, outshape, train, model_shape, minibatch_size):
             k.prior = tfd.Gamma(np.float32(1.0), np.float32(1.0))
         
     # var init for kernel
-    iv = gpflow.inducing_variables.InducingPoints(inducingset[0].T) 
+    iv = gpflow.inducing_variables.InducingPoints(inducingset[0])
 
-    lik = gpflow.likelihoods.SwitchedLikelihood(
+    likelihood = gpflow.likelihoods.SwitchedLikelihood(
     [gpflow.likelihoods.Gaussian() for _ in range(outshape)])
     
     # create mean function 
     # create guass kernel for interpolation
     # initialize mean of variational posterior to be of shape MxL
-    q_mu = np.zeros((in_shape, outshape))
+    # q_mu = np.zeros((in_shape, outshape))
     # initialize \sqrt(Σ) of variational posterior to be of shape LxMxM
-    q_sqrt = np.repeat(np.eye(in_shape)[None, ...], outshape, axis=0) * 1.0
+    # q_sqrt = np.repeat(np.eye(in_shape)[None, ...], outshape, axis=0) * 1.0
 
     gp_model = gpflow.models.SVGP(kernel=kernel, 
-        likelihood=lik, inducing_variable=iv, 
-            mean_function=GP_MEAN_FUNC(np.ones(outshape), np.zeros(outshape)),
-            q_mu=q_mu, q_sqrt=q_sqrt, q_diag=False)
+        likelihood=likelihood, inducing_variable=iv) # , q_mu=q_mu, q_sqrt=q_sqrt)
     
     # tfp.distributions dtype is inferred from parameters - so convert to 64-bit
-    gp_model.mean_function.A.prior = tfd.Gamma(np.float32(1.0), np.float32(1.0))
-    gp_model.mean_function.b.prior = tfd.Gamma(np.float32(1.0), np.float32(1.0))
     for liks in gp_model.likelihood.likelihoods:
         liks.variance.prior = tfd.Gamma(np.float32(1.0), np.float32(1.0))
     
     gp_model.q_mu.prior = tfd.Normal(np.float32(0.0), np.float32(1.0))
-    gp_model.kernel.W.prior = tfd.Normal(np.float32(0.0), np.float32(1.0))
     gp_model.q_sqrt.prior = tfd.Normal(np.float32(0.0), np.float32(1.0))
 
-    # Evaluate objective for different minibatch sizes
+    # Evaluate objective for different min) # minibatch sizes
     # We turn off training for inducing point locations
     from gpflow.utilities import set_trainable
     set_trainable(gp_model.inducing_variable, False)
 
     training_loss = gp_model.training_loss_closure(train, compile=True)
     optimizer_sci = gpflow.optimizers.Scipy()
-    loss = tfp.math.minimize(training_loss, minibatch_size, optimizer_sci, 
+    loss = optimizer_sci.minimize(training_loss, gp_model.trainable_variables)
+    """ loss = tfp.math.minimize(training_loss, minibatch_size, optimizer_sci, 
             trainable_variables=gp_model.trainable_variables)
-
+    -- optimizer for adam 
+    """
     from gpflow.ci_utils import reduce_in_tests
     max_iter = reduce_in_tests(BATCH_SIZE // MAX_ITER)
 
@@ -545,7 +540,7 @@ def interpolate_fft_train(sols, model, train):
     train = tuple(map(lambda x : x.astype(np.float32), train))
     tensor_data = (tf.convert_to_tensor(train[0]), tf.squeeze(tf.one_hot(train[1], outshape)))
     dataset = tf.data.Dataset.from_tensor_slices(tensor_data).repeat().shuffle(BATCH_SIZE)
-    # Create an Adam Optimizer action
+    # Create an Adam / scipy Optimizer action
     train_iter = iter(dataset.batch(minibatch_size))
 
     gp_model = gp_train(indu, outshape, train_iter, 
