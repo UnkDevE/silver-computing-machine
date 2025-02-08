@@ -404,7 +404,7 @@ def gp_train(inducingset, outshape, train, model_shape, minibatch_size):
     # input shape of target training model
     in_shape = product(model_shape)
 
-    # mutli output kernel 
+    # mutli output kernel add 1 to range to get full range
     kernel = gpflow.kernels.Sum([gpflow.kernels.Matern52() for _ in range(outshape)])
     
     # set all exterior priors to gamma
@@ -419,6 +419,7 @@ def gp_train(inducingset, outshape, train, model_shape, minibatch_size):
     # var init for kernel
     iv = gpflow.inducing_variables.InducingPoints(inducingset[0])
 
+    # add 1 to outshape to get outshape from for
     likelihood = gpflow.likelihoods.SwitchedLikelihood(
     [gpflow.likelihoods.Gaussian() for _ in range(outshape)])
     
@@ -430,7 +431,7 @@ def gp_train(inducingset, outshape, train, model_shape, minibatch_size):
     # q_sqrt = np.repeat(np.eye(in_shape)[None, ...], outshape, axis=0) * 1.0
 
     gp_model = gpflow.models.SVGP(kernel=kernel, 
-        likelihood=likelihood, inducing_variable=iv) # , q_mu=q_mu, q_sqrt=q_sqrt)
+        likelihood=likelihood, inducing_variable=iv, num_latent_gps=outshape-1) # , q_mu=q_mu, q_sqrt=q_sqrt)
     
     # tfp.distributions dtype is inferred from parameters - so convert to 64-bit
     for liks in gp_model.likelihood.likelihoods:
@@ -442,17 +443,51 @@ def gp_train(inducingset, outshape, train, model_shape, minibatch_size):
     # Evaluate objective for different min) # minibatch sizes
     # We turn off training for inducing point locations
     from gpflow.utilities import set_trainable
-    set_trainable(gp_model.inducing_variable, False)
+    gpflow.set_trainable(gp_model.inducing_variable, False)
 
     training_loss = gp_model.training_loss_closure(train, compile=True)
-    optimizer_sci = gpflow.optimizers.Scipy()
-    loss = optimizer_sci.minimize(training_loss, gp_model.trainable_variables)
-    """ loss = tfp.math.minimize(training_loss, minibatch_size, optimizer_sci, 
-            trainable_variables=gp_model.trainable_variables)
-    -- optimizer for adam 
-    """
-    from gpflow.ci_utils import reduce_in_tests
-    max_iter = reduce_in_tests(BATCH_SIZE // MAX_ITER)
+    elbo = tf.function(gp_model.elbo)
+    # Evaluate objective for different minibatch sizes
+    minibatch_proportions = np.logspace(-2, 0, 10)
+    times = []
+    objs = []
+    for mbp in minibatch_proportions:
+        batchsize = int(outshape * mbp)
+        start_time = time.time()
+        objs.append(
+            [elbo(minibatch) for minibatch in itertools.islice(train, 20)]
+        )
+        times.append(time.time() - start_time)
+ 
+    # We turn off training for inducing point locations
+
+    def run_adam(model, iterations):
+        """
+        Utility function running the Adam optimizer
+
+        :param model: GPflow model
+        :param interations: number of iterations
+        """
+        # Create an Adam Optimizer action
+        logf = []
+        train_iter = iter(train_dataset.batch(minibatch_size))
+        training_loss = model.training_loss_closure(train_iter, compile=True)
+        optimizer = tf.optimizers.Adam()
+
+        @tf.function
+        def optimization_step():
+            tfp.math.minimize(optimizer, 
+                training_loss, model.trainable_variables, jit_compile=True)
+
+        for step in range(iterations):
+            optimization_step()
+            if step % 10 == 0:
+                elbo = -training_loss().numpy()
+                logf.append(elbo)
+        return logf
+
+    max_iter = reduce_in_tests(BATCH_SIZE * outshape ** 2)
+    logf = run_adam(gp_model, maxiter)
 
     gpflow.utilities.print_summary(gp_model)
     return gp_model
