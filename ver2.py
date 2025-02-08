@@ -444,21 +444,9 @@ def gp_train(inducingset, outshape, train, model_shape, minibatch_size):
     # We turn off training for inducing point locations
     from gpflow.utilities import set_trainable
     gpflow.set_trainable(gp_model.inducing_variable, False)
-
     training_loss = gp_model.training_loss_closure(train, compile=True)
+
     elbo = tf.function(gp_model.elbo)
-    # Evaluate objective for different minibatch sizes
-    minibatch_proportions = np.logspace(-2, 0, 10)
-    times = []
-    objs = []
-    for mbp in minibatch_proportions:
-        batchsize = int(outshape * mbp)
-        start_time = time.time()
-        objs.append(
-            [elbo(minibatch) for minibatch in itertools.islice(train, 20)]
-        )
-        times.append(time.time() - start_time)
- 
     # We turn off training for inducing point locations
 
     def run_adam(model, iterations):
@@ -468,16 +456,17 @@ def gp_train(inducingset, outshape, train, model_shape, minibatch_size):
         :param model: GPflow model
         :param interations: number of iterations
         """
+
+
         # Create an Adam Optimizer action
         logf = []
-        train_iter = iter(train_dataset.batch(minibatch_size))
-        training_loss = model.training_loss_closure(train_iter, compile=True)
-        optimizer = tf.optimizers.Adam()
+        training_loss = model.training_loss_closure(train, compile=True)
+        optimizer = gpflow.optimizers.Scipy()
 
         @tf.function
         def optimization_step():
-            tfp.math.minimize(optimizer, 
-                training_loss, model.trainable_variables, jit_compile=True)
+            optimizer.minimize(training_loss, model.trainable_variables, 
+                tf_fun_args={"jit_compile":True}, options={"eps":1e-12, "maxls":40})
 
         for step in range(iterations):
             optimization_step()
@@ -486,8 +475,9 @@ def gp_train(inducingset, outshape, train, model_shape, minibatch_size):
                 logf.append(elbo)
         return logf
 
+    from gpflow.ci_utils import reduce_in_tests
     max_iter = reduce_in_tests(BATCH_SIZE * outshape ** 2)
-    logf = run_adam(gp_model, maxiter)
+    logf = run_adam(gp_model, max_iter)
 
     gpflow.utilities.print_summary(gp_model)
     return gp_model
