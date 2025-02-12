@@ -405,7 +405,7 @@ def gp_train(inducingset, outshape, train, model_shape, minibatch_size):
     in_shape = product(model_shape)
 
     # mutli output kernel add 1 to range to get full range
-    kernel = gpflow.kernels.Sum([gpflow.kernels.Matern52() for _ in range(outshape)])
+    kernel = gpflow.kernels.Sum([gpflow.kernels.SquaredExponential() for _ in range(outshape)])
     
     # set all exterior priors to gamma
     from tensorflow_probability import distributions as tfd
@@ -476,8 +476,8 @@ def gp_train(inducingset, outshape, train, model_shape, minibatch_size):
         return logf
 
     from gpflow.ci_utils import reduce_in_tests
-    max_iter = reduce_in_tests(BATCH_SIZE * outshape ** 2)
-    logf = run_adam(gp_model, max_iter)
+    reduce_in_tests(BATCH_SIZE)
+    logf = run_adam(gp_model, TRAIN_SIZE)
 
     gpflow.utilities.print_summary(gp_model)
     return gp_model
@@ -499,12 +499,12 @@ def monte_carlo_sim(model, num_samples, num_burnin_steps, training_data, outdim)
     # correct shapes for mcmc
     out = np.repeat(tf.one_hot(training_data[1], outdim), outdim, axis=1)
     data = training_data[0].repeat(outdim, axis=1).reshape(
-            [*training_data[0].shape, outdim])
+            [*training_data[0].shape, outdim]).swapaxes(1,2)
     # Note that here we need model.trainable_parameters, not trainable_variables - only parameters can have priors!
     priors = filter_for_priors(model.trainable_parameters)
 
     hmc_helper = gpflow.optimizers.SamplingHelper(
-        model.log_posterior_density((data, out)), priors)
+        model.log_posterior_density((data,out)), priors)
 
     hmc = tfp.mcmc.HamiltonianMonteCarlo(
         target_log_prob_fn=hmc_helper.target_log_prob_fn,
