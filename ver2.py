@@ -405,7 +405,7 @@ def gp_train(inducingset, outshape, train, model_shape, minibatch_size):
     in_shape = product(model_shape)
 
     # mutli output kernel add 1 to range to get full range
-    kernel = gpflow.kernels.SharedIndependent(gpflow.kernels.Sum([gpflow.kernels.SquaredExponential(active_dims=0)
+    kernel = gpflow.kernels.SharedIndependent(gpflow.kernels.Sum([gpflow.kernels.SquaredExponential()
         for _ in range(outshape)]), output_dim=outshape)
     
     # set all exterior priors to gamma
@@ -418,7 +418,7 @@ def gp_train(inducingset, outshape, train, model_shape, minibatch_size):
             k.prior = tfd.Gamma(np.float32(1.0), np.float32(1.0))
         
     # var init for kernel
-    iv = gpflow.inducing_variables.InducingPoints(inducingset[0].T)
+    iv  = gpflow.inducing_variables.InducingPoints(inducingset[0])
 
     # add 1 to outshape to get outshape from for
     likelihood = gpflow.likelihoods.SwitchedLikelihood(
@@ -427,12 +427,13 @@ def gp_train(inducingset, outshape, train, model_shape, minibatch_size):
     # create mean function 
     # create guass kernel for interpolation
     # initialize mean of variational posterior to be of shape MxL
-    # q_mu = np.zeros((in_shape, outshape))
+    q_mu = np.zeros((in_shape, outshape))
     # initialize \sqrt(Σ) of variational posterior to be of shape LxMxM
-    # q_sqrt = np.repeat(np.eye(in_shape)[None, ...], outshape, axis=0) * 1.0
+    q_sqrt = np.repeat(np.eye(in_shape)[None, ...], outshape, axis=0) * 1.0
 
     gp_model = gpflow.models.SVGP(kernel=kernel, 
-        likelihood=likelihood, inducing_variable=iv, num_latent_gps=in_shape)
+        likelihood=likelihood, inducing_variable=iv, num_latent_gps=in_shape,
+            q_mu=q_mu, q_sqrt=q_sqrt)
     
     # tfp.distributions dtype is inferred from parameters - so convert to 64-bit
     for liks in gp_model.likelihood.likelihoods:
