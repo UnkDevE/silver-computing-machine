@@ -405,13 +405,14 @@ def gp_train(inducingset, outshape, train, model_shape, minibatch_size):
     in_shape = product(model_shape)
 
     # mutli output kernel add 1 to range to get full range
-    kernel = gpflow.kernels.Sum([gpflow.kernels.SquaredExponential() for _ in range(outshape)])
+    kernel = gpflow.kernels.SharedIndependent(gpflow.kernels.Sum([gpflow.kernels.SquaredExponential()
+        for _ in range(outshape)]), output_dim=outshape)
     
     # set all exterior priors to gamma
     from tensorflow_probability import distributions as tfd
 
     # have to punch in var names directly to create priors
-    for mk in kernel.kernels:
+    for mk in kernel.kernel.kernels:
         for k in [# mk.kernels[0].W, mk.kernels[0].kappa, 
                 mk.variance, mk.lengthscales]: 
             k.prior = tfd.Gamma(np.float32(1.0), np.float32(1.0))
@@ -431,7 +432,7 @@ def gp_train(inducingset, outshape, train, model_shape, minibatch_size):
     # q_sqrt = np.repeat(np.eye(in_shape)[None, ...], outshape, axis=0) * 1.0
 
     gp_model = gpflow.models.SVGP(kernel=kernel, 
-        likelihood=likelihood, inducing_variable=iv, num_latent_gps=outshape-1) # , q_mu=q_mu, q_sqrt=q_sqrt)
+        likelihood=likelihood, inducing_variable=iv, num_latent_gps=in_shape, num_data=outshape) 
     
     # tfp.distributions dtype is inferred from parameters - so convert to 64-bit
     for liks in gp_model.likelihood.likelihoods:
@@ -449,6 +450,7 @@ def gp_train(inducingset, outshape, train, model_shape, minibatch_size):
     elbo = tf.function(gp_model.elbo)
     # We turn off training for inducing point locations
 
+    gpflow.utilities.print_summary(gp_model)
     def run_adam(model, iterations):
         """
         Utility function running the Adam optimizer
@@ -460,13 +462,12 @@ def gp_train(inducingset, outshape, train, model_shape, minibatch_size):
 
         # Create an Adam Optimizer action
         logf = []
-        training_loss = model.training_loss_closure(train, compile=True)
         optimizer = gpflow.optimizers.Scipy()
 
         @tf.function
         def optimization_step():
             optimizer.minimize(training_loss, model.trainable_variables, 
-                tf_fun_args={"jit_compile":True}, options={"eps":1e-12, "maxls":40})
+                tf_fun_args={"jit_compile":False}, options={"eps":1e-12, "maxls":40})
 
         for step in range(iterations):
             optimization_step()
@@ -497,14 +498,12 @@ def monte_carlo_sim(model, num_samples, num_burnin_steps, training_data, outdim)
     num_samples = reduce_in_tests(num_samples)
 
     # correct shapes for mcmc
-    out = np.repeat(tf.one_hot(training_data[1], outdim), outdim, axis=1)
-    data = training_data[0].repeat(outdim, axis=1).reshape(
-            [*training_data[0].shape, outdim]).swapaxes(1,2)
+    out = tf.one_hot(training_data[1], outdim).reshape([training_data[1].shape[0], outdim])
     # Note that here we need model.trainable_parameters, not trainable_variables - only parameters can have priors!
     priors = filter_for_priors(model.trainable_parameters)
 
     hmc_helper = gpflow.optimizers.SamplingHelper(
-        model.log_posterior_density((data,out)), priors)
+        model.log_posterior_density((training_data[0],out)), priors)
 
     hmc = tfp.mcmc.HamiltonianMonteCarlo(
         target_log_prob_fn=hmc_helper.target_log_prob_fn,
@@ -552,7 +551,8 @@ def interpolate_fft_train(sols, model, train):
     # inverse one hot the outputs
     model_shape = [1 if x is None else x for x in model.input_shape]
     Tout = model.predict(train.reshape([product(train.shape) // product(model_shape), *model_shape[1:]]))
-    train = (train, onecool(Tout))
+    Tout = Tout
+    train = (train, Tout)
 
     # use output from sheafifcation for inducing vars
     out = model.predict(ins.reshape([outshape, *model_shape[1:]]))
@@ -563,7 +563,7 @@ def interpolate_fft_train(sols, model, train):
 
     # keep types consistent as float32 because tfp has bug with float32 becoming a double
     train = tuple(map(lambda x : x.astype(np.float32), train))
-    tensor_data = (tf.convert_to_tensor(train[0]), tf.squeeze(tf.one_hot(train[1], outshape)))
+    tensor_data = (tf.convert_to_tensor(train[0]), tf.convert_to_tensor(train[1])) 
     dataset = tf.data.Dataset.from_tensor_slices(tensor_data).repeat().shuffle(BATCH_SIZE)
     # Create an Adam / scipy Optimizer action
     train_iter = iter(dataset.batch(minibatch_size))
