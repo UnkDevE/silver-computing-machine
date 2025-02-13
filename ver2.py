@@ -405,7 +405,7 @@ def gp_train(inducingset, outshape, train, model_shape, minibatch_size):
     in_shape = product(model_shape)
 
     # mutli output kernel add 1 to range to get full range
-    kernel = gpflow.kernels.SharedIndependent(gpflow.kernels.Sum([gpflow.kernels.SquaredExponential()
+    kernel = gpflow.kernels.SharedIndependent(gpflow.kernels.Sum([gpflow.kernels.SquaredExponential(active_dims=0)
         for _ in range(outshape)]), output_dim=outshape)
     
     # set all exterior priors to gamma
@@ -418,7 +418,7 @@ def gp_train(inducingset, outshape, train, model_shape, minibatch_size):
             k.prior = tfd.Gamma(np.float32(1.0), np.float32(1.0))
         
     # var init for kernel
-    iv = gpflow.inducing_variables.InducingPoints(inducingset[0])
+    iv = gpflow.inducing_variables.InducingPoints(inducingset[0].T)
 
     # add 1 to outshape to get outshape from for
     likelihood = gpflow.likelihoods.SwitchedLikelihood(
@@ -432,7 +432,7 @@ def gp_train(inducingset, outshape, train, model_shape, minibatch_size):
     # q_sqrt = np.repeat(np.eye(in_shape)[None, ...], outshape, axis=0) * 1.0
 
     gp_model = gpflow.models.SVGP(kernel=kernel, 
-        likelihood=likelihood, inducing_variable=iv, num_latent_gps=in_shape, num_data=outshape) 
+        likelihood=likelihood, inducing_variable=iv, num_latent_gps=in_shape)
     
     # tfp.distributions dtype is inferred from parameters - so convert to 64-bit
     for liks in gp_model.likelihood.likelihoods:
@@ -442,22 +442,20 @@ def gp_train(inducingset, outshape, train, model_shape, minibatch_size):
     gp_model.q_sqrt.prior = tfd.Normal(np.float32(0.0), np.float32(1.0))
 
     # Evaluate objective for different min) # minibatch sizes
-    # We turn off training for inducing point locations
     from gpflow.utilities import set_trainable
+    # We turn off training for inducing point locations
     gpflow.set_trainable(gp_model.inducing_variable, False)
     training_loss = gp_model.training_loss_closure(train, compile=True)
 
-    elbo = tf.function(gp_model.elbo)
-    # We turn off training for inducing point locations
+    #elbo = tf.function(gp_model.elbo)
 
     gpflow.utilities.print_summary(gp_model)
+    """
     def run_adam(model, iterations):
-        """
         Utility function running the Adam optimizer
 
         :param model: GPflow model
         :param interations: number of iterations
-        """
 
 
         # Create an Adam Optimizer action
@@ -479,7 +477,10 @@ def gp_train(inducingset, outshape, train, model_shape, minibatch_size):
     from gpflow.ci_utils import reduce_in_tests
     reduce_in_tests(BATCH_SIZE)
     logf = run_adam(gp_model, TRAIN_SIZE)
-
+    """
+    optimizer = gpflow.optimizers.Scipy()
+    optimizer.minimize(training_loss, gp_model.trainable_variables, 
+            tf_fun_args={"jit_compile":False}, options={ "eps":1e-12, "maxls":40})
     gpflow.utilities.print_summary(gp_model)
     return gp_model
 
@@ -551,7 +552,6 @@ def interpolate_fft_train(sols, model, train):
     # inverse one hot the outputs
     model_shape = [1 if x is None else x for x in model.input_shape]
     Tout = model.predict(train.reshape([product(train.shape) // product(model_shape), *model_shape[1:]]))
-    Tout = Tout
     train = (train, Tout)
 
     # use output from sheafifcation for inducing vars
@@ -563,12 +563,10 @@ def interpolate_fft_train(sols, model, train):
 
     # keep types consistent as float32 because tfp has bug with float32 becoming a double
     train = tuple(map(lambda x : x.astype(np.float32), train))
-    tensor_data = (tf.convert_to_tensor(train[0]), tf.convert_to_tensor(train[1])) 
-    dataset = tf.data.Dataset.from_tensor_slices(tensor_data).repeat().shuffle(BATCH_SIZE)
+    tensor_data = (tf.convert_to_tensor(train[0]), train[1])
     # Create an Adam / scipy Optimizer action
-    train_iter = iter(dataset.batch(minibatch_size))
 
-    gp_model = gp_train(indu, outshape, train_iter, 
+    gp_model = gp_train(indu, outshape, tensor_data, 
         model_shape, minibatch_size)
     
     # create gpflow sample params
