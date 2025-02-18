@@ -1,0 +1,7 @@
+tensorflow_datasets
+scipy
+numpy
+notebook
+pandas
+matplotlib;
+tensorflow-rocm==2.17.0 -f https://repo.radeon.com/rocm/manylinux/rocm-rel-6.3.1/ 

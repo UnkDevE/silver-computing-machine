@@ -32,9 +32,6 @@ import matplotlib.pyplot as plt
 MAX_ITER=2048
 BATCH_SIZE = 1024
 TRAIN_SIZE=16
-RBF_BOUND_MIN=1e-5
-RBF_BOUND_MAX=1e15
-NEIGHBOURS_DOT=3
 GP_SCALE=0.1
 GP_VAR=0.01
 
@@ -386,42 +383,29 @@ def graph_model(model, training_data, activations, shapes, layers):
 
 
 def interpolate_model_train(sols, model, train):
-    # hang on about this 
-    ins = np.array(sols[0])
-    # out = np.array(sols[1])
+    # get shapes
     outshape = len(sols[1])
-    out = sols[1]
-
-    # need this for later
     model_shape = [1 if x is None else x for x in model.input_shape]
+    # sensible names
+    ins = np.array(sols[0])
+    out = np.array(sols[1])
+    # predict training batch
     Tout = model.predict(train.reshape([product(train.shape) // product(model_shape), *model_shape[1:]]))
-    
-    from itertools import batched
+    from scipy.interpolate import make_splprep
 
-    quart_out = list(batched(Tout, n=(outshape * 4)))
-    quart_in = list(batched(train, n=(outshape * 4)))
+    # solving for 0 with out and ins to create spline
+    # LU decomposition for Gaussian Elimination
+    pl, u, _ = linalg.lu(np.stack([ins, out]), permute_l=True)
+    # back substitution to 0 
+    coeffs = linalg.solve(u, np.zeros(u.shape[0]))
 
-    first_quarts = (np.array(quart_in[0]), np.array(quart_out[0]))
-    out_with_quart = np.concatenate([out, first_quarts[1]])
-
-    from rbf.gproc import gpiso, gppoly 
-
-    # use Gaussian basis
-    priors = gpiso('ga', eps=0.5, var=1.0) 
-    priors += gppoly(2)
-    inout = np.stack([ins, out])
-    gp_post = priors.condition(inout, out_with_quart[0]) 
-    for i_in, outs in enumerate(out_with_quart[1:], start=1):
-        priors += gppoly(2)
-        gp_post += priors.condition(ins, outs) 
-
-    sample = [gp_post(s_out) for sout in quart_out[1:]] 
-    # inverse one hot the outputs
+    [spline, _] = make_splprep(coeffs, u=ins)
+    sampleout = spline(train)
+    # make sure it's in the right format i.e. inverse of one_hot
     onehottmp = np.reshape(np.tile(np.arange(outshape), out.shape[0]), out.shape)
     onehotout = np.reshape(onehottmp[np.max(sampleout)], out.shape[0]).reshape(-1, 1)
-    # allocating a sample from classification is not possible atm
-    # so we allocate a image and then classify it?
-    model.fit(sample, onehotout)
+    # train model
+    model.fit(train, onehotout)
     return model
 
 def bucketize(prelims):
@@ -467,13 +451,10 @@ def plot_test(starttest, endtest, outshape, name):
 
 def model_create_equation(model_dir, training_data):
     # check optional args
-    # from io import StringIO
-    # activ_obj = pandas.read_csv(StringIO(ACTIVATION_LIST), delimiter=';')
-
     # create prequesties
     model = tf.keras.models.load_model(model_dir)
     if model is not None:
-        # calculate fft + shap
+        # calculate fft + shape
         shapes = []
         layers = []
         
