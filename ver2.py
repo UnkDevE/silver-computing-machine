@@ -392,15 +392,19 @@ def interpolate_model_train(sols, model, train):
     # predict training batch
     Tout = model.predict(train.reshape([product(train.shape) // product(model_shape), *model_shape[1:]]))
     from scipy.interpolate import make_splprep
-
-    # solving for 0 with out and ins to create spline
-    # LU decomposition for Gaussian Elimination
-    pl, u, _ = linalg.lu(np.stack([ins, out]), permute_l=True)
-    # back substitution to 0 
-    coeffs = linalg.solve(u, np.zeros(u.shape[0]))
-
-    [spline, _] = make_splprep(coeffs, u=ins)
-    sampleout = spline(train)
+    # out is already a diagonalized matrix of 1s
+    # so therefore the standard basis becomes 0  
+    align, erase, std_basis = linalg.svd(ins)
+    # solve for the new std_basis
+    new_basis = linalg.solve(std_basis, np.zeros(std_basis.shape[0]))
+    # create LU Decomposition towards new_basis
+    (pl, u) = linalg.lu(np.vstack([ins, new_basis]).T)
+    #interpolate
+    [spline, _] = make_splprep(u.T)
+    unsolved_sample = spline(train)
+    # this is in rref so we use svd to get answers
+    align, erase, std_basis = linalg.svd(unsolved_sample)
+    
     # make sure it's in the right format i.e. inverse of one_hot
     onehottmp = np.reshape(np.tile(np.arange(outshape), out.shape[0]), out.shape)
     onehotout = np.reshape(onehottmp[np.max(sampleout)], out.shape[0]).reshape(-1, 1)
