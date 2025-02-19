@@ -398,18 +398,25 @@ def interpolate_model_train(sols, model, train):
     # solve for the new std_basis
     new_basis = linalg.solve(std_basis, np.zeros(std_basis.shape[0]))
     # create LU Decomposition towards new_basis
-    (pl, u) = linalg.lu(np.vstack([ins, new_basis]).T)
+    lu_decomp = linalg.lu(np.vstack([ins, new_basis]).T)
     #interpolate
-    [spline, _] = make_splprep(u.T)
-    unsolved_sample = spline(train)
-    # this is in rref so we use svd to get answers
-    align, erase, std_basis = linalg.svd(unsolved_sample)
-    
+    [spline, _] = make_splprep(lu_decomp[1].T)
+    unsolved_samples = spline(train).swapaxes(0,1)
+
+    # mutliply out the final answer colmn so it is at an equal outputs
+    solved_samples = []
+    for sample in unsolved_samples: 
+        tomul = sample[:-1]
+        mul = sample[-1]
+        solved_samples.append(tomul @ mul)
+
+    solved_samples = np.array(solved_samples)
+     
     # make sure it's in the right format i.e. inverse of one_hot
     onehottmp = np.reshape(np.tile(np.arange(outshape), out.shape[0]), out.shape)
-    onehotout = np.reshape(onehottmp[np.max(sampleout)], out.shape[0]).reshape(-1, 1)
+    onehotout = np.reshape(onehottmp[np.max(Tout)], out.shape[0]).reshape(-1, 1)
     # train model
-    model.fit(train, onehotout)
+    model.fit(solved_samples, onehotout)
     return model
 
 def bucketize(prelims):
