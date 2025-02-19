@@ -410,15 +410,15 @@ def interpolate_model_train(sols, model, train):
         mul = sample[-1]
         solved_sheafs = tomul * mul
         # sheafify by using average
-        solved_samples.append(np.average(solved_sheafs, axis=0))
+        solved_samples.append(solved_sheafs)
 
     solved_samples = np.array(solved_samples)
      
     # make sure it's in the right format i.e. inverse of one_hot
-    onehottmp = np.reshape(np.tile(np.arange(outshape), Tout.shape[0]), Tout.shape)
+    onehottmp = np.reshape(np.tile(np.arange(outshape), out.shape[0]), Tout.shape)
     onehotout = np.reshape(onehottmp[Tout == np.max(Tout)], Tout.shape[0]).reshape(-1, 1)
     # train model, reshape inputs
-    solved_samples = np.reshape(solved_samples, [train.shape[0], *model_shape[1:]])
+    solved_samples = np.reshape(solved_samples, [train.shape[0] * outshape, *model_shape[1:]])
     model.fit(solved_samples, onehotout)
     return model
 
