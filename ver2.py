@@ -498,6 +498,7 @@ def model_create_equation(model_dir, training_data):
             test = tester(model, sheaf, outward, sort_avg)
             plot_test(control, test, shapes[-1], "out-epoch-"+str(i)+".png")
 
+        model.save("MNIST_Transformed.keras")
 
 if __name__=="__main__":
     if len(sys.argv) > 2:
