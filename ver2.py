@@ -415,8 +415,9 @@ def interpolate_model_train(sols, model, train):
     solved_samples = np.array(solved_samples)
      
     # make sure it's in the right format i.e. inverse of one_hot
-    onehottmp = np.reshape(np.tile(np.arange(outshape), out.shape[0]), Tout.shape)
-    onehotout = np.reshape(onehottmp[Tout == np.max(Tout)], Tout.shape[0]).reshape(-1, 1)
+    Tout = Tout.repeat(outshape).reshape([Tout.shape[0], outshape, outshape])
+    onehottmp = np.reshape(np.tile(np.arange(outshape), product(Tout.shape[:-1])), Tout.shape)
+    onehotout = np.reshape(onehottmp[Tout == np.max(Tout)], Tout.shape[0] * outshape).reshape(-1, 1)
     # train model, reshape inputs
     solved_samples = np.reshape(solved_samples, [train.shape[0] * outshape, *model_shape[1:]])
     model.fit(solved_samples, onehotout)
