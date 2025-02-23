@@ -103,7 +103,7 @@ def output_aggregator(model, data):
     # filter through to find duplicates
     values_removed = dataset.map(lambda i: rm_val(i, [value]))
                                  
-    # call unqiue on features
+    # call unique on features
     need_extract = values_removed.unique() 
 
     @tf.function
@@ -258,7 +258,7 @@ def quot_space(subset, space):
         # use svd here
         SL, s, SR = linalg.svd(sp)
 
-        # compose both matricies 
+        # compose both matrices 
         new_diag = linalg.diagsvd(s, sp.shape[0], sp.shape[1]) @ diag
         inputbasis = (zSl * SR) @ diag
         orthsout = SL @ new_diag @ ZSr 
@@ -290,14 +290,14 @@ def solve_system(activations, layers):
     # first dtft makes our system linear, however it's already in this form 
     # so we can ignore our transform until we finish computation
 
-    # now we modify the differential to apply for matricies
-    # so for this we simply mutliple 
+    # now we modify the differential to apply for matrices
+    # so for this we simply multiple
 
-    # This for loop below caclualtes all the terms lienarly so we want to add 
+    # This for loop below calculates all the terms linearly so we want to add 
     # in the non linear function compositions in a liner manner
     # we want to *not* use inputs as it gums up the works
     zetas = []
-    baises = []
+    biases = []
     for i, (layer,act) in enumerate(zip(layers, activations)):
         # add in nonlinear operator 
         # take power to remove nonlinears
@@ -313,10 +313,10 @@ def solve_system(activations, layers):
         if len(zetas) < 1:
             zetas.append(weight)
         else:
-            zetas.append(inv(zetas[-1] + baises[-1]).astype(np.float64) @ weight)
-        baises.append(bias)
+            zetas.append(inv(zetas[-1] + biases[-1]).astype(np.float64) @ weight)
+        biases.append(bias)
 
-    zetas.append(zetas[-1] + baises[-1])
+    zetas.append(zetas[-1] + biases[-1])
     # run cohomologies
     return cohomologies(zetas)
 
@@ -381,7 +381,6 @@ def graph_model(model, training_data, activations, shapes, layers):
     ret = [sheafifed, sols, outward, sort_avg]
     return ret
 
-
 def interpolate_model_train(sols, model, train):
     # get shapes
     outshape = len(sols[1])
@@ -403,13 +402,12 @@ def interpolate_model_train(sols, model, train):
     [spline, _] = make_splprep(lu_decomp[1].T)
     unsolved_samples = spline(train).swapaxes(0,1)
 
-    # mutliply out the final answer column so it is at an equal outputs
+    # multiply out the final answer column so it is at an equal outputs
     solved_samples = []
     for sample in unsolved_samples: 
         tomul = sample[:-1]
         mul = sample[-1]
         solved_sheafs = tomul * mul
-        # sheafify by using average
         solved_samples.append(solved_sheafs)
 
     solved_samples = np.array(solved_samples)
@@ -418,10 +416,10 @@ def interpolate_model_train(sols, model, train):
     Tout = Tout.repeat(outshape).reshape([Tout.shape[0], outshape, outshape])
     onehottmp = np.reshape(np.tile(np.arange(outshape), product(Tout.shape[:-1])), Tout.shape)
     onehotout = np.reshape(onehottmp[Tout == np.max(Tout)], Tout.shape[0] * outshape).reshape(-1, 1)
-    # train model, reshape inputs
+    # check model, reshape inputs
     solved_samples = np.reshape(solved_samples, [train.shape[0] * outshape, *model_shape[1:]])
     model.fit(solved_samples, onehotout)
-    return model
+    return [model, lu_decomp[1].T]
 
 def bucketize(prelims):
     arr = []
@@ -463,22 +461,36 @@ def plot_test(starttest, endtest, outshape, name):
     # clear figures and axes
     plt.cla()
     plt.clf()
+    
+def generate_readable_eqs(solved_system, name):
+    from sympy import init_printing,latex
+    from sympy.abc import x 
+    from sympy.solvers.recurr import rsolve_hyper 
 
+    init_printing()
+    # find the relations will probably result in error
+    equation = rsolve_hyper(solved_system, 0, x)
+    tex_data = latex(equation)
+
+    with open(name, "w") as file:
+        file.write(tex_data)
+
+    
 def model_create_equation(model_dir, training_data):
     # check optional args
-    # create prequesties
+    # create prerequisites 
     model = tf.keras.models.load_model(model_dir)
     if model is not None:
         # calculate fft + shape
         shapes = []
         layers = []
         
-        # append input shape remove None typp/e
+        # append input shape remove None type
         shapes.append([product(model.input_shape[1:])])
         activations = []
 
         # main wb extraction loop
-        for [weights, baises, act, shape] in [
+        for [weights, biases, act, shape] in [
                 (layer.weights[0].numpy(), 
                     layer.weights[1].numpy(), 
                         layer.activation, layer.kernel.shape.as_list())
@@ -486,19 +498,34 @@ def model_create_equation(model_dir, training_data):
 
             # if no activation assume linear
             activations.append(lambda x: x if act is None else act(x))
-            layers.append([weights, baises]) 
-            shapes.append([shape, weights.shape, baises.shape])
+            layers.append([weights, biases]) 
+            shapes.append([shape, weights.shape, biases.shape])
 
         [sheaf, sols, outward, sort_avg] = graph_model(model, training_data, activations, shapes, layers)        
         control = tester(model, sheaf, outward, sort_avg)
+        
+        # should we wipe the model every i in TRAIN_SIZE or leave it?
+        test_model = tf.keras.models.clone_model(model)
+        
+        # using sols[0] shape as a template for input 
+        # this would be input, output shape of neural nets e.g. 784,10 for mnist
+        systems = [np.zeros(sols[0].shape)] 
 
         for i in range(TRAIN_SIZE):
-            model = interpolate_model_train(sols[-1], model, outward)
-            [sheaf, sols, outward, sort_avg] = graph_model(model, training_data, activations, shapes, layers)        
-            test = tester(model, sheaf, outward, sort_avg)
+            # find variance in solved systems
+            [test_model, solved_system] = interpolate_model_train(sols[-1], model, training_data)
+            systems.append(solved_system)
+            # print the variance of each solved system
+            print(np.var(systems, axis=-1))
+            # generate the equation!
+            generate_readable_eqs(solved_system, format("EQUATION_{i}.latex", i))
+            # another round of training
+            [sheaf, sols, outward, sort_avg] = graph_model(test_model, training_data, activations, shapes, layers)        
+            # and testing
+            test = tester(test_model, sheaf, outward, sort_avg)
             plot_test(control, test, shapes[-1], "out-epoch-"+str(i)+".png")
 
-        model.save("MNIST_Transformed.keras")
+        test_model.save("MNIST_only_interpolant.keras")
 
 if __name__=="__main__":
     if len(sys.argv) > 2:

@@ -3,5 +3,6 @@ scipy
 numpy
 notebook
 pandas
+sympy
 matplotlib;
 tensorflow-rocm==2.17.0 -f https://repo.radeon.com/rocm/manylinux/rocm-rel-6.3.1/ 

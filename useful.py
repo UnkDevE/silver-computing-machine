@@ -1,6 +1,6 @@
 
 # vector multiplication because sympy doesn't do it
-# with matricies is done by repeating the column in numpy  
+# with matrices is done by repeating the column in numpy  
 # if not a vector it leaves it alone
 def vecmul(vec_m, target, transpose):
     inner = vec_m

@@ -4,5 +4,5 @@ numpy<2
 notebook
 pandas
 matplotlib
-treverhines-rbf
 tensorflow
+sympy

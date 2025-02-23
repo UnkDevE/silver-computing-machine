@@ -11,7 +11,7 @@ Math statements
 A matrix is transformation of a vector A matrix of directions transforming a vector is a function
 This works in any dimensions of matrix and vector
 if a vector is an input space N then a matrix of NxN is a eigenfunction that defines it
-if a function is one to one it corresponds to these matricies
+if a function is one to one it corresponds to these matrices
 if the determinant of a matrix is 0 then the matrix reduces by at least 1 dimension
 All continous functions can be writtern as a polynomial
 
@@ -20,7 +20,7 @@ Neural networks are an approximation of fitting the curve and finding it's minim
 for a function that we are unable to define programmatically.
 
 Feedfoward is:
-Each activation is the dot product of weights and baises in respect to the previous layer 
+Each activation is the dot product of weights and biases in respect to the previous layer 
 put the nonlinearity function which acts as renormilization into the boundaries 0 and 1.
 
 Backpropagation is:
@@ -116,7 +116,7 @@ borsuk ulam theorem?
 e^Mt = transform / rotation
 meta-networks => deriving the function from networks and then inverse fourier 
 to create genralized function. Same idea as finding the transform for training batches.
-eigenstates for input matricies
+eigenstates for input matrices
 foruier transforms => to create human readable functions
 quanta + tunneling to find absoloute minima =>
 

@@ -1,4 +1,6 @@
 emperors-new-noesis/builddir
+*.profraw
+__pycache__/
 MNIST_tf_model.pb
 .venv
 *~

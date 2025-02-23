@@ -348,7 +348,7 @@ def model_create_equation(model_dir, tex_save, training_data):
         shapes.append([product(model.input_shape[1:])])
 
         # main wb extraction loop
-        for [weights, baises, act, shape] in [
+        for [weights, biases, act, shape] in [
                 (layer.weights[0].numpy(), 
                     layer.weights[1].numpy(), 
                         layer.activation, layer.kernel.shape.as_list())
@@ -356,8 +356,8 @@ def model_create_equation(model_dir, tex_save, training_data):
             # if no activation assume linear
             if act is None:
                 act = sage_eval('x',locals={"x": INPUT_SYMBOL})
-            fft_layers.append([weights, baises, act])
-            shapes.append([shape, weights.shape, baises.shape])
+            fft_layers.append([weights, biases, act])
+            shapes.append([shape, weights.shape, biases.shape])
         
         targets = [1] * len(shapes)
         # add output target
