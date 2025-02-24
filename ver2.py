@@ -83,14 +83,15 @@ def activation_fn_lookup(activ_src, csv):
             return (csv['function'][i])
     return csv['function']['linear']
 
-def output_aggregator(model, data):
-    # load and get unique features
-    [dataset, test] = tdfs.load(data, download=False, split=['train[:100%]', 'test'])
-    
+# normalize function for images
+@tf.function
+def normalize_img(image):
+  return tf.cast(image, tf.float32) / 255.
+
+def output_aggregator(model, dataset):
     # get label and value
     value, *features = list(list(dataset.take(1).as_numpy_iterator())[0].keys())
 
-   
     # get types of labels
     # dataset.unique() doesn't work with uint8
     # so we remove the offending key and use it
@@ -137,10 +138,6 @@ def output_aggregator(model, data):
             auto_condense([i[feature] == label for feature in features])) 
             for label in labels]
 
-    # normalize function for images
-    @tf.function
-    def normalize_img(image):
-      return tf.cast(image, tf.float32) / 255.
 
     # numpy array of predictions
     inputimages = []
@@ -388,8 +385,10 @@ def interpolate_model_train(sols, model, train):
     # sensible names
     ins = np.array(sols[0])
     out = np.array(sols[1])
-    # predict training batch
-    Tout = model.predict(train.reshape([product(train.shape) // product(model_shape), *model_shape[1:]]))
+    # predict training batch, normalize images by 255
+    [image, label] = tdfs.as_numpy(train) 
+    Tout = model.predict(tf.cast(image, tf.float32) // 255.)
+
     from scipy.interpolate import make_splprep
     # out is already a diagonalized matrix of 1s
     # so therefore the standard basis becomes 0  
@@ -481,7 +480,10 @@ def model_create_equation(model_dir, training_data):
     # create prerequisites 
     model = tf.keras.models.load_model(model_dir)
     if model is not None:
-        # calculate fft + shape
+        # load dataset for training
+        [train_dataset, test_dataset] = tdfs.load(training_data, 
+             download=False, split=['train[:80%]', 'test'])
+         # calculate fft + shape
         shapes = []
         layers = []
         
@@ -501,7 +503,7 @@ def model_create_equation(model_dir, training_data):
             layers.append([weights, biases]) 
             shapes.append([shape, weights.shape, biases.shape])
 
-        [sheaf, sols, outward, sort_avg] = graph_model(model, training_data, activations, shapes, layers)        
+        [sheaf, sols, outward, sort_avg] = graph_model(model, train_dataset, activations, shapes, layers)        
         control = tester(model, sheaf, outward, sort_avg)
         
         # should we wipe the model every i in TRAIN_SIZE or leave it?
@@ -509,22 +511,26 @@ def model_create_equation(model_dir, training_data):
         
         # using sols[0] shape as a template for input 
         # this would be input, output shape of neural nets e.g. 784,10 for mnist
-        systems = [np.zeros(sols[0].shape)] 
+        systems = [np.zeros(sols[-1][0].shape)] 
 
         for i in range(TRAIN_SIZE):
             # find variance in solved systems
-            [test_model, solved_system] = interpolate_model_train(sols[-1], model, training_data)
+            [test_model, solved_system] = interpolate_model_train(sols[-1], model, train_dataset)
             systems.append(solved_system)
             # print the variance of each solved system
             print(np.var(systems, axis=-1))
             # generate the equation!
             generate_readable_eqs(solved_system, format("EQUATION_{i}.latex", i))
             # another round of training
-            [sheaf, sols, outward, sort_avg] = graph_model(test_model, training_data, activations, shapes, layers)        
+            [sheaf, sols, outward, sort_avg] = graph_model(test_model, train_dataset, activations, shapes, layers)        
             # and testing
             test = tester(test_model, sheaf, outward, sort_avg)
             plot_test(control, test, shapes[-1], "out-epoch-"+str(i)+".png")
-
+        
+        print("CONTROL:")
+        model.evaluate(test_dataset[0], test_dataset[1], verbose=2)
+        print("EVALUATION:")
+        test_model.evaluate(test_dataset[0], test_dataset[1], verbose=2)
         test_model.save("MNIST_only_interpolant.keras")
 
 if __name__=="__main__":
