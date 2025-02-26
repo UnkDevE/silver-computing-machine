@@ -421,7 +421,7 @@ def interpolate_model_train(sols, model, train):
     solved_samples = np.reshape(solved_samples, [images.shape[0] * outshape, *model_shape[1:]])
     rep_labels = np.repeat(labels, 10)
     model.fit(solved_samples, rep_labels, batch_size=BATCH_SIZE)
-    return [model, lu_decomp[1].T]
+    return [model, np.vstack([ins, new_basis]).T]
 
 def bucketize(prelims):
     arr = []
@@ -467,12 +467,13 @@ def plot_test(starttest, endtest, outshape, name):
 def generate_readable_eqs(solved_system, name):
     from sympy import init_printing,latex
     from sympy.abc import x 
-    from sympy.solvers.recurr import rsolve_hyper 
+    from sympy.solvers.recurr import rsolve_poly, rsolve_ratio
 
     init_printing()
     # find the relations will probably result in error
-    equation = rsolve_hyper(solved_system, 0, x)
-    tex_data = latex(equation)
+    equation = rsolve_poly(solved_system, x, x)
+    ratio = rsolve_ratio(equation, x, x) 
+    tex_data = latex(ratio)
 
     with open(name, "w") as file:
         file.write(tex_data)
@@ -523,9 +524,8 @@ def model_create_equation(model_dir, training_data):
             # print the variance of each solved system
             print(np.var(systems, axis=-1))
             # generate the equation!
-            generate_readable_eqs(solved_system, format("EQUATION_{i}.latex", str(i)))
-            # another round of training
-            [sheaf, sols, outward, sort_avg] = graph_model(test_model, train_dataset, activations, shapes, layers)        
+            # another round of training 
+            # [sheaf, sols, outward, sort_avg] = graph_model(test_model, train_dataset, activations, shapes, layers)        
             # and testing
             test = tester(test_model, sheaf, outward, sort_avg)
             plot_test(control, test, shapes[-1], "out-epoch-"+str(i)+".png")
@@ -535,6 +535,8 @@ def model_create_equation(model_dir, training_data):
         print("EVALUATION:")
         test_model.evaluate(test_dataset[0], test_dataset[1], verbose=2)
         test_model.save("MNIST_only_interpolant.keras")
+        # generate the human readable eq
+        generate_readable_eqs(systems[-1], format("EQUATION_{i}.latex", str(i)))
 
 if __name__=="__main__":
     if len(sys.argv) > 2:
