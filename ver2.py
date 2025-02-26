@@ -378,6 +378,13 @@ def graph_model(model, training_data, activations, shapes, layers):
     ret = [sheafifed, sols, outward, sort_avg]
     return ret
 
+def get_features(features, value):
+    xs = []
+    for f in features:
+        xs.append(value[f])
+    
+    return xs
+
 def interpolate_model_train(sols, model, train):
     # get shapes
     outshape = len(sols[1])
@@ -386,9 +393,9 @@ def interpolate_model_train(sols, model, train):
     ins = np.array(sols[0])
     out = np.array(sols[1])
     # predict training batch, normalize images by 255
-    [image, label] = tdfs.as_numpy(train) 
-    Tout = model.predict(tf.cast(image, tf.float32) // 255.)
-
+    value, *features = list(list(train.take(1).as_numpy_iterator())[0].keys())
+    [images, labels] = list(tf.data.Dataset.get_single_element(train.batch(len(train))).values())
+    images = normalize_img(images)
     from scipy.interpolate import make_splprep
     # out is already a diagonalized matrix of 1s
     # so therefore the standard basis becomes 0  
@@ -399,7 +406,7 @@ def interpolate_model_train(sols, model, train):
     lu_decomp = linalg.lu(np.vstack([ins, new_basis]).T)
     #interpolate
     [spline, _] = make_splprep(lu_decomp[1].T)
-    unsolved_samples = spline(train).swapaxes(0,1)
+    unsolved_samples = spline(images).swapaxes(0,1)
 
     # multiply out the final answer column so it is at an equal outputs
     solved_samples = []
@@ -410,14 +417,10 @@ def interpolate_model_train(sols, model, train):
         solved_samples.append(solved_sheafs)
 
     solved_samples = np.array(solved_samples)
-     
-    # make sure it's in the right format i.e. inverse of one_hot
-    Tout = Tout.repeat(outshape).reshape([Tout.shape[0], outshape, outshape])
-    onehottmp = np.reshape(np.tile(np.arange(outshape), product(Tout.shape[:-1])), Tout.shape)
-    onehotout = np.reshape(onehottmp[Tout == np.max(Tout)], Tout.shape[0] * outshape).reshape(-1, 1)
     # check model, reshape inputs
-    solved_samples = np.reshape(solved_samples, [train.shape[0] * outshape, *model_shape[1:]])
-    model.fit(solved_samples, onehotout)
+    solved_samples = np.reshape(solved_samples, [images.shape[0] * outshape, *model_shape[1:]])
+    rep_labels = np.repeat(labels, 10)
+    model.fit(solved_samples, rep_labels, batch_size=BATCH_SIZE)
     return [model, lu_decomp[1].T]
 
 def bucketize(prelims):
@@ -511,7 +514,7 @@ def model_create_equation(model_dir, training_data):
         
         # using sols[0] shape as a template for input 
         # this would be input, output shape of neural nets e.g. 784,10 for mnist
-        systems = [np.zeros(sols[-1][0].shape)] 
+        systems = []
 
         for i in range(TRAIN_SIZE):
             # find variance in solved systems
@@ -520,7 +523,7 @@ def model_create_equation(model_dir, training_data):
             # print the variance of each solved system
             print(np.var(systems, axis=-1))
             # generate the equation!
-            generate_readable_eqs(solved_system, format("EQUATION_{i}.latex", i))
+            generate_readable_eqs(solved_system, format("EQUATION_{i}.latex", str(i)))
             # another round of training
             [sheaf, sols, outward, sort_avg] = graph_model(test_model, train_dataset, activations, shapes, layers)        
             # and testing
