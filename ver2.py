@@ -385,6 +385,13 @@ def get_features(features, value):
     
     return xs
 
+def get_ds(dataset):
+    # predict training batch, normalize images by 255
+    value, *features = list(list(dataset.take(1).as_numpy_iterator())[0].keys())
+    [images, labels] = list(tf.data.Dataset.get_single_element(dataset.batch(len(dataset))).values())
+    images = normalize_img(images)
+    return [images, labels]
+
 def interpolate_model_train(sols, model, train):
     # get shapes
     outshape = len(sols[1])
@@ -392,10 +399,6 @@ def interpolate_model_train(sols, model, train):
     # sensible names
     ins = np.array(sols[0])
     out = np.array(sols[1])
-    # predict training batch, normalize images by 255
-    value, *features = list(list(train.take(1).as_numpy_iterator())[0].keys())
-    [images, labels] = list(tf.data.Dataset.get_single_element(train.batch(len(train))).values())
-    images = normalize_img(images)
     from scipy.interpolate import make_splprep
     # out is already a diagonalized matrix of 1s
     # so therefore the standard basis becomes 0  
@@ -404,24 +407,30 @@ def interpolate_model_train(sols, model, train):
     new_basis = linalg.solve(std_basis, np.zeros(std_basis.shape[0]))
     # create LU Decomposition towards new_basis
     lu_decomp = linalg.lu(np.vstack([ins, new_basis]).T)
-    #interpolate
-    [spline, _] = make_splprep(lu_decomp[1].T)
-    unsolved_samples = spline(images).swapaxes(0,1)
 
     # multiply out the final answer column so it is at an equal outputs
-    solved_samples = []
-    for sample in unsolved_samples: 
-        tomul = sample[:-1]
-        mul = sample[-1]
-        solved_sheafs = tomul * mul
-        solved_samples.append(solved_sheafs)
+    # we can't use this on LU decomposition as it would come out as zero.
+    def reduce_basis(decomp):
+        solved_decomp = []
+        for sample in decomp: 
+            tomul = sample[:-1]
+            mul = sample[-1]
+            solved_sheafs = tomul * mul
+            solved_decomp.append(solved_sheafs)
+        return np.array(solved_decomp)
+    
+    # get dataset 
+    [images, labels] = get_ds(train) 
+    
+    #interpolate
+    [spline, _] = make_splprep(lu_decomp[1].T)
+    solved_samples = reduce_basis(np.array(spline(images).swapaxes(0,1)))
 
-    solved_samples = np.array(solved_samples)
     # check model, reshape inputs
     solved_samples = np.reshape(solved_samples, [images.shape[0] * outshape, *model_shape[1:]])
     rep_labels = np.repeat(labels, 10)
     model.fit(solved_samples, rep_labels, batch_size=BATCH_SIZE)
-    return [model, np.vstack([ins, new_basis]).T]
+    return [model, lu_decomp[1]]
 
 def bucketize(prelims):
     arr = []
@@ -512,6 +521,7 @@ def model_create_equation(model_dir, training_data):
         
         # should we wipe the model every i in TRAIN_SIZE or leave it?
         test_model = tf.keras.models.clone_model(model)
+        test_model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
         
         # using sols[0] shape as a template for input 
         # this would be input, output shape of neural nets e.g. 784,10 for mnist
@@ -519,9 +529,10 @@ def model_create_equation(model_dir, training_data):
 
         for i in range(TRAIN_SIZE):
             # find variance in solved systems
-            [test_model, solved_system] = interpolate_model_train(sols[-1], model, train_dataset)
+            [test_model, solved_system] = interpolate_model_train(sols[-1], test_model, train_dataset)
             systems.append(solved_system)
             # print the variance of each solved system
+            print(systems)
             print(np.var(systems, axis=-1))
             # generate the equation!
             # another round of training 
@@ -531,6 +542,7 @@ def model_create_equation(model_dir, training_data):
             plot_test(control, test, shapes[-1], "out-epoch-"+str(i)+".png")
         
         print("CONTROL:")
+        test_dataset = get_ds(test_dataset)
         model.evaluate(test_dataset[0], test_dataset[1], verbose=2)
         print("EVALUATION:")
         test_model.evaluate(test_dataset[0], test_dataset[1], verbose=2)
