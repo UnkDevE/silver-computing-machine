@@ -429,7 +429,7 @@ def interpolate_model_train(sols, model, train):
     # check model, reshape inputs
     solved_samples = np.reshape(solved_samples, [images.shape[0] * outshape, *model_shape[1:]])
     rep_labels = np.repeat(labels, 10)
-    model.fit(solved_samples, rep_labels, batch_size=BATCH_SIZE)
+    model.fit(solved_samples, rep_labels, batch_size=BATCH_SIZE, epochs=5)
     return [model, lu_decomp[1]]
 
 def bucketize(prelims):
@@ -521,7 +521,8 @@ def model_create_equation(model_dir, training_data):
         
         # should we wipe the model every i in TRAIN_SIZE or leave it?
         test_model = tf.keras.models.clone_model(model)
-        test_model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+        loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+        test_model.compile(optimizer='adam', loss=loss_fn, metrics=['accuracy'])
         
         # using sols[0] shape as a template for input 
         # this would be input, output shape of neural nets e.g. 784,10 for mnist
