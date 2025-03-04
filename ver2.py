@@ -424,12 +424,13 @@ def interpolate_model_train(sols, model, train):
     
     #interpolate
     [spline, _] = make_splprep(lu_decomp[1].T)
-    solved_samples = reduce_basis(np.array(spline(images).swapaxes(0,1)))
+    mask_samples = reduce_basis(np.array(spline(images).swapaxes(0,1)))
+    solved_samples = np.repeat(images, outshape).reshape([images.shape[0] * outshape, *model_shape[1:]])
 
     # check model, reshape inputs
-    solved_samples = np.reshape(solved_samples, [images.shape[0] * outshape, *model_shape[1:]])
+    masked_samples = mask_samples * solved_samples
     rep_labels = np.repeat(labels, 10)
-    model.fit(solved_samples, rep_labels, batch_size=BATCH_SIZE, epochs=5)
+    model.fit(masked_samples, rep_labels, batch_size=BATCH_SIZE, epochs=5)
     return [model, lu_decomp[1]]
 
 def bucketize(prelims):
