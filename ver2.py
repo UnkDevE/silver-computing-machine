@@ -423,12 +423,16 @@ def interpolate_model_train(sols, model, train):
     [images, labels] = get_ds(train) 
     
     #interpolate
-    [spline, _] = make_splprep(lu_decomp[1].T)
+    [spline, _] = make_splprep(lu_decomp[1].T, k=outshape)
     mask_samples = reduce_basis(np.array(spline(images).swapaxes(0,1)))
+    mask_samples = np.reshape(mask_samples, [images.shape[0] * outshape, *model_shape[1:]])
     solved_samples = np.repeat(images, outshape).reshape([images.shape[0] * outshape, *model_shape[1:]])
 
     # check model, reshape inputs
-    masked_samples = mask_samples * solved_samples
+    mask = mask_samples > solved_samples
+    import numpy.ma as ma
+    masked_samples = ma.array(solved_samples, mask=mask, fill_value=0)
+
     rep_labels = np.repeat(labels, 10)
     model.fit(masked_samples, rep_labels, batch_size=BATCH_SIZE, epochs=5)
     return [model, lu_decomp[1]]
