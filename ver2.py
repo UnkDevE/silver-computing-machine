@@ -426,11 +426,14 @@ def interpolate_model_train(sols, model, train, step):
     
     #interpolate
     [spline, _] = make_splprep(lu_decomp[1].T, k=outshape)
-    solved_samples = reduce_basis(np.array(spline(images).swapaxes(0,1)))
+    mask_samples = reduce_basis(np.array(spline(images).swapaxes(0,1)))
+    mask_samples = np.reshape(mask_samples, [images.shape[0] * outshape, *model_shape[1:]])
+    solved_samples = np.repeat(images, outshape).reshape([images.shape[0] * outshape, *model_shape[1:]])
 
     # check model, reshape inputs
-    masked_samples = np.reshape(solved_samples, [images.shape[0] * outshape, *model_shape[1:]])
-    masked_samples = np.repeat(images, outshape).reshape([images.shape[0] * outshape, *model_shape[1:]]) / masked_samples
+    mask = mask_samples > solved_samples
+    import numpy.ma as ma
+    masked_samples = ma.array(solved_samples, mask=mask, fill_value=0)
 
     rep_labels = np.repeat(labels, outshape)
     model.fit(masked_samples, rep_labels, batch_size=BATCH_SIZE, epochs=5)

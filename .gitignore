@@ -1,3 +1,4 @@
+imagetests/
 emperors-new-noesis/builddir
 *.profraw
 __pycache__/
