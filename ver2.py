@@ -394,6 +394,22 @@ def get_ds(dataset):
     images = normalize_img(images)
     return [images, labels]
 
+@tf.function
+def save_interpol_video(trainset, interset):
+    import matplotlib.cm as cm
+    import matplotlib.animation as animation
+    
+    imgs = []
+    fig = plt.figure()
+    for i in range(100):
+        plt.imshow(trainset[i], cmap='gray', interpolation=None) 
+        imgs.append([plt.imshow(interset[i], cmap='Reds', alpha = 0.5, interpolation=None)])
+
+    ani = animation.ArtistAnimation(fig, imgs, interval=50, blit=True,
+                                repeat_delay=1000)
+
+    ani.save("testimages.mp4")
+
 def interpolate_model_train(sols, model, train, step):
     # get shapes
     outshape = len(sols[1])
@@ -425,18 +441,20 @@ def interpolate_model_train(sols, model, train, step):
     [images, labels] = get_ds(train) 
     
     #interpolate
-    [spline, _] = make_splprep(lu_decomp[1].T, k=outshape)
+    [spline, _] = make_splprep(lu_decomp[1].T, k=outshape+1)
     mask_samples = reduce_basis(np.array(spline(images).swapaxes(0,1)))
     mask_samples = np.reshape(mask_samples, [images.shape[0] * outshape, *model_shape[1:]])
     solved_samples = np.repeat(images, outshape).reshape([images.shape[0] * outshape, *model_shape[1:]])
 
+    # save_interpol_video(solved_samples, mask_samples)
+
     # check model, reshape inputs
-    mask = mask_samples > solved_samples
+    mask = mask_samples <= solved_samples
     import numpy.ma as ma
     masked_samples = ma.array(solved_samples, mask=mask, fill_value=0)
 
     rep_labels = np.repeat(labels, outshape)
-    model.fit(masked_samples, rep_labels, batch_size=BATCH_SIZE, epochs=5)
+    model.fit(masked_samples, rep_labels, batch_size=BATCH_SIZE // 4, epochs=5)
     return [model, lu_decomp[1]]
 
 def bucketize(prelims):
