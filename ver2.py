@@ -401,11 +401,12 @@ def save_interpol_video(trainset, interset):
     
     imgs = []
     fig = plt.figure()
-    for i in range(100):
-        plt.imshow(trainset[i], cmap='gray', interpolation=None) 
-        imgs.append([plt.imshow(interset[i], cmap='Reds', alpha = 0.5, interpolation=None)])
+    for i in range(2000):
+        plt.imshow(trainset[i], cmap='gray', interpolation=None)
+        img = plt.imshow(interset[i], cmap='hot', alpha = 0.5, interpolation=None)
+        imgs.append([img])
 
-    ani = animation.ArtistAnimation(fig, imgs, interval=50, blit=True,
+    ani = animation.ArtistAnimation(fig, imgs, interval=5, blit=True,
                                 repeat_delay=1000)
 
     ani.save("testimages.mp4")
@@ -446,12 +447,13 @@ def interpolate_model_train(sols, model, train, step):
     mask_samples = np.reshape(mask_samples, [images.shape[0] * outshape, *model_shape[1:]])
     solved_samples = np.repeat(images, outshape).reshape([images.shape[0] * outshape, *model_shape[1:]])
 
-    # save_interpol_video(solved_samples, mask_samples)
 
     # check model, reshape inputs
-    mask = mask_samples <= solved_samples
+    mask = mask_samples > solved_samples
     import numpy.ma as ma
     masked_samples = ma.array(solved_samples, mask=mask, fill_value=0)
+
+    save_interpol_video(solved_samples, masked_samples)
 
     rep_labels = np.repeat(labels, outshape)
     model.fit(masked_samples, rep_labels, batch_size=BATCH_SIZE // 4, epochs=5)

@@ -1,0 +1,1 @@
+using sheafification and: cech cohomologies finds the path the AI takes however removing the points / pixels causes the ai to become untrainable, emphasizing the points also causes the ai to become inaccurate.
