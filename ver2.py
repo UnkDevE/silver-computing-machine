@@ -399,15 +399,20 @@ def save_interpol_video(trainset, interset):
     import matplotlib.cm as cm
     import matplotlib.animation as animation
     
-    imgs = []
+    img1 = plt.imshow(trainset[0], cmap='gray', interpolation=None)
+    img2 = plt.imshow(interset[0], cmap='hot', alpha = 0.5, interpolation=None)
     fig = plt.figure()
-    for i in range(2000):
-        plt.imshow(trainset[i], cmap='gray', interpolation=None)
-        img = plt.imshow(interset[i], cmap='hot', alpha = 0.5, interpolation=None)
-        imgs.append([img])
+    i = 0
 
-    ani = animation.ArtistAnimation(fig, imgs, interval=5, blit=True,
-                                repeat_delay=1000)
+    def update(frame, trainset, interset, i):
+        img1.set_data(trainset[i])
+        img2.set_data(interset[i])
+        frame.set_data(img2)
+        i += 1
+        return frame
+
+    ani = animation.FuncAnimation(fig=fig, func=lambda frame: update(frame, trainset, interset, i), 
+        frames = len(trainset), interval=200)
 
     ani.save("testimages.mp4")
 
@@ -454,6 +459,7 @@ def interpolate_model_train(sols, model, train, step):
     masked_samples = ma.array(solved_samples, mask=mask, fill_value=0)
 
     save_interpol_video(solved_samples, masked_samples)
+    exit()
 
     rep_labels = np.repeat(labels, outshape)
     model.fit(masked_samples, rep_labels, batch_size=BATCH_SIZE // 4, epochs=5)
