@@ -403,7 +403,7 @@ def save_interpol_video(trainset, interset):
     img2 = plt.imshow(interset[0], cmap='hot', alpha = 0.5, interpolation=None)
     fig = plt.figure()
 
-    def update(i, trainset, interset):
+    def update(i): 
         img1.set_data(trainset[i])
         img2.set_data(interset[i])
         return [img1, img2] 
