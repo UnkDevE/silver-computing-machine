@@ -402,17 +402,14 @@ def save_interpol_video(trainset, interset):
     img1 = plt.imshow(trainset[0], cmap='gray', interpolation=None)
     img2 = plt.imshow(interset[0], cmap='hot', alpha = 0.5, interpolation=None)
     fig = plt.figure()
-    i = 0
 
-    def update(frame, trainset, interset, i):
+    def update(i, trainset, interset):
         img1.set_data(trainset[i])
         img2.set_data(interset[i])
-        frame.set_data(img2)
-        i += 1
-        return frame
+        return [img1, img2] 
 
-    ani = animation.FuncAnimation(fig=fig, func=lambda frame: update(frame, trainset, interset, i), 
-        frames = len(trainset), interval=200)
+    ani = animation.FuncAnimation(fig=fig, func=update, 
+        frames = 200, interval=200)
 
     ani.save("testimages.mp4")
 
