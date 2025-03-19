@@ -22,7 +22,6 @@ import os
 
 import tensorflow as tf
 import tensorflow_datasets as tdfs
-import keras as K
 
 from scipy.fft import rfftn
 from scipy import linalg
@@ -95,6 +94,17 @@ def normalize_img(image):
     return tf.cast(image, tf.float32) / 255.
 
 
+@tf.function
+def label_extract(label_extract, features):
+    labels = []
+    for feature in features:
+        for label in label_extract:
+            if hasattr(label[feature], 'numpy') and callable(getattr(
+                    label[feature], 'numpy')):
+                labels.append(label[feature].numpy())
+    return labels
+
+
 def output_aggregator(model, dataset):
     # get label and value
     value, *features = list(list(
@@ -114,16 +124,6 @@ def output_aggregator(model, dataset):
 
     # call unique on features
     need_extract = values_removed.unique()
-
-    @tf.function
-    def label_extract(label_extract, features):
-        labels = []
-        for feature in features:
-            for label in label_extract:
-                if hasattr(label[feature], 'numpy') and callable(getattr(
-                        label[feature], 'numpy')):
-                    labels.append(label[feature].numpy())
-        return labels
 
     labels = label_extract(need_extract, features)
 
@@ -427,18 +427,24 @@ def save_interpol_video(trainset, interset):
     import matplotlib.animation as animation
 
     fig = plt.figure()
-    img2 = plt.imshow(interset[0], cmap='coolwarm', interpolation=None)
-    plt.show()
+    img1 = plt.imshow(trainset[0], cmap='Greys', alpha=0.1,
+                      interpolation=None,
+                      animated=True)
+    img2 = plt.imshow(interset[0], cmap='coolwarm', alpha=0.1,
+                      interpolation=None, animated=True)
 
     def update(i):
         # offset for imagery
-        img2.set_data(interset[i] / trainset[i])
-        return img2
+        img1.set_array(trainset[i] / 255)
+        img2.set_array(interset[i])
+        return [img1]
 
-    ani = animation.FuncAnimation(fig=fig,
-                                  func=update,
-                                  frames=200,
-                                  interval=200)
+    ani = animation.FuncAnimation(
+        fig=fig,
+        func=update,
+        interval=20,
+        save_count=200,
+        blit=True)
 
     ani.save("testimages.mp4")
 
@@ -574,41 +580,59 @@ def model_create_equation(model_dir, training_data):
 
         # main wb extraction loop
         for [weights, biases, act, shape] in [
-                (layer.weights[0].numpy(),
-                    layer.weights[1].numpy(),
-                        layer.activation, layer.kernel.shape.as_list())
-                          for layer in model.layers if len(layer.weights) > 1]:
-                                pass
+            (layer.weights[0].numpy(), layer.weights[1].numpy(),
+                layer.activation, layer.kernel.shape.as_list())
+                for layer in model.layers if len(layer.weights) > 1]:
+            # werid indentation here
             # if no activation assume linear
-            activations.append(lambda x: x if act is None else act(x))
+            activations.append(
+                lambda x: x if act is None else act(x)
+            )
+
             layers.append([weights, biases])
             shapes.append([shape, weights.shape, biases.shape])
 
-        [sheaf, sols, outward, sort_avg] = graph_model(model, train_dataset, activations, shapes, layers)
+        [sheaf, sols, outward, sort_avg] = graph_model(
+            model,
+            train_dataset,
+            activations,
+            shapes,
+            layers)
+
         control = tester(model, sheaf, outward, sort_avg)
 
         # should we wipe the model every i in TRAIN_SIZE or leave it?
         test_model = tf.keras.models.clone_model(model)
-        loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
-        test_model.compile(optimizer='adam', loss=loss_fn, metrics=['accuracy'])
+        loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(
+            from_logits=True)
+
+        test_model.compile(optimizer='adam',
+                           loss=loss_fn, metrics=['accuracy'])
 
         # using sols[0] shape as a template for input
-        # this would be input, output shape of neural nets e.g. 784,10 for mnist
+        # this would be input, output shape of neural
+        # nets e.g. 784,10 for mnist
         systems = []
 
         for i in range(TRAIN_SIZE):
             # find variance in solved systems
-            [test_model, solved_system] = interpolate_model_train(sols[-1], test_model, train_dataset, i)
+            [test_model, solved_system] = interpolate_model_train(
+                sols[-1],
+                test_model,
+                train_dataset,
+                i)
             systems.append(solved_system)
             # print the variance of each solved system
             print(systems)
             print(np.var(systems, axis=-1))
             # generate the equation!
             # another round of training
-            # [sheaf, sols, outward, sort_avg] = graph_model(test_model, train_dataset, activations, shapes, layers)
+            # [sheaf, sols, outward, sort_avg] = graph_model(test_model,
+            # train_dataset, activations, shapes, layers)
             # and testing
             test = tester(test_model, sheaf, outward, sort_avg)
-            plot_test(control, test, shapes[-1], "out-epoch-"+str(i)+".png")
+            plot_test(control, test, shapes[-1],
+                      "out-epoch-" + str(i) + ".png")
 
         print("CONTROL:")
         test_dataset = get_ds(test_dataset)
@@ -617,9 +641,11 @@ def model_create_equation(model_dir, training_data):
         test_model.evaluate(test_dataset[0], test_dataset[1], verbose=2)
         test_model.save("MNIST_only_interpolant.keras")
         # generate the human readable eq
-        generate_readable_eqs(systems[-1], format("EQUATION_{i}.latex", str(i)))
+        generate_readable_eqs(systems[-1],
+                              format("EQUATION_{i}.latex", str(i)))
 
-if __name__=="__main__":
+
+if __name__ == "__main__":
     if len(sys.argv) > 2:
         path = os.path.dirname(__file__)
         model = os.path.join(path, sys.argv[1])
@@ -628,11 +654,17 @@ if __name__=="__main__":
             if len(sys.argv) > 2:
                 model_create_equation(os.path.abspath(model), sys.argv[2])
             else:
-                print("""not enough commands, please give a filename of a model to extract, it's training dataset (which may be altered at future date)
-                output for a tex file, and a csv file containing each type of acitvation used delimitered by ; (optional)""")
+                print("""not enough commands, please give a filename of a model
+                      to extract, it's training dataset (which may be altered
+                      at future date)
+                output for a tex file, and a csv file containing each type of
+                      acitvation used delimitered by ; (optional)""")
         except FileNotFoundError:
             print("""file not found,
-                        please give filename of model to extract equation from""")
+                    please give filename of model to extract equation from""")
     else:
-        print("""not enough commands, please give a filename of a model to extract, it's training dataset (which may be altered at future date)
-output for a tex file, and a csv file containing each type of acitvation used delimitered by ; (optional)""")
+        print("""not enough commands, please give a filename of a
+              model to extract, it's training dataset (which may be altered at
+              future date)
+        output for a tex file, and a csv file containing each type of
+              acitvation used delimitered by ; (optional)""")
