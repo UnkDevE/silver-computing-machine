@@ -31,7 +31,7 @@ import matplotlib.pyplot as plt
 # TUNE THESE INPUT PARAMS
 MAX_ITER = 2048
 BATCH_SIZE = 1024
-TRAIN_SIZE = 16
+TRAIN_SIZE = 2
 GP_SCALE = 0.1
 GP_VAR = 0.01
 
@@ -423,19 +423,19 @@ def get_ds(dataset):
     return [images, labels]
 
 
-def save_interpol_video(trainset, interset):
+def save_interpol_video(trainset, interset, step):
     import matplotlib.animation as animation
 
     fig = plt.figure()
-    img1 = plt.imshow(trainset[0], cmap='Greys', alpha=0.1,
+    img1 = plt.imshow(trainset[0], cmap='gray',
                       interpolation=None,
                       animated=True)
-    img2 = plt.imshow(interset[0], cmap='coolwarm', alpha=0.1,
+    img2 = plt.imshow(interset[0], cmap='coolwarm', alpha=0.5,
                       interpolation=None, animated=True)
 
     def update(i):
         # offset for imagery
-        img1.set_array(trainset[i] / 255)
+        img1.set_array(trainset[i])
         img2.set_array(interset[i])
         return [img1]
 
@@ -446,7 +446,11 @@ def save_interpol_video(trainset, interset):
         save_count=200,
         blit=True)
 
-    ani.save("testimages.mp4")
+    ani.save("images" + str(step) + ".mp4")
+
+    # clear figures and axes
+    plt.cla()
+    plt.clf()
 
 
 def interpolate_model_train(sols, model, train, step):
@@ -485,19 +489,18 @@ def interpolate_model_train(sols, model, train, step):
     mask_samples = np.reshape(mask_samples, [images.shape[0] * outshape,
                                              *model_shape[1:]])
 
-    solved_samples = np.repeat(images, outshape).reshape(
-        [images.shape[0] * outshape, *model_shape[1:]])
+    solved_samples = np.repeat(images, outshape, axis=0)
+    solved_samples = np.reshape(solved_samples, solved_samples.shape[:-1])
 
     # check model, reshape inputs
     mask = mask_samples > solved_samples
     import numpy.ma as ma
     masked_samples = ma.array(solved_samples, mask=mask, fill_value=0)
 
-    save_interpol_video(solved_samples, mask_samples)
-    exit()
+    save_interpol_video(solved_samples, mask_samples, step)
 
     rep_labels = np.repeat(labels, outshape)
-    model.fit(masked_samples, rep_labels, batch_size=BATCH_SIZE // 4, epochs=5)
+    model.fit(masked_samples, rep_labels, batch_size=BATCH_SIZE, epochs=5)
     return [model, lu_decomp[1]]
 
 
@@ -641,8 +644,8 @@ def model_create_equation(model_dir, training_data):
         test_model.evaluate(test_dataset[0], test_dataset[1], verbose=2)
         test_model.save("MNIST_only_interpolant.keras")
         # generate the human readable eq
-        generate_readable_eqs(systems[-1],
-                              format("EQUATION_{i}.latex", str(i)))
+        # generate_readable_eqs(systems[-1],
+        #                     format("EQUATION_{i}.latex", str(i)))
 
 
 if __name__ == "__main__":
