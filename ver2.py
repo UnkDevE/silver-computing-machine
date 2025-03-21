@@ -551,12 +551,11 @@ def plot_test(starttest, endtest, outshape, name):
 def generate_readable_eqs(solved_system, name):
     from sympy import init_printing, latex
     from sympy.abc import x
-    from sympy.solvers.recurr import rsolve_poly, rsolve_ratio
+    from sympy.solvers.recurr import rsolve_poly
 
     init_printing()
     # find the relations will probably result in error
-    equation = rsolve_poly(solved_system, x, x)
-    ratio = rsolve_ratio(equation, x, x)
+    ratio = rsolve_poly(solved_system, x, x)
     tex_data = latex(ratio)
 
     with open(name, "w") as file:
@@ -644,8 +643,7 @@ def model_create_equation(model_dir, training_data):
         test_model.evaluate(test_dataset[0], test_dataset[1], verbose=2)
         test_model.save("MNIST_only_interpolant.keras")
         # generate the human readable eq
-        # generate_readable_eqs(systems[-1],
-        #                     format("EQUATION_{i}.latex", str(i)))
+        generate_readable_eqs(systems[-1], "EQ.latex")
 
 
 if __name__ == "__main__":
