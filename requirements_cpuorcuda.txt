@@ -5,3 +5,4 @@ notebook
 pandas
 matplotlib
 tensorflow
+sympy

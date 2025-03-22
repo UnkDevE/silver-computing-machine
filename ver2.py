@@ -484,7 +484,7 @@ def interpolate_model_train(sols, model, train, step):
     [images, labels] = get_ds(train)
 
     # interpolate
-    [spline, _] = make_splprep(lu_decomp[1].T, k=outshape + 1)
+    [spline, u] = make_splprep(lu_decomp[1].T, k=outshape + 1)
     mask_samples = reduce_basis(np.array(spline(images).swapaxes(0, 1)))
     mask_samples = np.reshape(mask_samples, [images.shape[0] * outshape,
                                              *model_shape[1:]])
@@ -501,7 +501,7 @@ def interpolate_model_train(sols, model, train, step):
 
     rep_labels = np.repeat(labels, outshape)
     model.fit(masked_samples, rep_labels, batch_size=BATCH_SIZE, epochs=5)
-    return [model, lu_decomp[1]]
+    return [model, [spline, u]]
 
 
 def bucketize(prelims):
@@ -547,15 +547,39 @@ def plot_test(starttest, endtest, outshape, name):
     plt.cla()
     plt.clf()
 
+def to_poly(spline, params):
+    from sympy import symbols
+    # use De Casteljau's algorithm
+    # linear interpolation algorithm but with symbolic twist
+    def lerp(a, b, syms):
+        return (1-syms)*a + b
+
+    # we now need to find each starting and ending of control points
+    # so we just find the next control point
+    ends = np.roll(params, 1) 
+    # set up for semi recursion 
+    evaluated = ends
+    # get the length of knots so we don't do too many iterations
+    knots = params.shape[-1] 
+    # create vector x type of symbols representing each dimension
+    syms = np.array(list(symbols("x:" + str(knots), Real=True)), dtype="object")
+    # this is incredibly slow - TODO: parallelize using Bernstein polynomials
+    for i in range(knots):
+        evaluated = lerp(params, evaluated, syms)
+    
+    return evaluated
 
 def generate_readable_eqs(solved_system, name):
-    from sympy import init_printing, latex
     from sympy.abc import x
-    from sympy.solvers.recurr import rsolve_poly
+    from sympy.solvers import rsolve_ratio
+    from sympy import init_printing, latex, Matrix
 
     init_printing()
+
     # find the relations will probably result in error
-    ratio = rsolve_poly(solved_system, x, x)
+    mat_eq = Matrix(to_poly(*solved_system))
+    ratio = rsolve_ratio(mat_eq)
+
     tex_data = latex(ratio)
 
     with open(name, "w") as file:
@@ -585,7 +609,7 @@ def model_create_equation(model_dir, training_data):
             (layer.weights[0].numpy(), layer.weights[1].numpy(),
                 layer.activation, layer.kernel.shape.as_list())
                 for layer in model.layers if len(layer.weights) > 1]:
-            # werid indentation here
+            # weird indentation here
             # if no activation assume linear
             activations.append(
                 lambda x: x if act is None else act(x)
@@ -624,13 +648,6 @@ def model_create_equation(model_dir, training_data):
                 train_dataset,
                 i)
             systems.append(solved_system)
-            # print the variance of each solved system
-            print(systems)
-            print(np.var(systems, axis=-1))
-            # generate the equation!
-            # another round of training
-            # [sheaf, sols, outward, sort_avg] = graph_model(test_model,
-            # train_dataset, activations, shapes, layers)
             # and testing
             test = tester(test_model, sheaf, outward, sort_avg)
             plot_test(control, test, shapes[-1],
@@ -643,7 +660,7 @@ def model_create_equation(model_dir, training_data):
         test_model.evaluate(test_dataset[0], test_dataset[1], verbose=2)
         test_model.save("MNIST_only_interpolant.keras")
         # generate the human readable eq
-        generate_readable_eqs(systems[-1], "EQ.latex")
+        generate_readable_eqs(systems[-1], "EQUATION_OUTPUT.latex")
 
 
 if __name__ == "__main__":
