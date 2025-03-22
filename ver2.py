@@ -549,36 +549,44 @@ def plot_test(starttest, endtest, outshape, name):
 
 def to_poly(spline, params):
     from sympy import symbols
+    from sympy.functions.combinatorial.factorials import binomial
+
+    """
+    THIS IS TOO SLOW DO SOMETHING ELSE
     # use De Casteljau's algorithm
     # linear interpolation algorithm but with symbolic twist
     def lerp(a, b, syms):
         return (1-syms)*a + b
-
     # we now need to find each starting and ending of control points
     # so we just find the next control point
     ends = np.roll(params, 1) 
     # set up for semi recursion 
     evaluated = ends
+    """
     # get the length of knots so we don't do too many iterations
     knots = params.shape[-1] 
     # create vector x type of symbols representing each dimension
     syms = np.array(list(symbols("x:" + str(knots), Real=True)), dtype="object")
     # this is incredibly slow - TODO: parallelize using Bernstein polynomials
-    for i in range(knots):
-        evaluated = lerp(params, evaluated, syms)
-    
-    return evaluated
+    bernoli = linalg.pascal(knots)
+    # use matrix multiplication and rolls for speedup
+    # split calc 
+    exponent = (1 - syms) ** (np.arange(0, knots))
+    symroll = syms * np.roll(np.arange(0, knots) , 1)
+    basis = bernoli @ exponent @ symroll 
+
+    return np.sum(basis @ params)
 
 def generate_readable_eqs(solved_system, name):
     from sympy.abc import x
-    from sympy.solvers import rsolve_ratio
+    from sympy.solvers import rsolve
     from sympy import init_printing, latex, Matrix
 
     init_printing()
 
     # find the relations will probably result in error
-    mat_eq = Matrix(to_poly(*solved_system))
-    ratio = rsolve_ratio(mat_eq)
+    mat_eq = to_poly(*solved_system)
+    ratio = rsolve(mat_eq, 0)
 
     tex_data = latex(ratio)
 
