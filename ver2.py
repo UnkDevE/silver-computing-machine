@@ -548,8 +548,8 @@ def plot_test(starttest, endtest, outshape, name):
     plt.clf()
 
 def to_poly(spline, params):
-    from sympy import symbols
-    from sympy.functions.combinatorial.factorials import binomial
+    from sympy import symbols, Matrix
+    from scipy.special import binom 
 
     """
     THIS IS TOO SLOW DO SOMETHING ELSE
@@ -567,26 +567,29 @@ def to_poly(spline, params):
     knots = params.shape[-1] 
     # create vector x type of symbols representing each dimension
     syms = np.array(list(symbols("x:" + str(knots), Real=True)), dtype="object")
-    # this is incredibly slow - TODO: parallelize using Bernstein polynomials
-    bernoli = linalg.pascal(knots)
+
+    bernoli = np.array([binom(n, v) for v, n in enumerate(reversed(range(knots)))])
+    
     # use matrix multiplication and rolls for speedup
     # split calc 
     exponent = (1 - syms) ** (np.arange(0, knots))
     symroll = syms * np.roll(np.arange(0, knots) , 1)
-    basis = bernoli @ exponent @ symroll 
+    
+    # was slow now no longer
+    basis = bernoli * exponent * symroll
 
     return np.sum(basis @ params)
 
 def generate_readable_eqs(solved_system, name):
     from sympy.abc import x
-    from sympy.solvers import rsolve
+    from sympy import simplify
     from sympy import init_printing, latex, Matrix
 
     init_printing()
 
     # find the relations will probably result in error
     mat_eq = to_poly(*solved_system)
-    ratio = rsolve(mat_eq, 0)
+    ratio = simplify(mat_eq)
 
     tex_data = latex(ratio)
 
