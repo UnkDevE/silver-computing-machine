@@ -501,7 +501,7 @@ def interpolate_model_train(sols, model, train, step):
 
     rep_labels = np.repeat(labels, outshape)
     model.fit(masked_samples, rep_labels, batch_size=BATCH_SIZE, epochs=5)
-    return [model, [spline, u]]
+    return [model, lu_decomp[1]]
 
 
 def bucketize(prelims):
@@ -547,22 +547,10 @@ def plot_test(starttest, endtest, outshape, name):
     plt.cla()
     plt.clf()
 
-def to_poly(spline, params):
-    from sympy import symbols, Matrix
+def bspline_to_poly(spline, params):
+    from sympy import symbols
     from scipy.special import binom 
-
-    """
-    THIS IS TOO SLOW DO SOMETHING ELSE
     # use De Casteljau's algorithm
-    # linear interpolation algorithm but with symbolic twist
-    def lerp(a, b, syms):
-        return (1-syms)*a + b
-    # we now need to find each starting and ending of control points
-    # so we just find the next control point
-    ends = np.roll(params, 1) 
-    # set up for semi recursion 
-    evaluated = ends
-    """
     # get the length of knots so we don't do too many iterations
     knots = params.shape[-1] 
     # create vector x type of symbols representing each dimension
@@ -582,16 +570,17 @@ def to_poly(spline, params):
 
 def generate_readable_eqs(solved_system, name):
     from sympy.abc import x
-    from sympy import simplify
-    from sympy import init_printing, latex, Matrix
+    from sympy import simplify, Matrix, solve_linear_system_LU
+    from sympy import init_printing, latex, symbols
 
     init_printing()
 
+    syms = list(symbols("x:" + str(solved_system.shape[1])))
     # find the relations will probably result in error
-    mat_eq = to_poly(*solved_system)
-    ratio = simplify(mat_eq)
+    mat_eq = Matrix(solved_system) 
+    ratio = solve_linear_system_LU(mat_eq, syms) 
 
-    tex_data = latex(ratio)
+    tex_data = latex(ratio, mat_eq)
 
     with open(name, "w") as file:
         file.write(tex_data)
