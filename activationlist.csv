@@ -1,8 +1,0 @@
-activation;function;
-linear;x;
-step;piecewise([(0,1), 0), (1, oo), x)]);
-logistic;1/(1+e^-x);
-tanh;e^x - e^-x/e^x+e^-x;
-smht;e^ax - e^-bx/e^cx + e^-dx;
-relu;piecewise([(oo,0,), 0), ((0, oo), x)]);
-softplus;ln(1+e^x);

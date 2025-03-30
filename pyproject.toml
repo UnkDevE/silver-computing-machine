@@ -1,0 +1,15 @@
+[project]
+name = "clean-silver-computing-machine"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+tensorflow_datasets
+scipy
+numpy<2
+notebook
+pandas
+matplotlib
+tensorflow
+sympy]

@@ -1,8 +1,0 @@
-tensorflow_datasets
-scipy
-numpy<2
-notebook
-pandas
-matplotlib
-tensorflow
-sympy
