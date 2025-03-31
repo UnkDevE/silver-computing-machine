@@ -663,7 +663,7 @@ def model_create_equation(model_dir, training_data):
         test_model.evaluate(test_dataset[0], test_dataset[1], verbose=2)
         test_model.save("MNIST_only_interpolant.keras")
         # generate the human readable eq
-        generate_readable_eqs(systems[-1], "EQUATION_OUTPUT.latex")
+        generate_readable_eqs(sheaf, "EQUATION_OUTPUT.latex")
 
 
 if __name__ == "__main__":
