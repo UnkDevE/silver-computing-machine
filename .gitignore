@@ -1,5 +1,9 @@
+*.png
+*.mp4
+EQUATION_OUTPUT.latex
 .ropeproject
-*MNIST
+*.keras
+MNIST.keras
 imagetests/
 emperors-new-noesis/builddir
 *.profraw
