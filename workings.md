@@ -140,3 +140,8 @@ main method:
     this can be done using linear algebra at this point
 6) we then inverse fourier both the equation and output
 7) we set the solver to solve this equation
+
+
+
+
+

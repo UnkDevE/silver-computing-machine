@@ -31,7 +31,7 @@ import matplotlib.pyplot as plt
 # TUNE THESE INPUT PARAMS
 MAX_ITER = 2048
 BATCH_SIZE = 1024
-TRAIN_SIZE = 2
+TRAIN_SIZE = 1
 GP_SCALE = 0.1
 GP_VAR = 0.01
 
@@ -398,7 +398,7 @@ def graph_model(model, training_data, activations, shapes, layers):
     # sheafifed = irfftn(solution, shapes[0])
     sheafifed = np.imag(rfftn(solution, shapes[0]))
 
-    ret = [sheafifed, sols, outward, sort_avg]
+    ret = [sheafifed, sols, outward, sort_avg, (solution.T @ outward).T]
     return ret
 
 
@@ -501,7 +501,7 @@ def interpolate_model_train(sols, model, train, step):
 
     rep_labels = np.repeat(labels, outshape)
     model.fit(masked_samples, rep_labels, batch_size=BATCH_SIZE, epochs=5)
-    return [model, lu_decomp[1]]
+    return [model, reduce_basis(lu_decomp[1])]
 
 
 def bucketize(prelims):
@@ -572,21 +572,24 @@ def bspline_to_poly(spline, params):
     return np.sum(basis @ params)
 
 
-def generate_readable_eqs(solved_system, name):
+def generate_readable_eqs(sol_system, name):
     from sympy import Matrix, solve_linear_system_LU
     from sympy import init_printing, latex, symbols
-
     init_printing()
 
-    syms = list(symbols("x:" + str(solved_system.shape[1])))
-    # find the relations will probably result in error
-    mat_eq = Matrix(solved_system)
-    ratio = solve_linear_system_LU(mat_eq, syms)
+    for solved_system in sol_system:
+        syms = list(symbols("x:" + str(solved_system.shape[1])))
+        # find the relations will probably result in error
+        mat_eq = Matrix(solved_system)
+        ratio = solve_linear_system_LU(mat_eq, syms)
 
-    tex_data = latex(ratio, mat_eq)
+        if ratio is not None:
+            tex_data = latex(ratio, mat_eq)
 
-    with open(name, "w") as file:
-        file.write(tex_data)
+            with open(name, "w") as file:
+                file.write(tex_data)
+
+            return
 
 
 def model_create_equation(model_dir, training_data):
@@ -621,7 +624,7 @@ def model_create_equation(model_dir, training_data):
             layers.append([weights, biases])
             shapes.append([shape, weights.shape, biases.shape])
 
-        [sheaf, sols, outward, sort_avg] = graph_model(
+        [sheaf, sols, outward, sort_avg, sheafsol] = graph_model(
             model,
             train_dataset,
             activations,
@@ -663,7 +666,8 @@ def model_create_equation(model_dir, training_data):
         test_model.evaluate(test_dataset[0], test_dataset[1], verbose=2)
         test_model.save("MNIST_only_interpolant.keras")
         # generate the human readable eq
-        generate_readable_eqs(sheaf, "EQUATION_OUTPUT.latex")
+        generate_readable_eqs([sols[-1][-1], systems[-1] @ sheafsol.T],
+                              "EQUATION_OUTPUT.latex")
 
 
 if __name__ == "__main__":
@@ -686,6 +690,4 @@ if __name__ == "__main__":
     else:
         print("""not enough commands, please give a filename of a
               model to extract, it's training dataset (which may be altered at
-              future date)
-        output for a tex file, and a csv file containing each type of
-              acitvation used delimitered by ; (optional)""")
+              future date)""")
