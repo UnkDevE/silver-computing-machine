@@ -575,21 +575,33 @@ def bspline_to_poly(spline, params):
 def generate_readable_eqs(sol_system, name):
     from sympy import Matrix, solve_linear_system_LU
     from sympy import init_printing, latex, symbols
+
+    syms = list(symbols("x:" + str(sol_system[-1].shape[-1])))
+    # flatten sol system
+    sols = np.hstack(sol_system)[::-1]
+    # reverse sols into a readable system
+
+    # init symbol system
+    sym_system = sols[0]
+
+    for sol in sols[1:]:
+        sym_system = sym_system @ sol
+
+    syms = sym_system @ sol_system[-1].T
+
     init_printing()
 
-    for solved_system in sol_system:
-        syms = list(symbols("x:" + str(solved_system.shape[1])))
-        # find the relations will probably result in error
-        mat_eq = Matrix(solved_system)
-        ratio = solve_linear_system_LU(mat_eq, syms)
+    # find the relations will probably result in error
+    mat_eq = Matrix(sym_system)
+    ratio = solve_linear_system_LU(mat_eq, syms)
 
-        if ratio is not None:
-            tex_data = latex(ratio, mat_eq)
+    if ratio is not None:
+        tex_data = latex(ratio, mat_eq)
 
-            with open(name, "w") as file:
-                file.write(tex_data)
+        with open(name, "w") as file:
+            file.write(tex_data)
 
-            return
+        return
 
 
 def model_create_equation(model_dir, training_data):
@@ -666,7 +678,7 @@ def model_create_equation(model_dir, training_data):
         test_model.evaluate(test_dataset[0], test_dataset[1], verbose=2)
         test_model.save("MNIST_only_interpolant.keras")
         # generate the human readable eq
-        generate_readable_eqs([sols[-1][-1], systems[-1] @ sheafsol.T],
+        generate_readable_eqs([sols, systems[-1] @ sheafsol.T],
                               "EQUATION_OUTPUT.latex")
 
 
