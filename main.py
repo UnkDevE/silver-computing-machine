@@ -573,26 +573,33 @@ def bspline_to_poly(spline, params):
 
 
 def generate_readable_eqs(sol_system, name, activ_fn):
-    from sympy import Matrix
-    from sympy import init_printing, latex, symbols
+    from sage.matrix.constructor import matrix
+    from sage.all import var, latex
+    import itertools
 
-    syms = list(symbols("x:" + str(sol_system[-1].shape[-1])))
+    syms = list([var("x" + str(i))
+                for i in range(sol_system[-1].shape[-1])])
+
     # flatten sol system only 1 deep
-    sols = [m for sol in sol_system for m in sol]
+    solslhs = list(itertools.chain(*sol_system[0]))
+    rhs_system = sol_system[1]
 
     # init symbol system
-    lhs_system = sols[-1] * syms
-    rhs_system = sol_system[0] * syms
+    lhs_system = solslhs[0] * syms
 
     # reverse sols into a readable system
-    for sol in reversed(sols[1:-1]):
-        lhs_system = lhs_system @ sol
+    for i, sol in enumerate(reversed(solslhs[1:])):
+        if i % 2 == 1:  # if odd
+            lhs_system = lhs_system @ sol.T
+        else:
+            lhs_system = lhs_system @ sol
 
     syms = lhs_system @ rhs_system.T
-    init_printing()
 
     # find the relations will probably result in error
-    mat_eq = Matrix(syms)
+    # this takes forever
+    mat_eq = matrix(syms)
+    print(mat_eq)
     ratio = mat_eq.solve(mat_eq, sum(activ_fn(syms)))
 
     if ratio is not None:
