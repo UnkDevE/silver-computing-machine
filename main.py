@@ -575,35 +575,36 @@ def bspline_to_poly(spline, params):
 def generate_readable_eqs(sol_system, name, activ_fn):
     from sage.matrix.constructor import matrix
     from sage.all import var, latex
-    import itertools
 
     syms = list([var("x" + str(i))
                 for i in range(sol_system[-1].shape[-1])])
 
     # flatten sol system only 1 deep
-    solslhs = list(itertools.chain(*sol_system[0]))
-    rhs_system = sol_system[1]
+    solslhs = sol_system[0]
+    rhs_system = matrix(sol_system[1])
 
     # init symbol system
-    lhs_system = solslhs[0] * syms
+    lhs_system = syms
 
     # reverse sols into a readable system
-    for i, sol in enumerate(reversed(solslhs[1:])):
-        if i % 2 == 1:  # if odd
-            lhs_system = lhs_system @ sol.T
-        else:
-            lhs_system = lhs_system @ sol
-
-    syms = lhs_system @ rhs_system.T
+    [print(sol.shape) for sol in solslhs]
+    for k, sheafs in enumerate(solslhs[1:]):
+        for i, sheaf in enumerate(sheafs):
+            sheaf_system = matrix(sheafs[i])
+            if i + k % 2 == 0:  # if odd starting at 1
+                sheaf_system = sheaf_system.T @ sheaf
+            else:
+                sheaf_system = sheaf @ sheaf_system
+            breakpoint()
+            lhs_system = lhs_system @ sheaf_system
 
     # find the relations will probably result in error
     # this takes forever
-    mat_eq = matrix(syms)
-    print(mat_eq)
-    ratio = mat_eq.solve(mat_eq, sum(activ_fn(syms)))
+    print(lhs_system)
+    ratio = lhs_system.solve(rhs_system, sum(activ_fn(syms)))
 
     if ratio is not None:
-        tex_data = latex(ratio, mat_eq)
+        tex_data = latex(ratio, lhs_system, rhs_system)
 
         with open(name, "w") as file:
             file.write(tex_data)
@@ -709,4 +710,4 @@ if __name__ == "__main__":
     else:
         print("""not enough commands, please give a filename of a
               model to extract, it's training dataset (which may be altered at
-              future date)""")
+                 future date)""")
