@@ -1,3 +1,4 @@
+#!/bin/python
 """
     SILVER-COMPUTING-MACHINE converts Nerual nets into human readable code
     or maths
@@ -587,16 +588,12 @@ def generate_readable_eqs(sol_system, name, activ_fn):
     lhs_system = syms
 
     # reverse sols into a readable system
-    [print(sol.shape) for sol in solslhs]
-    for k, sheafs in enumerate(solslhs[1:]):
+    for k, sheafs in enumerate(solslhs):
         for i, sheaf in enumerate(sheafs):
-            sheaf_system = matrix(sheafs[i])
             if i + k % 2 == 0:  # if odd starting at 1
-                sheaf_system = sheaf_system.T @ sheaf
+                lhs_system = lhs_system.T @ sheaf
             else:
-                sheaf_system = sheaf @ sheaf_system
-            breakpoint()
-            lhs_system = lhs_system @ sheaf_system
+                lhs_system = sheaf @ lhs_system
 
     # find the relations will probably result in error
     # this takes forever

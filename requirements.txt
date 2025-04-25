@@ -1,8 +1,6 @@
 tensorflow_datasets
 scipy
-numpy
+numpy<2
 pandas
 matplotlib
-tensorflow
-sagemath
 debugpy>=1.8.13

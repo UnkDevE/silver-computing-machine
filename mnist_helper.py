@@ -1,7 +1,5 @@
+#!/bin/python
 import tensorflow as tf
-import tensorflow_datasets as tfds
-import tensorflow as tf
-
 print("TensorFlow version:", tf.__version__)
 mnist = tf.keras.datasets.mnist
 
