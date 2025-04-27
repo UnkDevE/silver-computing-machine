@@ -585,15 +585,18 @@ def generate_readable_eqs(sol_system, name, activ_fn):
     rhs_system = matrix(sol_system[1])
 
     # init symbol system
-    lhs_system = syms
+    lhs_system = matrix(syms)
 
     # reverse sols into a readable system
     for k, sheafs in enumerate(solslhs):
         for i, sheaf in enumerate(sheafs):
-            if i + k % 2 == 0:  # if odd starting at 1
-                lhs_system = lhs_system.T @ sheaf
+            if k + i % 2 == 0:  # if odd starting at 1
+                breakpoint()
+                lhs_system = lhs_system @ sheaf.T
             else:
-                lhs_system = sheaf @ lhs_system
+                breakpoint()
+                lhs_system = sheaf @ lhs_system.T
+        lhs_system = lhs_system.T
 
     # find the relations will probably result in error
     # this takes forever

@@ -1,4 +1,2 @@
 #!/bin/sh
-uv sync
-uv run mnist-helper.py
-python main.py MNIST.keras mnist 
+HIP_VISIBLE_DEVICES=2 python main.py MNIST.keras mnist 
