@@ -1,23 +1,36 @@
 #!/bin/python
 import tensorflow as tf
 print("TensorFlow version:", tf.__version__)
-mnist = tf.keras.datasets.mnist
+import tensorflow_datasets as tfds
 
-(x_train, y_train), (x_test, y_test) = mnist.load_data()
-x_train, x_test = x_train / 255.0, x_test / 255.0
+ds_train = tfds.load('mnist', split='train', shuffle_files=True, as_supervised=True)
+
+def normalize_img(image, label):
+  """Normalizes images: `uint8` -> `float32`."""
+  return tf.cast(image, tf.float32) / 255., label
+
+ds_train = ds_train.map(
+    normalize_img, num_parallel_calls=tf.data.AUTOTUNE)
+
+ds_train = ds_train.cache()
+ds_train = ds_train.shuffle(256)
+ds_train = ds_train.batch(128)
+ds_train = ds_train.prefetch(tf.data.AUTOTUNE)
+
 model = tf.keras.models.Sequential([
-  tf.keras.layers.Flatten(input_shape=(28, 28)),
+    tf.keras.layers.Flatten(input_shape=(28, 28)),
   tf.keras.layers.Dense(128, activation='relu'),
-  tf.keras.layers.Dropout(0.2),
   tf.keras.layers.Dense(10)
 ])
-predictions = model(x_train[:1]).numpy()
-tf.nn.softmax(predictions).numpy()
-loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
-loss_fn(y_train[:1], predictions).numpy()
-model.compile(optimizer='adam',
-              loss=loss_fn,
-              metrics=['accuracy'])
-model.fit(x_train, y_train, epochs=5)
-model.evaluate(x_test,  y_test, verbose=2)
+model.compile(
+    optimizer=tf.keras.optimizers.Adam(0.001),
+    loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+    metrics=[tf.keras.metrics.SparseCategoricalAccuracy()],
+)
+
+model.fit(
+    ds_train,
+    epochs=5,
+)
+
 model.save("MNIST.keras")
