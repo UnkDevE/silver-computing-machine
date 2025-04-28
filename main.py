@@ -32,6 +32,7 @@ import matplotlib.pyplot as plt
 # TUNE THESE INPUT PARAMS
 MAX_ITER = 2048
 BATCH_SIZE = 1024
+TEST_ROUNDS = 1
 TRAIN_SIZE = 1
 GP_SCALE = 0.1
 GP_VAR = 0.01
@@ -591,14 +592,14 @@ def generate_readable_eqs(sol_system, name, activ_fn):
     for k, sheafs in enumerate(solslhs):
         sheafs = list(sheafs)
         for i, sheaf in enumerate(sheafs):
+            sheaf = sheaf.T
             if i % 2 == 0:  # if odd starting at 1
                 breakpoint()
-                lhs_system = lhs_system @ sheaf.T
+                lhs_system = lhs_system @ sheaf
             else:
                 breakpoint()
-                lhs_system = sheaf @ lhs_system.T
-        lhs_system = lhs_system.T
-        sheafs[k] = sheafs[k].T
+                lhs_system = sheaf.T @ lhs_system
+            lhs_system = lhs_system.T
 
     # find the relations will probably result in error
     # this takes forever
@@ -654,42 +655,46 @@ def model_create_equation(model_dir, training_data):
             layers)
 
         control = tester(model, sheaf, outward, sort_avg)
+        train_dataset.cache()
 
-        # should we wipe the model every i in TRAIN_SIZE or leave it?
-        test_model = tf.keras.models.clone_model(model)
-        loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(
-            from_logits=True)
+        for t in range(TEST_ROUNDS):
+            # should we wipe the model every i in TRAIN_SIZE or leave it?
+            test_model = tf.keras.models.clone_model(model)
+            loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(
+                from_logits=True)
 
-        test_model.compile(optimizer='adam',
-                           loss=loss_fn, metrics=['accuracy'])
+            test_model.compile(optimizer='adam',
+                               loss=loss_fn, metrics=['accuracy'])
 
-        # using sols[0] shape as a template for input
-        # this would be input, output shape of neural
-        # nets e.g. 784,10 for mnist
-        systems = []
+            # using sols[0] shape as a template for input
+            # this would be input, output shape of neural
+            # nets e.g. 784,10 for mnist
+            systems = []
 
-        for i in range(TRAIN_SIZE):
-            # find variance in solved systems
-            [test_model, solved_system] = interpolate_model_train(
-                sols[-1],
-                test_model,
-                train_dataset,
-                i)
-            systems.append(solved_system)
-            # and testing
-            test = tester(test_model, sheaf, outward, sort_avg)
-            plot_test(control, test, shapes[-1],
-                      "out-epoch-" + str(i) + ".png")
+            train_dataset.shuffle(BATCH_SIZE)
 
-        print("CONTROL:")
-        test_dataset = get_ds(test_dataset)
-        model.evaluate(test_dataset[0], test_dataset[1], verbose=2)
-        print("EVALUATION:")
-        test_model.evaluate(test_dataset[0], test_dataset[1], verbose=2)
-        test_model.save("MNIST_only_interpolant.keras")
-        # generate the human readable eq
-        generate_readable_eqs([sols, systems[-1] @ sheafsol.T],
-                              "EQUATION_OUTPUT.latex", activations[-1])
+            for i in range(TRAIN_SIZE):
+                # find variance in solved systems
+                [test_model, solved_system] = interpolate_model_train(
+                    sols[-1],
+                    test_model,
+                    train_dataset,
+                    i)
+                systems.append(solved_system)
+                # and testing
+                test = tester(test_model, sheaf, outward, sort_avg)
+                plot_test(control, test, shapes[-1],
+                          "out-epoch-" + str(i) + ".png")
+
+            print("CONTROL:")
+            test_dataset = get_ds(test_dataset)
+            model.evaluate(test_dataset[0], test_dataset[1], verbose=2)
+            print("EVALUATION:")
+            test_model.evaluate(test_dataset[0], test_dataset[1], verbose=2)
+            test_model.save("MNIST_only_interpolant.keras")
+            # generate the human readable eq
+            generate_readable_eqs([sols, systems[-1] @ sheafsol.T],
+                                  "EQUATION_OUTPUT.latex", activations[-1])
 
 
 if __name__ == "__main__":
