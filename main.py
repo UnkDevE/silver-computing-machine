@@ -592,14 +592,13 @@ def generate_readable_eqs(sol_system, name, activ_fn):
     for k, sheafs in enumerate(solslhs):
         sheafs = list(sheafs)
         for i, sheaf in enumerate(sheafs):
-            sheaf = sheaf.T
-            if i % 2 == 0:  # if odd starting at 1
+            if i % 2 == 0:  # if even starting at 0
                 breakpoint()
-                lhs_system = lhs_system @ sheaf
+                lhs_system = lhs_system @ sheaf.T
             else:
                 breakpoint()
-                lhs_system = sheaf.T @ lhs_system
-            lhs_system = lhs_system.T
+                lhs_system = lhs_system @ sheaf
+        lhs_system = lhs_system.T
 
     # find the relations will probably result in error
     # this takes forever
