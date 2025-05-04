@@ -29,6 +29,9 @@ from scipy import linalg
 import numpy as np
 import matplotlib.pyplot as plt
 
+# sage import so solve works
+import sage.all as sage
+
 # TUNE THESE INPUT PARAMS
 MAX_ITER = 2048
 BATCH_SIZE = 1024
@@ -591,22 +594,26 @@ def generate_readable_eqs(sol_system, name, activ_fn):
     # reverse sols into a readable system
     for k, sheafs in enumerate(solslhs):
         for i, sheaf in enumerate(sheafs):
-            print("SHEAF:", sheaf.shape)
             if k == len(solslhs) - 1 and i == 0:
                 lhs_system = lhs_system.T @ sheaf.T
             elif i % 2 == 0:
                 lhs_system = lhs_system * sheaf.T
             else:
                 lhs_system = lhs_system @ sheaf
-            print("SYSTEM:", lhs_system.shape)
 
     # find the relations will probably result in error
     # this takes forever
-    print(lhs_system)
-    ratio = lhs_system.solve(rhs_system, sum(activ_fn(syms)))
+    lhs_system = matrix(lhs_system)
+    # import from sage.all
+    ratio = lhs_system.minpoly()
+    rhs = rhs_system.minpoly()
+    ratio = ratio.simplify(algorithm="giac")
+    rhs = rhs.simplify(algorithm="giac")
+
+    solution = sage.solve(ratio == rhs, syms)
 
     if ratio is not None:
-        tex_data = latex(ratio, lhs_system, rhs_system)
+        tex_data = latex(solution)
 
         with open(name, "w") as file:
             file.write(tex_data)
