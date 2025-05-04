@@ -586,19 +586,19 @@ def generate_readable_eqs(sol_system, name, activ_fn):
     rhs_system = matrix(sol_system[1])
 
     # init symbol system
-    lhs_system = matrix(syms)
+    lhs_system = matrix(syms).T
 
     # reverse sols into a readable system
     for k, sheafs in enumerate(solslhs):
-        sheafs = list(sheafs)
         for i, sheaf in enumerate(sheafs):
-            if i % 2 == 0:  # if even starting at 0
-                breakpoint()
-                lhs_system = lhs_system @ sheaf.T
+            print("SHEAF:", sheaf.shape)
+            if k == len(solslhs) - 1 and i == 0:
+                lhs_system = lhs_system.T @ sheaf.T
+            elif i % 2 == 0:
+                lhs_system = lhs_system * sheaf.T
             else:
-                breakpoint()
                 lhs_system = lhs_system @ sheaf
-        lhs_system = lhs_system.T
+            print("SYSTEM:", lhs_system.shape)
 
     # find the relations will probably result in error
     # this takes forever
@@ -716,4 +716,5 @@ if __name__ == "__main__":
     else:
         print("""not enough commands, please give a filename of a
               model to extract, it's training dataset (which may be altered at
+    find the relations will probably result in error
                  future date)""")
