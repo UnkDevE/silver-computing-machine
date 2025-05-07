@@ -506,7 +506,7 @@ def interpolate_model_train(sols, model, train, step):
 
     rep_labels = np.repeat(labels, outshape)
     model.fit(masked_samples, rep_labels, batch_size=BATCH_SIZE, epochs=5)
-    return [model, reduce_basis(lu_decomp[1])]
+    return [model, reduce_basis(lu_decomp[1]), spline, u]
 
 
 def bucketize(prelims):
@@ -554,14 +554,13 @@ def plot_test(starttest, endtest, outshape, name):
 
 
 def bspline_to_poly(spline, params):
-    from sympy import symbols
     from scipy.special import binom
+    from sage.all import var
     # use De Casteljau's algorithm
     # get the length of knots so we don't do too many iterations
     knots = params.shape[-1]
     # create vector x type of symbols representing each dimension
-    syms = np.array(list(symbols("x:" + str(knots),
-                                 Real=True)), dtype="object")
+    syms = np.array(list(var("x" + str(knots))), dtype="object")
 
     bernoli = np.array([binom(n, v)
                         for v, n in enumerate(reversed(range(knots)))])
@@ -574,45 +573,23 @@ def bspline_to_poly(spline, params):
     # was slow now no longer
     basis = bernoli * exponent * symroll
 
-    return np.sum(basis @ params)
+    return [np.sum(basis @ params), syms]
 
 
-def generate_readable_eqs(sol_system, name, activ_fn):
+def generate_readable_eqs(sol_system, bspline, name, activ_fn):
     from sage.matrix.constructor import matrix
-    from sage.all import var, latex
-
-    syms = list([var("x" + str(i))
-                for i in range(sol_system[-1].shape[-1])])
+    from sage.all import latex
 
     # flatten sol system only 1 deep
-    solslhs = sol_system[0]
-    rhs_system = matrix(sol_system[1])
+    rhs_system = matrix(sol_system)
 
     # init symbol system
-    lhs_system = matrix(syms).T
+    polyspline, syms = bspline_to_poly(*bspline)
+    breakpoint()
+    # from import sage.all
+    solution = sage.solve(polyspline == rhs_system, syms)
 
-    # reverse sols into a readable system
-    for k, sheafs in enumerate(solslhs):
-        for i, sheaf in enumerate(sheafs):
-            if k == len(solslhs) - 1 and i == 0:
-                lhs_system = lhs_system.T @ sheaf.T
-            elif i % 2 == 0:
-                lhs_system = lhs_system * sheaf.T
-            else:
-                lhs_system = lhs_system @ sheaf
-
-    # find the relations will probably result in error
-    # this takes forever
-    lhs_system = matrix(lhs_system)
-    # import from sage.all
-    ratio = lhs_system.minpoly()
-    rhs = rhs_system.minpoly()
-    ratio = ratio.simplify(algorithm="giac")
-    rhs = rhs.simplify(algorithm="giac")
-
-    solution = sage.solve(ratio == rhs, syms)
-
-    if ratio is not None:
+    if solution is not None:
         tex_data = latex(solution)
 
         with open(name, "w") as file:
@@ -678,14 +655,16 @@ def model_create_equation(model_dir, training_data):
             systems = []
 
             train_dataset.shuffle(BATCH_SIZE)
-
+            bsplines = []
             for i in range(TRAIN_SIZE):
                 # find variance in solved systems
-                [test_model, solved_system] = interpolate_model_train(
-                    sols[-1],
-                    test_model,
-                    train_dataset,
-                    i)
+                [test_model, solved_system,
+                    bspline, u] = interpolate_model_train(
+                        sols[-1],
+                        test_model,
+                        train_dataset,
+                        i)
+                bsplines.append([bspline, u])
                 systems.append(solved_system)
                 # and testing
                 test = tester(test_model, sheaf, outward, sort_avg)
@@ -699,8 +678,9 @@ def model_create_equation(model_dir, training_data):
             test_model.evaluate(test_dataset[0], test_dataset[1], verbose=2)
             test_model.save("MNIST_only_interpolant.keras")
             # generate the human readable eq
-            generate_readable_eqs([sols, systems[-1] @ sheafsol.T],
-                                  "EQUATION_OUTPUT.latex", activations[-1])
+            generate_readable_eqs(systems[-1] @ sheafsol.T,
+                                  bsplines[-1], "EQUATION_OUTPUT.latex",
+                                  activations[-1])
 
 
 if __name__ == "__main__":
