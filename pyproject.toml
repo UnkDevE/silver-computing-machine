@@ -3,15 +3,13 @@ name = "clean-silver-computing-machine"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.13.2"
+requires-python = ">=3.11.11"
+license = "GPL"
 dependencies = [
     "tensorflow_datasets",
     "scipy",
-    "numpy<2",
     "pandas",
     "matplotlib",
-#   "tensorflow", or rocm
-#   "sage_conf",
-    "debugpy",
+    "tensorflow", # or rocm
+    "passagemath-giac"
 ]
-

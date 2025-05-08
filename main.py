@@ -506,7 +506,7 @@ def interpolate_model_train(sols, model, train, step):
 
     rep_labels = np.repeat(labels, outshape)
     model.fit(masked_samples, rep_labels, batch_size=BATCH_SIZE, epochs=5)
-    return [model, reduce_basis(lu_decomp[1]), spline, u]
+    return [model, lu_decomp[1], spline, u]
 
 
 def bucketize(prelims):
@@ -553,14 +553,16 @@ def plot_test(starttest, endtest, outshape, name):
     plt.clf()
 
 
-def bspline_to_poly(spline, params):
+def bspline_to_poly(spline, params, lu_system):
     from scipy.special import binom
     from sage.all import var
+    from sage.matrix.constructor import matrix
+
     # use De Casteljau's algorithm
     # get the length of knots so we don't do too many iterations
     knots = params.shape[-1]
     # create vector x type of symbols representing each dimension
-    syms = np.array([var("x" + str(i) for i in range(knots))], dtype="object")
+    syms = np.array([var("x" + str(i)) for i in range(knots)], dtype="object")
 
     bernoli = np.array([binom(n, v)
                         for v, n in enumerate(reversed(range(knots)))])
@@ -570,10 +572,11 @@ def bspline_to_poly(spline, params):
     exponent = (1 - syms) ** (np.arange(0, knots))
     symroll = syms * np.roll(np.arange(0, knots), 1)
 
-    # was slow now no longer
     basis = bernoli * exponent * symroll
+    breakpoint()
+    lhs = basis @ lu_system
 
-    return [np.sum(basis @ params), syms]
+    return [lhs, syms]
 
 
 def generate_readable_eqs(sol_system, bspline, name, activ_fn):
@@ -582,12 +585,13 @@ def generate_readable_eqs(sol_system, bspline, name, activ_fn):
 
     # flatten sol system only 1 deep
     rhs_system = matrix(sol_system)
+    #params = bspline[-1]
 
     # init symbol system
-    polyspline, syms = bspline_to_poly(*bspline)
+    polyspline, syms = bspline_to_poly(*bspline, sol_system)
     breakpoint()
     # from import sage.all
-    solution = sage.solve(polyspline == rhs_system, syms)
+    solution = sage.solve(polyspline.to_list(), *syms)
 
     if solution is not None:
         tex_data = latex(solution)
@@ -678,7 +682,7 @@ def model_create_equation(model_dir, training_data):
             test_model.evaluate(test_dataset[0], test_dataset[1], verbose=2)
             test_model.save("MNIST_only_interpolant.keras")
             # generate the human readable eq
-            generate_readable_eqs(systems[-1] @ sheafsol.T,
+            generate_readable_eqs(systems[-1],
                                   bsplines[-1], "EQUATION_OUTPUT.latex",
                                   activations[-1])
 
