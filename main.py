@@ -560,7 +560,7 @@ def bspline_to_poly(spline, params):
     # get the length of knots so we don't do too many iterations
     knots = params.shape[-1]
     # create vector x type of symbols representing each dimension
-    syms = np.array(list(var("x" + str(knots))), dtype="object")
+    syms = np.array([var("x" + str(i) for i in range(knots))], dtype="object")
 
     bernoli = np.array([binom(n, v)
                         for v, n in enumerate(reversed(range(knots)))])
