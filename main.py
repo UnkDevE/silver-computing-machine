@@ -29,9 +29,6 @@ from scipy import linalg
 import numpy as np
 import matplotlib.pyplot as plt
 
-# sage import so solve works
-import sage.all as sage
-
 # TUNE THESE INPUT PARAMS
 MAX_ITER = 2048
 BATCH_SIZE = 1024
@@ -468,7 +465,7 @@ def interpolate_model_train(sols, model, train, step):
     from scipy.interpolate import make_splprep
     # out is already a diagonalized matrix of 1s
     # so therefore the standard basis becomes 0
-    align, erase, std_basis = linalg.svd(ins)
+    _, _, std_basis = linalg.svd(ins)
     # solve for the new std_basis
     new_basis = linalg.solve(std_basis, np.zeros(std_basis.shape[0]))
     # create LU Decomposition towards new_basis
@@ -556,7 +553,6 @@ def plot_test(starttest, endtest, outshape, name):
 def bspline_to_poly(spline, params, lu_system):
     from scipy.special import binom
     from sage.all import var
-    from sage.matrix.constructor import matrix
 
     # use De Casteljau's algorithm
     # get the length of knots so we don't do too many iterations
@@ -573,28 +569,24 @@ def bspline_to_poly(spline, params, lu_system):
     symroll = syms * np.roll(np.arange(0, knots), 1)
 
     basis = bernoli * exponent * symroll
-    breakpoint()
     lhs = basis @ lu_system
 
     return [lhs, syms]
 
 
-def generate_readable_eqs(sol_system, bspline, name, activ_fn):
-    from sage.matrix.constructor import matrix
-    from sage.all import latex
-
-    # flatten sol system only 1 deep
-    rhs_system = matrix(sol_system)
-    #params = bspline[-1]
-
-    # init symbol system
-    polyspline, syms = bspline_to_poly(*bspline, sol_system)
-    breakpoint()
+def generate_readable_eqs(sol_system, bspline, name):
+    from sage.interfaces.giac import giac
+    from sage.all import latex, solve
+    # init symbol system bspline has two args
+    polyspline, syms = bspline_to_poly(bspline[0], bspline[1], sol_system)
     # from import sage.all
-    solution = sage.solve(polyspline.to_list(), *syms)
 
-    if solution is not None:
-        tex_data = latex(solution)
+    giac_func = giac(polyspline.tolist())
+    giac_var_list = [giac(sym) for sym in syms]
+    ret = giac_func.solve(giac_var_list)
+
+    if ret is not None:
+        tex_data = ret.__str__()
 
         with open(name, "w") as file:
             file.write(tex_data)
@@ -683,8 +675,7 @@ def model_create_equation(model_dir, training_data):
             test_model.save("MNIST_only_interpolant.keras")
             # generate the human readable eq
             generate_readable_eqs(systems[-1],
-                                  bsplines[-1], "EQUATION_OUTPUT.latex",
-                                  activations[-1])
+                                  bsplines[-1], "EQUATION_OUTPUT.latex")
 
 
 if __name__ == "__main__":
