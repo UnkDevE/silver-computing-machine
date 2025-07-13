@@ -11,5 +11,5 @@ dependencies = [
     "pandas",
     "matplotlib",
     "tensorflow", # or rocm
-    "passagemath-giac"
+    "passagemath-standard" 
 ]

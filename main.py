@@ -529,7 +529,6 @@ def tester(model, sheafout, sheafs, sort_avg):
     avg_outs = [avg for (_, (_, avg)) in sort_avg]
     return [avg_outs, bucketize(prelims), final_test.numpy()]
 
-
 def plot_test(starttest, endtest, outshape, name):
     tests = [starttest, endtest]
     plt.xlabel("features")
@@ -576,17 +575,17 @@ def bspline_to_poly(spline, params, lu_system):
 
 def generate_readable_eqs(sol_system, bspline, name):
     from sage.interfaces.giac import giac
-    from sage.all import latex, solve
+    from sage.all import solve, vector
+
     # init symbol system bspline has two args
     polyspline, syms = bspline_to_poly(bspline[0], bspline[1], sol_system)
     # from import sage.all
+    vector(polyspline).save("polyspline")
 
-    giac_func = giac(polyspline.tolist())
-    giac_var_list = [giac(sym) for sym in syms]
-    ret = giac_func.solve(giac_var_list)
+    solution = solve(polyspline.tolist(), *syms, algorithm="msolve")
 
-    if ret is not None:
-        tex_data = ret.__str__()
+    if solution is not None:
+        tex_data = solution.__str__()
 
         with open(name, "w") as file:
             file.write(tex_data)
@@ -667,11 +666,13 @@ def model_create_equation(model_dir, training_data):
                 plot_test(control, test, shapes[-1],
                           "out-epoch-" + str(i) + ".png")
 
-            print("CONTROL:")
-            test_dataset = get_ds(test_dataset)
-            model.evaluate(test_dataset[0], test_dataset[1], verbose=2)
-            print("EVALUATION:")
-            test_model.evaluate(test_dataset[0], test_dataset[1], verbose=2)
+                print("CONTROL:")
+                test_dataset = get_ds(test_dataset)
+                model.evaluate(test_dataset[0], test_dataset[1], verbose=2)
+                print("EVALUATION:")
+                test_model.evaluate(test_dataset[0], test_dataset[1],
+                                    verbose=2)
+
             test_model.save("MNIST_only_interpolant.keras")
             # generate the human readable eq
             generate_readable_eqs(systems[-1],
