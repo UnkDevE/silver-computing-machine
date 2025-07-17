@@ -633,15 +633,16 @@ def model_create_equation(model_dir, training_data):
             layers)
 
         control = tester(model, sheaf, outward, sort_avg)
-        train_dataset.cache()
+        loss_fn = model.loss
+        optimizer = model.optimizer
 
+        breakpoint()
+        train_dataset.cache()
         for t in range(TEST_ROUNDS):
             # should we wipe the model every i in TRAIN_SIZE or leave it?
             test_model = tf.keras.models.clone_model(model)
-            loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(
-                from_logits=True)
 
-            test_model.compile(optimizer='adam',
+            test_model.compile(optimizer=optimizer,
                                loss=loss_fn, metrics=['accuracy'])
 
             # using sols[0] shape as a template for input

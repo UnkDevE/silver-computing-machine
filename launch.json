@@ -1,0 +1,36 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python Debugger: V2",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "ver2.py",
+            "env": {"ROCM_PATH": "/opt/rocm/"},
+            "python": "/home/ethan/miniforge3/envs/sage/bin/python",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "MNIST.keras",
+                "mnist",
+                "out.tex"
+            ],
+        },{
+            "name": "Python Profiler : V2",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "ver2.py",
+            "python": "/home/ethan/miniconda3/bin/python",
+            "pythonArgs": ["-m", "scalene", "--cli"],
+            "console": "integratedTerminal",
+            "args": [
+                "MNIST.keras",
+                "mnist",
+                "out.tex"
+            ]
+        }
+    ]
+}
