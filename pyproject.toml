@@ -6,10 +6,10 @@ readme = "README.md"
 requires-python = ">=3.11.11"
 license = "GPL"
 dependencies = [
-    "tensorflow_datasets",
     "scipy",
     "pandas",
     "matplotlib",
     "tensorflow", # or rocm
-    "passagemath-standard" 
+    "tensorflow-datasets",
+    "passagemath-standard",
 ]
