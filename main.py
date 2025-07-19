@@ -550,14 +550,39 @@ def plot_test(starttest, endtest, outshape, name):
     plt.clf()
 
 
-def bspline_to_poly(spline, params, lu_system):
+# returns multiplicants then powers
+def get_unzip_coeffs(ndspline, max_inputs):
+    muls = []
+    pows = []
+    for spline in ndspline:
+        spline = spline.expand()
+        zipcoeffs = spline.coefficients(sparse=True)
+        # unzip here but zip function would be inefficient
+        # might need to recoccur here because sage is not gud at extracting
+        # terms
+        mul = np.array([coeff[0] for coeff in zipcoeffs])
+        power = np.array([coeff[1] for coeff in zipcoeffs])
+
+        # pad values so we have same sizes
+        mul = np.pad(mul, (0, max_inputs-mul.shape[0]), constant_values=0)
+        power = np.pad(power, (0, max_inputs-power.shape[0]), constant_values=0)
+
+        muls.append(mul)
+        pows.append(power)
+
+    breakpoint()
+    # this is ordered in symbolic x1 -> xn as inputs
+    return np.array(np.array(muls), np.array(pows))
+
+# returns coeffecients in matrix form with [mutliplicants, powers]
+def generate_bernstien_polys(params, lu_system):
     from scipy.special import binom
     from sage.all import var
 
     # use De Casteljau's algorithm
     # get the length of knots so we don't do too many iterations
     knots = params.shape[-1]
-    # create vector x type of symbols representing each dimension
+    # create vector x type of symbols representing input dimension
     syms = np.array([var("x" + str(i)) for i in range(knots)], dtype="object")
 
     bernoli = np.array([binom(n, v)
@@ -565,42 +590,31 @@ def bspline_to_poly(spline, params, lu_system):
 
     # use matrix multiplication and rolls for speedup
     # split calc
-    exponent = (1 - syms) ** (np.arange(0, knots))
-    symroll = syms * np.roll(np.arange(0, knots), 1)
+    exponent = (1 - syms) ** (np.flip(np.arange(0, knots))
+                              - np.arange(0,knots))
+    symar = syms * np.arange(0, knots)
 
-    basis = bernoli * exponent * symroll
-    lhs = basis @ lu_system
+    bern_coeffs = bernoli * (get_unzip_coeffs(exponent, knots) *
+                                               get_unzip_coeffs(symar, knots))
 
-    return [lhs, syms]
+    coeffs = bern_coeffs * lu_system
+
+    return [coeffs, syms]
 
 
 def generate_readable_eqs(sol_system, bspline, name):
-    from sage.all import solve, vector, expand
-
+    from sage.all import solve, vector
     # init symbol system bspline has two args
-    polyspline, syms = bspline_to_poly(bspline[0], bspline[1], sol_system)
-    polyspline = list(vector(polyspline))
-    # from import sage.all
+    coeffs, syms = generate_bernstien_polys(bspline[1], sol_system)
 
-    multiplicants = []
-    powers = []
-    for spline in polyspline:
-        spline = expand(spline)
-        zipcoeffs = spline.coefficients(sparse=True)
-        multiplicants.append(np.array([coeff[0] for coeff in zipcoeffs]))
-        powers.append(np.array([coeff[1] for coeff in zipcoeffs]))
+    # this now solves for polynomial space
+    # get zeros for input squared.
+    zeros = np.zeros(sol_system.shape[0], sol_system.shape[0])
 
+    # now solve each simultaneous equation of tensor output dim * 2
+    solutions = tf.linalg.solve(coeffs, zeros)
+    print(solutions)
     breakpoint()
-
-    solution = solve(vector(polyspline), syms)
-    if solution is not None:
-        tex_data = solution.__str__()
-
-        with open(name, "w") as file:
-            file.write(tex_data)
-
-        return
-
 
 def model_create_equation(model_dir, training_data):
     # check optional args
