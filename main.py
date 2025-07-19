@@ -575,19 +575,20 @@ def bspline_to_poly(spline, params, lu_system):
 
 
 def generate_readable_eqs(sol_system, bspline, name):
-    from sage.all import solve, vector
+    from sage.all import solve, vector, expand
 
     # init symbol system bspline has two args
     polyspline, syms = bspline_to_poly(bspline[0], bspline[1], sol_system)
-    polyspline = vector(polyspline)
+    polyspline = list(vector(polyspline))
     # from import sage.all
 
     multiplicants = []
-    additions = []
+    powers = []
     for spline in polyspline:
+        spline = expand(spline)
         zipcoeffs = spline.coefficients(sparse=True)
         multiplicants.append(np.array([coeff[0] for coeff in zipcoeffs]))
-        additions.append(np.array([coeff[1] for coeff in zipcoeffs]))
+        powers.append(np.array([coeff[1] for coeff in zipcoeffs]))
 
     breakpoint()
 
