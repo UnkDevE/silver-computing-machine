@@ -564,15 +564,16 @@ def get_unzip_coeffs(ndspline, max_inputs):
         power = np.array([coeff[1] for coeff in zipcoeffs])
 
         # pad values so we have same sizes
-        mul = np.pad(mul, (0, max_inputs-mul.shape[0]), constant_values=0)
-        power = np.pad(power, (0, max_inputs-power.shape[0]), constant_values=0)
+        mul = np.pad(mul, (0, max_inputs - mul.shape[0]), constant_values=0)
+        power = np.pad(power, (0, max_inputs - power.shape[0]),
+                       constant_values=0)
 
         muls.append(mul)
         pows.append(power)
 
-    breakpoint()
     # this is ordered in symbolic x1 -> xn as inputs
-    return np.array(np.array(muls), np.array(pows))
+    return np.dstack([np.vstack(muls), np.vstack(pows)])
+
 
 # returns coeffecients in matrix form with [mutliplicants, powers]
 def generate_bernstien_polys(params, lu_system):
@@ -591,30 +592,38 @@ def generate_bernstien_polys(params, lu_system):
     # use matrix multiplication and rolls for speedup
     # split calc
     exponent = (1 - syms) ** (np.flip(np.arange(0, knots))
-                              - np.arange(0,knots))
+                              - np.arange(0, knots))
     symar = syms * np.arange(0, knots)
 
-    bern_coeffs = bernoli * (get_unzip_coeffs(exponent, knots) *
-                                               get_unzip_coeffs(symar, knots))
+    bern_coeffs = (get_unzip_coeffs(exponent, knots) *
+                   get_unzip_coeffs(symar, knots))
 
-    coeffs = bern_coeffs * lu_system
+    # reshape to square matrix
+    bernoli_matrix = np.repeat(bernoli, knots).reshape(knots, knots)
+    bernoli_tensor = np.dstack([bernoli_matrix, bernoli_matrix])
+
+    coeffs = bernoli_tensor * bern_coeffs
+
+    breakpoint()
+    coeffs = [system @ coeffs for system in lu_system.T]
+    breakpoint()
 
     return [coeffs, syms]
 
 
 def generate_readable_eqs(sol_system, bspline, name):
-    from sage.all import solve, vector
     # init symbol system bspline has two args
     coeffs, syms = generate_bernstien_polys(bspline[1], sol_system)
 
     # this now solves for polynomial space
     # get zeros for input squared.
-    zeros = np.zeros(sol_system.shape[0], sol_system.shape[0])
+    zeros = np.zeros([sol_system.shape[0], sol_system.shape[0]])
 
     # now solve each simultaneous equation of tensor output dim * 2
     solutions = tf.linalg.solve(coeffs, zeros)
     print(solutions)
     breakpoint()
+
 
 def model_create_equation(model_dir, training_data):
     # check optional args
