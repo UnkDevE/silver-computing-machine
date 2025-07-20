@@ -555,21 +555,23 @@ def get_unzip_coeffs(ndspline, max_inputs):
     muls = []
     pows = []
     for spline in ndspline:
-        spline = spline.expand()
-        zipcoeffs = spline.coefficients(sparse=True)
-        # unzip here but zip function would be inefficient
-        # might need to recoccur here because sage is not gud at extracting
-        # terms
-        mul = np.array([coeff[0] for coeff in zipcoeffs])
-        power = np.array([coeff[1] for coeff in zipcoeffs])
+        for eq in spline:
+            expand = eq.expand()
+            zipcoeffs = expand.coefficients(sparse=True)
+            # unzip here but zip function would be inefficient
+            # convert numerical expressions to floats
 
-        # pad values so we have same sizes
-        mul = np.pad(mul, (0, max_inputs - mul.shape[0]), constant_values=0)
-        power = np.pad(power, (0, max_inputs - power.shape[0]),
-                       constant_values=0)
+            mul = np.array([coeff[0].n() for coeff in zipcoeffs])
+            power = np.array([coeff[1].n() for coeff in zipcoeffs])
 
-        muls.append(mul)
-        pows.append(power)
+            # pad values so we have same sizes
+            mul = np.pad(mul, (0, max_inputs - mul.shape[0]),
+                         constant_values=0)
+            power = np.pad(power, (0, max_inputs - power.shape[0]),
+                           constant_values=0)
+
+            muls.append(mul)
+            pows.append(power)
 
     # this is ordered in symbolic x1 -> xn as inputs
     return np.dstack([np.vstack(muls), np.vstack(pows)])
@@ -583,20 +585,26 @@ def generate_bernstien_polys(params, lu_system):
     # use De Casteljau's algorithm
     # get the length of knots so we don't do too many iterations
     knots = params.shape[-1]
+    # get output dim
+    degrees = lu_system.shape[-1]
+
     # create vector x type of symbols representing input dimension
     syms = np.array([var("x" + str(i)) for i in range(knots)], dtype="object")
-
+    # get Bernoli numbers ready
     bernoli = np.array([binom(n, v)
                         for v, n in enumerate(reversed(range(knots)))])
 
     # use matrix multiplication and rolls for speedup
     # split calc
-    exponent = (1 - syms) ** (np.flip(np.arange(0, knots))
-                              - np.arange(0, knots))
-    symar = syms * np.arange(0, knots)
+    startexp = (1 - params[0]) * syms ** np.arange(0, knots)
+    exps = [startexp + syms * params[0]]
 
-    bern_coeffs = (get_unzip_coeffs(exponent, knots) *
-                   get_unzip_coeffs(symar, knots))
+    for degree in range(1, degrees):
+        exps.append((1 - params) * syms ** exps[degree - 1])
+        exps[degree] += syms * params[degree]
+
+    breakpoint()
+    bern_coeffs = get_unzip_coeffs(exps, knots)
 
     # reshape to square matrix
     bernoli_matrix = np.repeat(bernoli, knots).reshape(knots, knots)
@@ -605,7 +613,7 @@ def generate_bernstien_polys(params, lu_system):
     coeffs = bernoli_tensor * bern_coeffs
 
     breakpoint()
-    coeffs = [system @ coeffs for system in lu_system.T]
+    coeffs = [params @ coeffs for system in lu_system.T]
     breakpoint()
 
     return [coeffs, syms]
@@ -616,11 +624,8 @@ def generate_readable_eqs(sol_system, bspline, name):
     coeffs, syms = generate_bernstien_polys(bspline[1], sol_system)
 
     # this now solves for polynomial space
-    # get zeros for input squared.
-    zeros = np.zeros([sol_system.shape[0], sol_system.shape[0]])
-
     # now solve each simultaneous equation of tensor output dim * 2
-    solutions = tf.linalg.solve(coeffs, zeros)
+    solutions = tf.linalg.solve(coeffs, sol_system)
     print(solutions)
     breakpoint()
 
