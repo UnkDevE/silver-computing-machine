@@ -555,12 +555,15 @@ def get_unzip_coeffs(ndspline, max_inputs):
     muls = []
     pows = []
     for spline in ndspline:
+        t_muls = []
+        t_pows = []
         for eq in spline:
             expand = eq.expand()
             zipcoeffs = expand.coefficients(sparse=True)
             # unzip here but zip function would be inefficient
             # convert numerical expressions to floats
 
+            print(zipcoeffs)
             mul = np.array([coeff[0].n() for coeff in zipcoeffs])
             power = np.array([coeff[1].n() for coeff in zipcoeffs])
 
@@ -570,8 +573,10 @@ def get_unzip_coeffs(ndspline, max_inputs):
             power = np.pad(power, (0, max_inputs - power.shape[0]),
                            constant_values=0)
 
-            muls.append(mul)
-            pows.append(power)
+            t_muls.append(mul)
+            t_pows.append(power)
+        muls.append(t_muls)
+        pows.append(t_pows)
 
     # this is ordered in symbolic x1 -> xn as inputs
     return np.dstack([np.vstack(muls), np.vstack(pows)])
