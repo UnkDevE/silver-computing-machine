@@ -554,31 +554,41 @@ def plot_test(starttest, endtest, outshape, name):
 def get_unzip_coeffs(ndspline, max_inputs):
     muls = []
     pows = []
+    print(ndspline.shape)
     for spline in ndspline:
         t_muls = []
         t_pows = []
         for eq in spline:
             expand = eq.expand()
-            zipcoeffs = expand.coefficients(sparse=True)
-            # unzip here but zip function would be inefficient
-            # convert numerical expressions to floats
+            zipcoeffs = expand.coefficients(sparse=False)
 
-            t_muls += [coeff[0].n() for coeff in zipcoeffs]
-            t_pows += [coeff[1].n() for coeff in zipcoeffs]
+            mul = zipcoeffs[0].n()
+            # if linear
+            pow = 0 if len(zipcoeffs) < 2 else zipcoeffs[1].n()
+            t_muls.append(mul)
+            t_pows.append(pow)
 
-        # pad values so we have same sizes
         t_muls = np.array(t_muls)
         t_pows = np.array(t_pows)
 
-        muls.append(np.pad(t_muls, (0, max_inputs - t_muls.shape[0]),
-                    constant_values=0))
+        # where multiplicant zero change to zero in power
+        t_pows[t_muls == 0.0] = 0.0
 
-        pows.append(np.pad(t_pows, (0, max_inputs - t_pows.shape[0]),
-                    constant_values=0))
+        # if less than max inputs pad with zero
+        if len(t_muls) < max_inputs:
+            t_muls = np.pad(t_muls, (0, max_inputs), t_muls.shape[0],
+                            constant_value=0)
 
+        if len(t_pows) < max_inputs:
+            t_pows = np.pad(t_pows, (0, max_inputs), t_pows.shape[0],
+                            constant_value=0)
+
+        muls.append(t_muls)
+        pows.append(t_pows)
+
+    # pad values so we have same sizes
     # this is ordered in symbolic x1 -> xn as inputs
-    breakpoint()
-    return np.stack([np.array(muls), np.array(pows)])
+    return np.dstack([np.array(muls), np.array(pows)])
 
 
 # returns coeffecients in matrix form with [mutliplicants, powers]
@@ -618,10 +628,19 @@ def generate_readable_eqs(sol_system, bspline, name):
 
     # this now solves for polynomial space
     # now solve each simultaneous equation of tensor output dim * 2
-    breakpoint()
-    solutions = tf.linalg.solve(coeffs, sol_system)
-    print(solutions)
-    breakpoint()
+    coeffs = np.flip(coeffs)
+    zero_sol = np.zeros(sol_system.shape)
+
+    # guass eliminate
+    mul_lu = linalg.lu_factor(coeffs[0])
+    pow_lu = linalg.lu_factor(coeffs[1])
+    mul_sol = linalg.lu_solve(mul_lu)
+    pow_sol = linalg.lu_solve(pow_lu)
+
+
+
+
+
 
 
 def model_create_equation(model_dir, training_data):
