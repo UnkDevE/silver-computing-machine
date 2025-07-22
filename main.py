@@ -550,7 +550,7 @@ def plot_test(starttest, endtest, outshape, name):
     plt.clf()
 
 
-# returns multiplicants then powers
+# returns mutliplicants then powers
 def get_unzip_coeffs(ndspline, max_inputs):
     muls = []
     pows = []
@@ -563,7 +563,6 @@ def get_unzip_coeffs(ndspline, max_inputs):
             # unzip here but zip function would be inefficient
             # convert numerical expressions to floats
 
-            print(zipcoeffs)
             t_muls += [coeff[0].n() for coeff in zipcoeffs]
             t_pows += [coeff[1].n() for coeff in zipcoeffs]
 
@@ -578,7 +577,8 @@ def get_unzip_coeffs(ndspline, max_inputs):
                     constant_values=0))
 
     # this is ordered in symbolic x1 -> xn as inputs
-    return np.dstack([np.vstack(muls), np.vstack(pows)])
+    breakpoint()
+    return np.stack([np.array(muls), np.array(pows)])
 
 
 # returns coeffecients in matrix form with [mutliplicants, powers]
@@ -590,45 +590,35 @@ def generate_bernstien_polys(params, lu_system):
     # get the length of knots so we don't do too many iterations
     knots = params.shape[-1]
     # get output dim
-    degrees = lu_system.shape[-1]
+    outdim = lu_system.shape[-1]
 
     # create vector x type of symbols representing input dimension
     syms = np.array([var("x" + str(i)) for i in range(knots)], dtype="object")
-    # get Bernoli numbers ready
+
+    coeffs = []
+    for d in range(outdim):
+        coeffs.append((1 - syms) * params[d] +
+                      syms * params[d + 1 % outdim])
+
+    coeffs = np.array(coeffs)
     bernoli = np.array([binom(n, v)
                         for v, n in enumerate(reversed(range(knots)))])
 
-    # use matrix multiplication and rolls for speedup
-    # split calc
-    startexp = (1 - params[0]) * syms ** np.arange(0, knots)
-    exps = [startexp + syms * params[0]]
+    eq = bernoli * coeffs
 
-    for degree in range(1, degrees):
-        exps.append((1 - params) * syms ** exps[degree - 1])
-        exps[degree] += syms * params[degree]
+    # remove symbolics and just use coefficients
+    coeffs = get_unzip_coeffs(eq, knots)
 
-    breakpoint()
-    bern_coeffs = get_unzip_coeffs(exps, knots)
-
-    # reshape to square matrix
-    bernoli_matrix = np.repeat(bernoli, knots).reshape(knots, knots)
-    bernoli_tensor = np.dstack([bernoli_matrix, bernoli_matrix])
-
-    coeffs = bernoli_tensor * bern_coeffs
-
-    breakpoint()
-    coeffs = [params @ coeffs for system in lu_system.T]
-    breakpoint()
-
-    return [coeffs, syms]
+    return [coeffs, syms, eq]
 
 
 def generate_readable_eqs(sol_system, bspline, name):
     # init symbol system bspline has two args
-    coeffs, syms = generate_bernstien_polys(bspline[1], sol_system)
+    coeffs, syms, eq = generate_bernstien_polys(bspline[1], sol_system)
 
     # this now solves for polynomial space
     # now solve each simultaneous equation of tensor output dim * 2
+    breakpoint()
     solutions = tf.linalg.solve(coeffs, sol_system)
     print(solutions)
     breakpoint()
