@@ -554,7 +554,6 @@ def plot_test(starttest, endtest, outshape, name):
 def get_unzip_coeffs(ndspline, max_inputs):
     muls = []
     pows = []
-    print(ndspline.shape)
     for spline in ndspline:
         t_muls = []
         t_pows = []
@@ -565,6 +564,7 @@ def get_unzip_coeffs(ndspline, max_inputs):
             mul = zipcoeffs[0].n()
             # if linear
             pow = 0 if len(zipcoeffs) < 2 else zipcoeffs[1].n()
+
             t_muls.append(mul)
             t_pows.append(pow)
 
@@ -628,18 +628,50 @@ def generate_readable_eqs(sol_system, bspline, name):
 
     # this now solves for polynomial space
     # now solve each simultaneous equation of tensor output dim * 2
-    coeffs = np.flip(coeffs)
-    zero_sol = np.zeros(sol_system.shape)
+    # first coefficients are all zero due to linearity
+    new_shape = list(coeffs.shape)
+    new_shape[0] -= 1
 
-    # guass eliminate
-    mul_lu = linalg.lu_factor(coeffs[0])
-    pow_lu = linalg.lu_factor(coeffs[1])
-    pow_sol = linalg.lu_solve(pow_lu, zero_sol.T)
-    mul_sol = linalg.solve(mul_lu @ pow_sol, zero_sol.T)
+    coeffs = np.delete(coeffs, 0, 0)
+    coeffs = np.reshape(coeffs, new_shape)
+    coeffs = coeffs.T
 
-    print(mul_sol)
+    # solve to singular constant value
+    def svd_lu(lu):
+        # use svd to get components
+        r_basis, nul, l_scale = linalg.svd(lu)
+
+        # solve components scaling for new basis
+        # premute is set to true so no rounding errs occur
+        r_factor = linalg.lu(r_basis, permute_l=True, p_indices=True)
+        l_factor = linalg.lu(l_scale, permute_l=True, p_indices=True)
+
+        # rhs == 0 here due to factor decomposition i.e. solve(n, 0) == 0
+        # therefore r_basis is our inverse
+        new_basis = r_factor[0] @ r_factor[1] @ r_basis
+        new_scale = l_factor[0] @ l_factor[1] @ l_scale
+
+        # recreate diagonal so we can use to create same shape
+        mix = linalg.diagsvd(nul, *lu.shape)
+
+        return new_basis @ mix @ new_scale
+
+    # now we need to solve this via svd and LU
+    # no need for pivot
+    mul_svd = svd_lu(coeffs[0])
+    pow_svd = svd_lu(coeffs[1])
+
+    mat_eq = (syms @ mul_svd) ** pow_svd
+    # eq = sum(sum(mat_eq))
+
+    from sage.all import solve, latex, vector, matrix
     breakpoint()
+    algebras = solve(matrix(mat_eq), vector(syms))
 
+    print(algebras)
+    save("EQ.tex", latex(algebras))
+
+    return algebras
 
 def model_create_equation(model_dir, training_data):
     # check optional args
