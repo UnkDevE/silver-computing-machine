@@ -634,13 +634,11 @@ def generate_readable_eqs(sol_system, bspline, name):
     # guass eliminate
     mul_lu = linalg.lu_factor(coeffs[0])
     pow_lu = linalg.lu_factor(coeffs[1])
-    mul_sol = linalg.lu_solve(mul_lu)
-    pow_sol = linalg.lu_solve(pow_lu)
+    pow_sol = linalg.lu_solve(pow_lu, zero_sol.T)
+    mul_sol = linalg.solve(mul_lu @ pow_sol, zero_sol.T)
 
-
-
-
-
+    print(mul_sol)
+    breakpoint()
 
 
 def model_create_equation(model_dir, training_data):
