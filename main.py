@@ -662,16 +662,14 @@ def generate_readable_eqs(sol_system, bspline, name):
     pow_svd = svd_lu(coeffs[1])
 
     mat_eq = (syms @ mul_svd) ** pow_svd
-    # eq = sum(sum(mat_eq))
+    eq = sum(sum(mat_eq))
 
-    from sage.all import solve, latex, vector, matrix
-    breakpoint()
-    algebras = solve(matrix(mat_eq), vector(syms))
+    from sage.all import solve, latex, vector
+    algebras = solve(eq, *vector(syms), manual=True, algorithm="giac")
 
-    print(algebras)
     save("EQ.tex", latex(algebras))
-
     return algebras
+
 
 def model_create_equation(model_dir, training_data):
     # check optional args
