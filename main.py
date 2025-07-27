@@ -52,13 +52,12 @@ def product(x):
 # saver function helper
 def save(filename, write):
     import os.path
-    file = None
+
     if os.path.isfile(filename):
-        file = open(filename, "at")
-    else:
-        file = open(filename, "xt")
-    file.write(write)
-    file.close()
+        os.remove(filename)
+
+    with open(filename, "xt") as file:
+        file.write(write)
 
 
 # helper
@@ -661,13 +660,26 @@ def generate_readable_eqs(sol_system, bspline, name):
     mul_svd = svd_lu(coeffs[0])
     pow_svd = svd_lu(coeffs[1])
 
-    mat_eq = (syms @ mul_svd) ** pow_svd
-    eq = sum(sum(mat_eq))
+    from sage.all import PolynomialRing, QQ, latex
+    from sage.rings.polynomial import polynomial_ring
+    mat_ring = PolynomialRing(QQ, names=list(syms))
 
-    from sage.all import solve, latex, vector
-    algebras = solve(eq, *vector(syms), manual=True, algorithm="giac")
+    # this gets round an outdated library using deprecated functions
+    def is_ring(ring):
+        return isinstance(ring, polynomial_ring.PolynomialRing_generic)
+
+    setattr(polynomial_ring, 'is_PolynomialRing', is_ring)
+    # this import HAS to be after setattr for it to work
+    from rec_sequences.FunctionalEquation import FunctionalEquation
+    breakpoint()
+    mat_syms = np.reshape(np.repeat(syms, mul_svd.shape[-1]), mul_svd.shape)
+    mat_eq = np.dstack([mul_svd, mat_syms, pow_svd])
+
+    # find reoccurance relations for mat_eq
+    algebras = FunctionalEquation(mat_ring, mat_eq)
 
     save("EQ.tex", latex(algebras))
+
     return algebras
 
 
