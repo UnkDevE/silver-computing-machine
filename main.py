@@ -21,6 +21,7 @@
 import sys
 import os
 
+from sage.all import shuffle
 import tensorflow as tf
 import tensorflow_datasets as tdfs
 
@@ -424,7 +425,7 @@ def get_ds(dataset):
     return [images, labels]
 
 
-def save_interpol_video(trainset, interset, step):
+def save_interpol_video(model_name, trainset, interset, step):
     import matplotlib.animation as animation
 
     fig = plt.figure()
@@ -447,14 +448,14 @@ def save_interpol_video(trainset, interset, step):
         save_count=200,
         blit=True)
 
-    ani.save("images" + str(step) + ".mp4")
+    ani.save(model_name + str(step) + ".mp4")
 
     # clear figures and axes
     plt.cla()
     plt.clf()
 
 
-def interpolate_model_train(sols, model, train, step):
+def interpolate_model_train(model_name, sols, model, train, step):
     # get shapes
     outshape = len(sols[1])
     model_shape = [1 if x is None else x for x in model.input_shape]
@@ -498,7 +499,7 @@ def interpolate_model_train(sols, model, train, step):
     import numpy.ma as ma
     masked_samples = ma.array(solved_samples, mask=mask, fill_value=0)
 
-    save_interpol_video(solved_samples, mask_samples, step)
+    save_interpol_video(model_name, solved_samples, mask_samples, step)
 
     rep_labels = np.repeat(labels, outshape)
     model.fit(masked_samples, rep_labels, batch_size=BATCH_SIZE, epochs=5)
@@ -683,16 +684,14 @@ def generate_readable_eqs(sol_system, bspline, name):
     return algebras
 
 
-def model_create_equation(model_dir, training_data):
+def model_create_equation(model_dir, model_name, ds_pair):
     # check optional args
     # create prerequisites
     model = tf.keras.models.load_model(model_dir)
     if model is not None:
         # load dataset for training
-        [train_dataset, test_dataset] = tdfs.load(
-            training_data,
-            download=False,
-            split=['train[:80%]', 'test'])
+        [train_dataset, test_dataset] = ds_pair
+
         # calculate fft + shape
         shapes = []
         layers = []
@@ -751,6 +750,7 @@ def model_create_equation(model_dir, training_data):
                 # find variance in solved systems
                 [test_model, solved_system,
                     bspline, u] = interpolate_model_train(
+                        model_name,
                         sols[-1],
                         test_model,
                         train_dataset,
@@ -760,7 +760,7 @@ def model_create_equation(model_dir, training_data):
                 # and testing
                 test = tester(test_model, sheaf, outward, sort_avg)
                 plot_test(control, test, shapes[-1],
-                          "out-epoch-" + str(i) + ".png")
+                          model_name + "-out-epoch-" + str(i) + ".png")
 
                 test_dataset = get_ds(test_dataset)
                 print("EVALUATION:")
@@ -769,32 +769,83 @@ def model_create_equation(model_dir, training_data):
                 print("CONTROL:")
                 model.evaluate(test_dataset[0], test_dataset[1], verbose=2)
 
-            test_model.save("MNIST_only_interpolant.keras")
+            test_model.save(model_name + "_only_interpolant.keras")
 
             # generate the human readable eq
-            generate_readable_eqs(systems[-1],
-                                  bsplines[-1], "EQUATION_OUTPUT.latex")
+            # generate_readable_eqs(systems[-1],
+            #                     bsplines[-1], "EQUATION_OUTPUT.latex")
+
+
+def model_read_create(model, modelname):
+    path = os.path.dirname(__file__)
+    model = os.path.join(path, model)
+    model_create_equation(os.path.abspath(model), modelname)
+
+
+def test_main(model_list_path):
+    path = os.path.dirname(__file__)
+    abs_list_path = os.path.join(path, model_list_path)
+
+    from keras.applications.inception_v3 import InceptionV3
+    from keras.models import Model
+    from keras.layers import Dense, GlobalAveragePooling2D
+
+    # InceptionV3 model training code
+    # create the base pre-trained model
+    base_model = InceptionV3(weights='imagenet', include_top=False)
+
+    # add a global spatial average pooling layer
+    x = base_model.output
+    x = GlobalAveragePooling2D()(x)
+    # let's add a fully-connected layer
+    x = Dense(1024, activation='relu')(x)
+    # and a logistic layer -- let's say we have 200 classes
+    predictions = Dense(200, activation='softmax')(x)
+
+    # this is the model we will train
+    model = Model(inputs=base_model.input, outputs=predictions)
+
+    # first: train only the top layers (which were randomly initialized)
+    # i.e. freeze all convolutional InceptionV3 layers
+    for layer in base_model.layers:
+        layer.trainable = False
+
+    # compile the model (should be done *after* setting layers
+    # to non-trainable)
+    model.compile(optimizer='rmsprop', loss='categorical_crossentropy')
+
+    with open(abs_list_path, "r") as file:
+        for datasetname in file:  # each line is a dataset
+            datasetname = datasetname.strip()
+
+            ds_pair = tdfs.load(datasetname,
+                                shuffle_files=True,
+                                download=True,
+                                split=['train[:80%]', 'test'])
+
+            model.fit(ds_pair[0])
+
+            # the first 249 layers and unfreeze the rest:
+            for layer in model.layers[:249]:
+                layer.trainable = False
+            for layer in model.layers[249:]:
+                layer.trainable = True
+
+            # retrain
+
+            # we need to recompile the model for these modifications
+            # to take effect, we use SGD with a low learning rate
+            from keras.optimizers import SGD
+            model.compile(optimizer=SGD(lr=0.0001, momentum=0.9),
+                          loss='categorical_crossentropy')
+
+            model.fit(ds_pair[0])
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 2:
-        path = os.path.dirname(__file__)
-        model = os.path.join(path, sys.argv[1])
-        try:
-            print(os.path.abspath(model))
-            if len(sys.argv) > 2:
-                model_create_equation(os.path.abspath(model), sys.argv[2])
-            else:
-                print("""not enough commands, please give a filename of a model
-                      to extract, it's training dataset (which may be altered
-                      at future date)
-                output for a tex file, and a csv file containing each type of
-                      acitvation used delimitered by ; (optional)""")
-        except FileNotFoundError:
-            print("""file not found,
-                    please give filename of model to extract equation from""")
-    else:
-        print("""not enough commands, please give a filename of a
-              model to extract, it's training dataset (which may be altered at
-    find the relations will probably result in error
-                 future date)""")
+    try:
+        if len(sys.argv) > 1:
+            test_main(sys.argv[1])
+    except FileNotFoundError:
+        print("""file not found,
+                  please give list of datasets to test from""")
