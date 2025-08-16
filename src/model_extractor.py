@@ -1,13 +1,5 @@
 import sys
 import os
-
-# from sage.all import shuffle
-
-# jax for custom code
-import jax
-import jax.numpy as jnp
-from jax import jit
-
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
@@ -20,14 +12,8 @@ import numpy as np
 from scipy import linalg
 import matplotlib.pyplot as plt
 
-# TUNE THESE INPUT PARAMS
-MAX_ITER = 2048
-BATCH_SIZE = 1024
-TEST_ROUNDS = 1
-TRAIN_SIZE = 1
-GP_SCALE = 0.1
-GP_VAR = 0.01
-
+# something sane here
+BATCH_SIZE=1024
 
 def product(x):
     out = 1
@@ -46,13 +32,6 @@ def activation_fn_lookup(activ_src, csv):
     return csv['function']['linear']
 
 
-# normalize function for images
-@tf.function
-def normalize_img(image):
-    return tf.cast(image, tf.float32) / 255.
-
-
-@tf.function
 def label_extract(label_extract, features):
     labels = []
     for feature in features:
@@ -65,8 +44,7 @@ def label_extract(label_extract, features):
 
 def bucketize_features(model, dataset):
     # get label and value
-    value, *features = list(list(
-        dataset.take(1).as_numpy_iterator())[0].keys())
+    value, *features = dataset.numpy()
 
     # get types of labels
     # dataset.unique() doesn't work with uint8
@@ -87,7 +65,7 @@ def bucketize_features(model, dataset):
 
     # have to update cardinality each time
     # remember labels is a list due to extract
-    @tf.function
+
     def condense(v):
         b = True
         for i in v:
@@ -96,12 +74,11 @@ def bucketize_features(model, dataset):
         return b
 
     # condense doesn't work as complains about python bool
-    auto_condense = tf.autograph.to_graph(condense.python_function)
 
     # bucketize each feature in each label, return complete datapoints
     # bucketizing is failing at the moment because the labels are consumed
     sets = [dataset.filter(lambda i:
-            auto_condense([i[feature] == label for feature in features]))
+            condense([i[feature] == label for feature in features]))
             for label in labels]
 
     # numpy array of predictions
@@ -137,9 +114,7 @@ def get_ds(dataset):
     value, *features = list(list(dataset.take(1).as_numpy_iterator())[0]
                             .keys())
 
-    [images, labels] = list(tf.data.Dataset.get_single_element(
-        dataset.batch(len(dataset))).values())
-    images = normalize_img(images)
+    [images, labels] =
     return [images, labels]
 
 def model_read_create(model, modelname):
