@@ -22,7 +22,7 @@
 import numpy as np
 import scipy.linalg as linalg
 
-import model_extractor as me
+import src.model_extractor as me
 
 
 # returns mutliplicants then powers

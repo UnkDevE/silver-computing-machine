@@ -18,17 +18,17 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-import os
 from random import randint
-
-import torch
 import sys
 
 import numpy as np
 import matplotlib.pyplot as plt
 
-import cech_algorithm as ca
-import model_extractor as me
+import torch
+from torchvision.models import vgg11
+
+import src.cech_algorithm as ca
+import src.model_extractor as me
 
 # TUNE THESE INPUT PARAMS
 TEST_ROUNDS = 1
@@ -87,10 +87,9 @@ def plot_test(starttest, endtest, outshape, name):
     plt.clf()
 
 
-def model_create_equation(model_dir, model_name, dataset):
+def model_create_equation(model, model_name, dataset):
     # check optional args
     # create prerequisites
-    model = torch.load(model_dir)
     if model is not None:
         # load dataset for training
 
@@ -127,20 +126,9 @@ def model_create_equation(model_dir, model_name, dataset):
 
         control = tester(model, sheaf, outward, sort_avg)
 
-        # copy out cfgs
-        loss_fn_cfg = model.loss.get_config()
-        loss_fn = model.loss.__class__.from_config(loss_fn_cfg)
-        optcfg = model.optimizer.get_config()
-        optimizer = model.optimizer.__class__.from_config(optcfg)
-        # copy over user metrics
-        metrics = [model.metrics[-1].__dict__['_user_metrics'][0].__class__()]
-
         for _ in range(TEST_ROUNDS):
             # should we wipe the model every i in TRAIN_SIZE or leave it?
             test_model = model.clone()
-
-            test_model.compile(optimizer=optimizer,
-                               loss=loss_fn, metrics=metrics)
 
             # using sols[0] shape as a template for input
             # this would be input, output shape of neural
@@ -174,7 +162,9 @@ def model_create_equation(model_dir, model_name, dataset):
             test_model.save(model_name + "_only_interpolant")
 
 
-def model_read_create(model, modelname, ds):
-    path = os.path.dirname(__file__)
-    model = os.path.join(path, model)
-    model_create_equation(os.path.abspath(model), modelname, ds)
+def model_test_batch(root):
+    datasets = me.download_data(root)
+
+    for ds in datasets:
+        vgg11_model = vgg11(ds)
+        model_create_equation(vgg11_model, "vgg11_" + str(type(ds)), ds)

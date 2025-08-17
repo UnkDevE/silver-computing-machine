@@ -97,25 +97,20 @@ def bucketize_features(model, dataset):
     return list(zip(labels, zip(inputimages, tensors)))
 
 
-def get_features(features, value):
-    xs = []
-    for f in features:
-        xs.append(value[f])
-
-    return xs
-
-
 def get_ds(dataset):
     [images, labels] = [dataset['train'], dataset['train'].classes]
     return [images, labels]
 
 
 # download all inbuilt datasets and construct them
-def download_data():
+def download_data(dataset_root):
     datasets_names = datasets.__all__
     ds_list = []
     for ds_name in datasets_names:
-        dataset = datasets.__dict__[ds_name](download=True)
-        ds_list.append(dataset)
+        dataset = datasets.__dict__[ds_name]
+        if dataset.__dict__.get('download') is not None:
+
+            dataset = dataset(dataset_root, download=True)
+            ds_list.append(dataset)
 
     return ds_list

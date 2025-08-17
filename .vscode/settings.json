@@ -1,7 +1,0 @@
-{
-    "cmake.configureOnOpen": false,
-    "terminal.integrated.inheritEnv": false,
-    "python.REPL.enableREPLSmartSend": false,
-    "python.analysis.autoImportCompletions": false,
-    "mesonbuild.selectRootDir": false
-}

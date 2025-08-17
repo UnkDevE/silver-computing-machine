@@ -30,8 +30,6 @@ compile_commands.json
 tasks.json
 settings.json
 .gdb_history
-.vscode/*
-!.vscode/settings.json
 *.produced.out
 CMakeSettings.json
 CppProperties.json
@@ -54,3 +52,5 @@ silver_bullet/
 *.so
 setup.c
 ver2.c
+.vscode/
+datasets/
