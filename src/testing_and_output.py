@@ -20,6 +20,7 @@
 
 from random import randint
 import sys
+from pathlib import Path
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -34,10 +35,15 @@ import src.model_extractor as me
 TEST_ROUNDS = 1
 TRAIN_SIZE = 1
 
-
 # for reproduciblity purposes
 GENERATOR_SEED = randint(0, sys.maxsize)
 print("REPRODUCUBLE RANDOM SEED IS:" + str(GENERATOR_SEED))
+
+sd = Path("seeds")
+sd.touch()
+with open("seeds", "a") as f:
+    f.write(str(GENERATOR_SEED) + "\n")
+
 # needs to be _global_ here otherwise generation of seed will start at 0
 # multiple times
 GENERATOR = generator1 = torch.Generator().manual_seed(GENERATOR_SEED)
