@@ -168,8 +168,8 @@ def model_create_equation(model, model_name, dataset):
             test_model.save(model_name + "_only_interpolant")
 
 
-def model_test_batch(root):
-    datasets = me.download_data(root)
+def model_test_batch(root, download=True):
+    datasets = me.download_data(root, download=download)
 
     for ds in datasets:
         vgg11_model = vgg11(ds)

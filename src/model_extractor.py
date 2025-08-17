@@ -22,7 +22,6 @@
 """
 
 
-from torch.utils.data import Dataset
 from torchvision import datasets
 
 import numpy as np
@@ -104,7 +103,7 @@ def get_ds(dataset):
 
 
 # download all inbuilt datasets and construct them
-def download_data(dataset_root):
+def download_data(dataset_root, download=True):
     import inspect
     datasets_names = [ds for ds in datasets.__dict__.keys()
                       if inspect.isclass(datasets.__dict__[ds])]
@@ -120,8 +119,12 @@ def download_data(dataset_root):
 
         print(args, kwargs)
         if (args - kwargs) < 2 and sig.parameters.get("download") is not None:
-            dataset = datasets.__dict__[ds_name](dataset_root, download=True)
-            ds_list.append(dataset)
+            try:
+                dataset = datasets.__dict__[ds_name](dataset_root,
+                                                     download)
+                ds_list.append(dataset)
+            except Exception as e:
+                print("dataset download did not work not appending...")
+                print("err: " + str(e))
 
-    print(ds_list)
     return ds_list
