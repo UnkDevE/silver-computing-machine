@@ -18,7 +18,11 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
+import os
+from random import randint
+
 import torch
+import sys
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -29,6 +33,14 @@ import model_extractor as me
 # TUNE THESE INPUT PARAMS
 TEST_ROUNDS = 1
 TRAIN_SIZE = 1
+
+
+# for reproduciblity purposes
+GENERATOR_SEED = randint(0, sys.maxsize)
+print("REPRODUCUBLE RANDOM SEED IS:" + str(GENERATOR_SEED))
+# needs to be _global_ here otherwise generation of seed will start at 0
+# multiple times
+GENERATOR = generator1 = torch.Generator().manual_seed(GENERATOR_SEED)
 
 
 def bucketize(prelims):
@@ -75,20 +87,16 @@ def plot_test(starttest, endtest, outshape, name):
     plt.clf()
 
 
-# helper for dict extraction
-def extract(param, layer):
-    ds = layer.__dict__()
-    if param in ds:
-        return ds[param]
-
-
-def model_create_equation(model_dir, model_name, ds_pair):
+def model_create_equation(model_dir, model_name, dataset):
     # check optional args
     # create prerequisites
     model = torch.load(model_dir)
     if model is not None:
         # load dataset for training
-        [train_dataset, test_dataset] = ds_pair
+
+        from torch.utils.data import random_split
+        [train_dataset, test_dataset] = random_split(dataset, [7, 3],
+                                                     generator=GENERATOR)
 
         # calculate fft + shape
         shapes = []
@@ -98,11 +106,10 @@ def model_create_equation(model_dir, model_name, ds_pair):
         shapes.append([ca.product(model.input_shape[1:])])
         activations = []
 
-        params_to_ex = ["weights", "biases", "act", "shape"]
         # main wb extraction loop
         for layer in model:
-            weights, biases, act, shape = [extract(p, layer)
-                                           for p in params_to_ex]
+            weights, biases, act, shape = [layer.weights, layer.baises,
+                                           layer.act, layer.size()]
 
             # if no activation assume linear
             activations.append(
@@ -110,7 +117,8 @@ def model_create_equation(model_dir, model_name, ds_pair):
             )
 
             layers.append([weights, biases])
-            shapes.append([shape, weights.shape, biases.shape])
+            shapes.append([shape, weights.numpy().shape,
+                           biases.numpy().shape])
 
         [sheaf, sols, outward, sort_avg, _] = ca.graph_model(
             model,
@@ -127,8 +135,7 @@ def model_create_equation(model_dir, model_name, ds_pair):
         # copy over user metrics
         metrics = [model.metrics[-1].__dict__['_user_metrics'][0].__class__()]
 
-        train_dataset.cache()
-        for t in range(TEST_ROUNDS):
+        for _ in range(TEST_ROUNDS):
             # should we wipe the model every i in TRAIN_SIZE or leave it?
             test_model = model.clone()
 
@@ -140,7 +147,6 @@ def model_create_equation(model_dir, model_name, ds_pair):
             # nets e.g. 784,10 for mnist
             systems = []
 
-            train_dataset.shuffle(me.BATCH_SIZE)
             bsplines = []
             for i in range(TRAIN_SIZE):
                 # find variance in solved systems
@@ -166,3 +172,9 @@ def model_create_equation(model_dir, model_name, ds_pair):
                 model.evaluate(test_dataset[0], test_dataset[1], verbose=2)
 
             test_model.save(model_name + "_only_interpolant")
+
+
+def model_read_create(model, modelname, ds):
+    path = os.path.dirname(__file__)
+    model = os.path.join(path, model)
+    model_create_equation(os.path.abspath(model), modelname, ds)

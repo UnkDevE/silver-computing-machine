@@ -1,25 +1,34 @@
-import sys
-import os
-import torch
-from torch import nn
-from torch.utils.data import DataLoader
+#!/bin/python
+"""
+    SILVER-COMPUTING-MACHINE converts Nerual nets into human readable code
+    or maths
+    Copyright (C) 2024-2025 Ethan Riley
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+
+   Torch dataset wrangler
+"""
+
+
 from torchvision import datasets
-from torchvision.transforms import ToTensor
 
-
-from scipy.fft import rfftn
 import numpy as np
-from scipy import linalg
-import matplotlib.pyplot as plt
 
 # something sane here
-BATCH_SIZE=1024
+BATCH_SIZE = 1024
 
-def product(x):
-    out = 1
-    for y in x:
-        out *= y
-    return out
 
 # looks up each activation from csv and then defines a function to it
 def activation_fn_lookup(activ_src, csv):
@@ -44,19 +53,9 @@ def label_extract(label_extract, features):
 
 def bucketize_features(model, dataset):
     # get label and value
-    value, *features = dataset.numpy()
-
-    # get types of labels
-    # dataset.unique() doesn't work with uint8
-    # so we remove the offending key and use it
-    def rm_val(d, val):
-        for v in val:
-            if v in d:
-                del d[v]
-        return d
-
+    features = dataset.classes
     # filter through to find duplicates
-    values_removed = dataset.map(lambda i: rm_val(i, [value]))
+    values_removed = dataset.unique()
 
     # call unique on features
     need_extract = values_removed.unique()
@@ -88,8 +87,7 @@ def bucketize_features(model, dataset):
         # get the images
         batch = dataset.padded_batch(BATCH_SIZE, drop_remainder=True)
         # samples not normalized
-        normalized = batch.map(lambda x: normalize_img(x['image']))
-        for sample in normalized:
+        for sample in batch:
             inputimages.append(sample)
             prediction = model.predict(sample)
             # divide by 10 because output is in form n instead of 1\n
@@ -108,24 +106,16 @@ def get_features(features, value):
 
 
 def get_ds(dataset):
-    # shuffle dataset so each sample is a bit different
-    dataset.shuffle(BATCH_SIZE)
-    # predict training batch, normalize images by 255
-    value, *features = list(list(dataset.take(1).as_numpy_iterator())[0]
-                            .keys())
-
-    [images, labels] =
+    [images, labels] = [dataset['train'], dataset['train'].classes]
     return [images, labels]
 
-def model_read_create(model, modelname):
-    path = os.path.dirname(__file__)
-    model = os.path.join(path, model)
-    model_create_equation(os.path.abspath(model), modelname)
 
-if __name__ == "__main__":
-    try:
-        if len(sys.argv) > 1:
-            test_main(sys.argv[1])
-    except FileNotFoundError:
-        print("""file not found,
-                  please give list of datasets to test from""")
+# download all inbuilt datasets and construct them
+def download_data():
+    datasets_names = datasets.__all__
+    ds_list = []
+    for ds_name in datasets_names:
+        dataset = datasets.__dict__[ds_name](download=True)
+        ds_list.append(dataset)
+
+    return ds_list
