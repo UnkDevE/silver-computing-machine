@@ -21,15 +21,22 @@
     Jax module - does heavy lifting of topology analysis
 """
 
-# jax for custom code
-import jax
-import jax.numpy as jnp
-from jax import jit
 
+# jax for custom code
+import jax.numpy as jnp
+import torch
+# torch for tensor LU
+import torch.linalg as t_linalg
+import jax.scipy.linalg as j_linalg
+
+from jax.numpy.fft import rfftn
 import numpy as np
-from scipy import linalg
-from scipy.fft import rfftn
+
 from matplotlib import pyplot as plt
+
+
+def jax_to_tensor(jax_arr):
+    return torch.from_numpy(np.asarray(jax_arr))
 
 
 def product(x):
@@ -64,24 +71,27 @@ def image(rref):
     cstack = []
     # we flip here as we want the bottom half of the matrix up to the zero
     # row reducing compute
-    for row in np.flip(cref):
+    for row in jnp.flip(cref):
         # split by zero row
-        if np.all(row == np.zeros_like(cref[0]).astype(np.float64)):
-            return np.stack(cstack)
+        if jnp.all(row == jnp.zeros_like(cref[0]).astype(jnp.float64)):
+            return jnp.stack(cstack)
         cstack.append(row)
-    return np.stack(cstack)
+    return jnp.stack(cstack)
 
 
 # calculates the chec differential
 def _chec_diff(x, start):
     # axis=1 from oldcode to fix bottoming out on final feature
-    shape = np.roll(np.reshape(np.meshgrid(x)[0], x.shape), start, axis=1)
-    reshape = np.reshape(np.arange(product(shape.shape)), shape.shape)
-    pow = np.float_power(-np.ones_like(x), reshape)
+    # this could be sped up with jax but is quick op
+    mesh = np.meshgrid(x)[0]
+
+    shape = jnp.roll(jnp.reshape(mesh, x.shape), start, axis=1)
+    reshape = jnp.reshape(jnp.arange(product(shape.shape)), shape.shape)
+    pow = jnp.float_power(-jnp.ones_like(x), reshape)
     s = x * pow
     # memory leak here
-    sum = np.cumsum(s)
-    return np.reshape(sum, x.shape)
+    sums = jnp.cumsum(s)
+    return jnp.reshape(sums, x.shape)
 
 
 # rolls a 1D array
@@ -89,7 +99,7 @@ def shifts(x, start):
     y = np.zeros([x.shape[0], *x.shape])
     for i in range(-start, x.shape[0] - start):
         y[i] = np.roll(x, i)
-    return y
+    return jnp.array(y)
 
 
 def chec_diff(x, start):
@@ -99,7 +109,7 @@ def chec_diff(x, start):
     for i, perm in enumerate(permutes):
         diffs.append(_chec_diff(perm, i))
 
-    return np.array(diffs)
+    return jnp.array(diffs)
 
 
 """
@@ -112,7 +122,7 @@ def pad_coeff_output(coeff):
         arr.append(x)
         last = i
 
-    return np.array(arr)
+    return jnp.array(arr)
 """
 
 
@@ -123,12 +133,12 @@ def pad_coeff_output(coeff):
 def chec_chomology(layer):
     diff = chec_diff(layer, 0)
     cocycle = chec_diff(layer, 1)
-    _, _, rrefco = linalg.lu(cocycle)
-    coboundary = image(rrefco)
+    rrefco, _, _, = t_linalg.lu_factor_ex(jax_to_tensor(cocycle))
+    coboundary = image(rrefco.numpy())
 
     # LDU we want U (reduced row echelon form)
-    _, _, rref = linalg.lu(diff)
-    simplex = image(rref.transpose())
+    rref, _, _, = t_linalg.lu_factor_ex(jax_to_tensor(diff))
+    simplex = image(rref.numpy().transpose())
 
     # calculate chomologies
     return (simplex, coboundary)
@@ -139,9 +149,25 @@ def sortshape(a):
     shapes = list(a.shape)
     for (i, sh) in enumerate(shapes):
         if sh >= last[1]:
-            a = np.swapaxes(a, -i, last[0])
+            a = jnp.swapaxes(a, -i, last[0])
             last = (i, sh)
     return a
+
+
+# diagsvd for n dimensions not batched
+def nd_diagsvd(zs, shapes):
+    # convert shape to list from tuple
+    shapes = list(shapes)
+    shapes.sort()
+    out = np.zeros(shapes)
+
+    lin = np.arange(0, product(shapes)).reshape(shapes)
+    ds = np.diag(lin)
+    idx = np.where(lin == ds)
+
+    out[idx] = zs
+    out = jnp.array(out)
+    return out
 
 
 # where space is the space in matrix format
@@ -153,26 +179,32 @@ def quot_space(subset, space):
     # set solve subset for zero
     zerosub = []
     for subs in subset:
-        zerosub.append(linalg.solve(subs, np.ones(subs.shape[0])))
-    zerosub = np.array(zerosub)
+        # make square by jigging axes order by greatest first because set
+        unqaxes = list(set(subs.shape))
+        jsubs = jnp.swapaxes(subs, len(unqaxes) - 1, 0)
+        jsolve = j_linalg.solve(jsubs, jnp.ones(jsubs.shape[-1]))
+        zerosub.append(jsolve)
+
+    zerosub = jnp.array(zerosub)
 
     # sheafify with irfftn to find quotient
     quot = []
-    zSl, zs, ZSr = linalg.svd(zerosub)
-    diag = linalg.diagsvd(zs, zerosub.shape[0], zerosub.shape[1])
+    zSl, zs, ZSr = j_linalg.svd(zerosub)
+    diag = nd_diagsvd(zs, zerosub.shape)
 
     for sp in space:
         # use svd here
-        SL, s, SR = linalg.svd(sp)
+        SL, s, SR = j_linalg.svd(sp)
 
         # compose both matrices
-        new_diag = linalg.diagsvd(s, sp.shape[0], sp.shape[1]) @ diag
+        print(diag.shape)
+        new_diag = nd_diagsvd(s, sp.shape) @ diag
         inputbasis = (zSl * SR) @ diag
         orthsout = SL @ new_diag @ ZSr
 
         quot.append(inputbasis @ orthsout.T)
 
-    quot = np.sum(np.array(quot), axis=0)
+    quot = jnp.sum(jnp.array(quot), axis=0)
     return quot
 
 
@@ -188,7 +220,7 @@ def cohomologies(layers):
             cohol.append(quot_space(kerims[-1][0], kerims[-2][1]))
 
     # append R space
-    start = [quot_space(kerims[0][1], np.ones_like(kerims[0][1]))]
+    start = [quot_space(kerims[0][1], jnp.ones_like(kerims[0][1]))]
     # don't forget append in start in reverse!
     [start.append(c) for c in cohol]
 
@@ -201,20 +233,20 @@ def create_sols_from_system(solved_system):
         outdim = system.shape[-1]
 
         # create output template to be rolled
-        template = np.zeros(outdim)
+        template = jnp.zeros(outdim)
         template[0] = 1
-        inv = linalg.pinv(system)
+        inv = t_linalg.pinv(jax_to_tensor(system)).numpy()
 
-        SL, s, _ = linalg.svd(inv)
+        SL, s, _ = j_linalg.svd(inv)
 
         outtemplate = shifts(template, 0)
         # solve backwards
         sols = []
         for shift in outtemplate:
             # use svd with solve
-            sols.append(linalg.solve(SL, shift) * s @ inv)
+            sols.append(j_linalg.solve(SL, shift) * s @ inv)
 
-        solutions.append((np.array(sols), outtemplate))
+        solutions.append((jnp.array(sols), outtemplate))
 
     # what next sheafify outputs?
     return solutions
@@ -227,7 +259,7 @@ def ceildiv(a, b):
 def graph_model(model, shapes, layers):
     targets = [1] * len(shapes)
     # add output target
-    targets[-1] = model.output_shape[-1]
+    targets[-1] = shapes[-1]
 
     shapes = complete_bias(shapes, targets)
 
@@ -251,7 +283,7 @@ def graph_model(model, shapes, layers):
             solution = solution @ sheaf.T
 
     # sheafifed = irfftn(solution, shapes[0])
-    sheafifed = np.imag(rfftn(solution, shapes[0]))
+    sheafifed = jnp.imag(rfftn(solution, shapes[0]))
 
     ret = [sheafifed, sols, outward, (solution.T @ outward).T]
     return ret
@@ -298,21 +330,22 @@ def save_interpol_video(model_name, trainset, interset, step):
     plt.clf()
 
 
-def interpolate_model_train(sols, model, train, step, vid_out=None):
+def interpolate_model_train(sols, model, train, step, shapes, vid_out=None):
     # get shapes
     outshape = len(sols[1])
-    model_shape = [1 if x is None else x for x in model.input_shape]
+    model_shape = [1 if x is None else x for x in shapes[0]]
     # sensible names
-    ins = np.array(sols[0])
-    # out = np.array(sols[1])
+    ins = jnp.array(sols[0])
+    # out = jnp.array(sols[1])
     from scipy.interpolate import make_splprep
     # out is already a diagonalized matrix of 1s
     # so therefore the standard basis becomes 0
-    _, _, std_basis = linalg.svd(ins)
+    _, _, std_basis = j_linalg.svd(ins)
     # solve for the new std_basis
-    new_basis = linalg.solve(std_basis, np.zeros(std_basis.shape[0]))
+    new_basis = j_linalg.solve(std_basis, jnp.zeros(std_basis.shape[0]))
     # create LU Decomposition towards new_basis
-    lu_decomp = linalg.lu(np.vstack([ins, new_basis]).T)
+    lu_decomp = t_linalg.lu_factor_ex(jax_to_tensor(jnp.vstack([ins,
+                                                    new_basis]).T))
 
     # multiply out the final answer column so it is at an equal outputs
     # we can't use this on LU decomposition as it would come out as zero.
@@ -323,22 +356,22 @@ def interpolate_model_train(sols, model, train, step, vid_out=None):
             mul = sample[-1]
             solved_sheafs = tomul * mul
             solved_decomp.append(solved_sheafs)
-        return np.array(solved_decomp)
+        return jnp.array(solved_decomp)
 
     # get dataset
     import model_extractor as me
     [images, labels] = me.get_ds(train)
 
     # interpolate
-    [spline, u] = make_splprep(lu_decomp[1].T, k=outshape + 1)
-    mask_samples = reduce_basis(np.array(spline(images).swapaxes(0, 1)))
-    mask_samples = np.reshape(mask_samples, [images.shape[0] * outshape,
-                                             *model_shape[1:]])
+    [spline, u] = make_splprep(lu_decomp[1].T.numpy(), k=outshape + 1)
+    mask_samples = reduce_basis(jnp.array(spline(images).swapaxes(0, 1)))
+    mask_samples = jnp.reshape(mask_samples, [images.shape[0] * outshape,
+                               *model_shape[1:]])
 
-    solved_samples = np.repeat(images, outshape, axis=0)
-    solved_samples = np.reshape(solved_samples, solved_samples.shape[:-1])
+    solved_samples = jnp.repeat(images, outshape, axis=0)
+    solved_samples = jnp.reshape(solved_samples, solved_samples.shape[:-1])
 
-    # check model, reshape inputs
+    # check model, reshape jnputs
     mask = mask_samples > solved_samples
     import numpy.ma as ma
     masked_samples = ma.array(solved_samples, mask=mask, fill_value=0)
@@ -348,6 +381,6 @@ def interpolate_model_train(sols, model, train, step, vid_out=None):
     if vid_out is not None:
         save_interpol_video(str(vid_out), solved_samples, mask_samples, step)
 
-    rep_labels = np.repeat(labels, outshape)
+    rep_labels = jnp.repeat(labels, outshape)
     model.fit(masked_samples, rep_labels, epochs=5)
-    return [model, lu_decomp[1], spline, u]
+    return [model, lu_decomp[1].numpy(), spline, u]

@@ -60,7 +60,7 @@ def bucketize(prelims):
 
 
 def tester(model, sheafout, sheafs, sort_avg):
-    model_shape = [1 if x is None else x for x in model.input_shape]
+    model_shape = [1 if x is None else x for x in model.paramaters().size()]
     out = np.reshape(sheafout, model_shape)
     final_test = model(out)
 
@@ -93,6 +93,16 @@ def plot_test(starttest, endtest, outshape, name):
     plt.clf()
 
 
+def get_activations(model):
+    hooks = {}
+    for name, _ in model.named_modules():
+        attr = getattr(model, name, None)
+        if attr is not None:
+            hooks[name] = attr
+
+    return hooks
+
+
 def model_create_equation(model, model_name, dataset):
     # check optional args
     # create prerequisites
@@ -100,30 +110,27 @@ def model_create_equation(model, model_name, dataset):
         # load dataset for training
 
         from torch.utils.data import random_split
-        [train_dataset, test_dataset] = random_split(dataset, [7, 3],
-                                                     generator=GENERATOR)
+        ds_len = len(dataset)
+        [train_dataset, test_dataset] = random_split(dataset, [
+            (ds_len // 10) * 7, (ds_len // 10) * 3], generator=GENERATOR)
 
         # calculate fft + shape
         shapes = []
         layers = []
 
-        # append input shape remove None type
-        shapes.append([ca.product(model.input_shape[1:])])
-        activations = []
+        # if no activation assume linear
+        activations = get_activations(model)
 
         # main wb extraction loop
-        for layer in model:
-            weights, biases, act, shape = [layer.weights, layer.baises,
-                                           layer.act, layer.size()]
+        from itertools import batched
+        for [[weights, biases], act] in zip(batched(model.parameters(), 2),
+                                            activations):
 
-            # if no activation assume linear
-            activations.append(
-                lambda x: x if act is None else act(x)
-            )
-
-            layers.append([weights, biases])
-            shapes.append([shape, weights.numpy().shape,
-                           biases.numpy().shape])
+            shapes.append([weights.size(), biases.size()])
+            # make a copy of weights and biases to work off of
+            layers.append([np.copy(weights.detach().numpy()),
+                           np.copy(biases.detach().numpy()),
+                           act, shapes[-1]])
 
         [sheaf, sols, outward, sort_avg, _] = ca.graph_model(
             model,
@@ -146,11 +153,10 @@ def model_create_equation(model, model_name, dataset):
                 # find variance in solved systems
                 [test_model, solved_system,
                     bspline, u] = ca.interpolate_model_train(
-                        model_name,
                         sols[-1],
                         test_model,
                         train_dataset,
-                        i)
+                        i, shapes)
                 bsplines.append([bspline, u])
                 systems.append(solved_system)
                 # and testing
