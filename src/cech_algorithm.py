@@ -154,22 +154,6 @@ def sortshape(a):
     return a
 
 
-# diagsvd for n dimensions not batched
-def nd_diagsvd(zs, shapes):
-    # convert shape to list from tuple
-    shapes = list(shapes)
-    shapes.sort()
-    out = np.zeros(shapes)
-
-    lin = np.arange(0, product(shapes)).reshape(shapes)
-    ds = np.diag(lin)
-    idx = np.where(lin == ds)
-
-    out[idx] = zs
-    out = jnp.array(out)
-    return out
-
-
 # where space is the space in matrix format
 # plus the subset of spaces
 def quot_space(subset, space):
@@ -189,17 +173,15 @@ def quot_space(subset, space):
 
     # sheafify with irfftn to find quotient
     quot = []
-    zSl, zs, ZSr = j_linalg.svd(zerosub)
-    diag = nd_diagsvd(zs, zerosub.shape)
+    zSl, zs, ZSr = j_linalg.svd(zerosub, full_matricies=True)
 
     for sp in space:
         # use svd here
-        SL, s, SR = j_linalg.svd(sp)
+        SL, s, SR = j_linalg.svd(sp, full_matricies=True)
 
         # compose both matrices
-        print(diag.shape)
-        new_diag = nd_diagsvd(s, sp.shape) @ diag
-        inputbasis = (zSl * SR) @ diag
+        new_diag = s @ zs
+        inputbasis = (zSl * SR) @ zs
         orthsout = SL @ new_diag @ ZSr
 
         quot.append(inputbasis @ orthsout.T)
