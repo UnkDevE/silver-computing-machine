@@ -173,16 +173,25 @@ def quot_space(subset, space):
 
     # sheafify with irfftn to find quotient
     quot = []
-    zSl, zs, ZSr = j_linalg.svd(zerosub, full_matricies=True)
+    zSl, zs, ZSr = j_linalg.svd(zerosub)
+    diag = j_linalg.svd(zerosub, full_matrices=True, compute_uv=False)
 
     for sp in space:
         # use svd here
-        SL, s, SR = j_linalg.svd(sp, full_matricies=True)
-
+        SL, s, SR = j_linalg.svd(sp)
+        # differing approaches if even or odd dim
         # compose both matrices
-        new_diag = s @ zs
-        inputbasis = (zSl * SR) @ zs
-        orthsout = SL @ new_diag @ ZSr
+        if set(s.shape) == set(zs.shape):
+            new_diag = s @ zs
+        else:
+            new_diag = (s.T @ zs).T
+
+        if len(zerosub.shape) % 2 == 0 or set(s.shape) == set(zs.shape):
+            inputbasis = (zSl @ SR) @ diag  # err here
+            orthsout = SL @ new_diag @ ZSr
+        else:
+            orthsout = ((ZSr @ SL) @ new_diag.T)
+            inputbasis = zSl @ new_diag @ SR
 
         quot.append(inputbasis @ orthsout.T)
 
