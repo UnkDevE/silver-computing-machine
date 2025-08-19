@@ -23,6 +23,7 @@
 
 
 # jax for custom code
+import jax
 import jax.numpy as jnp
 import torch
 # torch for tensor LU
@@ -154,6 +155,28 @@ def sortshape(a):
     return a
 
 
+# takes in two shapes to matmul if same mutliplies
+# sorts axes in greatest to least
+def maybematmul(a, b):
+    shapes = [list(a.shape), list(b.shape)]
+    # sort in gt to lt
+    shapes_sorted = [np.flip(np.argsort(s)) for s in shapes]
+
+    if shapes[0] != shapes[1]:
+        a = jax.lax.transpose(a, shapes_sorted[0])
+        b = jax.lax.transpose(b, shapes_sorted[1])
+
+    if np.all(shapes_sorted == shapes_sorted[0]):
+        c = a * b
+    else:
+        if sum(shapes[0]) > sum(shapes[1]):
+            c = a @ b
+        else:
+            c = b @ a
+
+    return jax.lax.transpose(c, np.flip(np.argsort(c.shape)))
+
+
 # where space is the space in matrix format
 # plus the subset of spaces
 def quot_space(subset, space):
@@ -181,19 +204,24 @@ def quot_space(subset, space):
         SL, s, SR = j_linalg.svd(sp)
         # differing approaches if even or odd dim
         # compose both matrices
-        if set(s.shape) == set(zs.shape):
+        shapes = [list(s.shape), list(zs.shape)]
+        [s.sort() for s in shapes]
+
+        if shapes[0] == shapes[1]:
             new_diag = s @ zs
         else:
             new_diag = (s.T @ zs).T
 
-        if len(zerosub.shape) % 2 == 0 or set(s.shape) == set(zs.shape):
-            inputbasis = (zSl @ SR) @ diag  # err here
-            orthsout = SL @ new_diag @ ZSr
+        if set(shapes[0]) != set(shapes[1]) or ZSr.shape == SL.shape:
+            inputbasis = maybematmul(ZSr, SL) @ diag
+            orthsout = zSl @ diag @ new_diag @ SR
         else:
-            orthsout = ((ZSr @ SL) @ new_diag.T)
-            inputbasis = zSl @ new_diag @ SR
+            inputbasis = maybematmul(ZSr, SR) @ new_diag
+            orthsout = maybematmul(SL @ diag @ new_diag, SR)
+            inputbasis = jnp.swapaxes(inputbasis,
+                                      len(inputbasis.shape) // 2, 0)
 
-        quot.append(inputbasis @ orthsout.T)
+        quot.append(maybematmul(inputbasis, orthsout))
 
     quot = jnp.sum(jnp.array(quot), axis=0)
     return quot
@@ -221,6 +249,7 @@ def cohomologies(layers):
 def create_sols_from_system(solved_system):
     solutions = []
     for system in solved_system:
+        print(system)
         outdim = system.shape[-1]
 
         # create output template to be rolled
