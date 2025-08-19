@@ -37,7 +37,7 @@ from matplotlib import pyplot as plt
 
 
 def jax_to_tensor(jax_arr):
-    return torch.from_numpy(np.asarray(jax_arr))
+    return torch.from_numpy(np.asarray(jax_arr).copy())
 
 
 def product(x):
@@ -166,10 +166,20 @@ def maybematmul(a, b):
         a = jax.lax.transpose(a, shapes_sorted[0])
         b = jax.lax.transpose(b, shapes_sorted[1])
 
-    if np.all(shapes_sorted == shapes_sorted[0]):
-        c = a * b
+    fs = shapes_sorted[0]
+    bools = [si == fs for si in shapes_sorted if sum(si) == sum(fs)]
+    ors = [len(si) > len(fs) for si in shapes_sorted]
+
+    if not np.any(ors) and np.all(bools):
+        c = b * a
     else:
-        if sum(shapes[0]) > sum(shapes[1]):
+        if np.any(ors):
+            # this isn't quite right as the sum returns something incorrect
+            if sum(shapes[0]) <= sum(shapes[1]):
+                c = a.T * b.T
+            else:
+                c = a @ b
+        elif sum(shapes[0]) > sum(shapes[1]):
             c = a @ b
         else:
             c = b @ a
@@ -243,18 +253,18 @@ def cohomologies(layers):
     # don't forget append in start in reverse!
     [start.append(c) for c in cohol]
 
-    return start
+    return jnp.array(start)
 
 
 def create_sols_from_system(solved_system):
     solutions = []
     for system in solved_system:
-        print(system)
         outdim = system.shape[-1]
 
         # create output template to be rolled
-        template = jnp.zeros(outdim)
+        template = np.zeros(outdim)
         template[0] = 1
+        template = jnp.array(template)
         inv = t_linalg.pinv(jax_to_tensor(system)).numpy()
 
         SL, s, _ = j_linalg.svd(inv)
@@ -264,7 +274,7 @@ def create_sols_from_system(solved_system):
         sols = []
         for shift in outtemplate:
             # use svd with solve
-            sols.append(j_linalg.solve(SL, shift) * s @ inv)
+            sols.append(maybematmul(j_linalg.solve(SL, shift) * s, inv))
 
         solutions.append((jnp.array(sols), outtemplate))
 
