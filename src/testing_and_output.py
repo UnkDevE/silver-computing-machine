@@ -110,9 +110,8 @@ def model_create_equation(model, model_name, dataset):
         # load dataset for training
 
         from torch.utils.data import random_split
-        ds_len = len(dataset)
-        [train_dataset, test_dataset] = random_split(dataset, [
-            (ds_len // 10) * 7, (ds_len // 10) * 3], generator=GENERATOR)
+        [train_dataset, test_dataset] = random_split(dataset, [0.7, 0.3],
+                                                     generator=GENERATOR)
 
         # calculate fft + shape
         shapes = []
