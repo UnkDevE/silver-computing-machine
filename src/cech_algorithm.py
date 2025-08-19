@@ -187,10 +187,10 @@ def quot_space(subset, space):
             new_diag = (s.T @ zs).T
 
         if len(zerosub.shape) % 2 == 0 or set(s.shape) == set(zs.shape):
-            inputbasis = (zSl @ SR) @ diag  # err here
+            inputbasis = (zSl * SR) @ diag  # err here
             orthsout = SL @ new_diag @ ZSr
         else:
-            orthsout = ((ZSr @ SL) @ new_diag.T)
+            orthsout = ((ZSr * SL) @ new_diag.T)
             inputbasis = zSl @ new_diag @ SR
 
         quot.append(inputbasis @ orthsout.T)
