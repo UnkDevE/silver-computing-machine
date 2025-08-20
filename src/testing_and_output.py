@@ -60,7 +60,8 @@ def bucketize(prelims):
 
 
 def tester(model, sheafout, sheafs, sort_avg):
-    model_shape = [1 if x is None else x for x in model.paramaters().size()]
+    model_shape = [1 if x is None else x
+                   for x in list(model.parameters().size())]
     out = np.reshape(sheafout, model_shape)
     final_test = model(out)
 
@@ -131,7 +132,7 @@ def model_create_equation(model, model_name, dataset):
                            np.copy(biases.detach().numpy()),
                            act, shapes[-1]])
 
-        [sheaf, sols, outward, sort_avg, _] = ca.graph_model(
+        [sheaf, sols, outward, sort_avg] = ca.graph_model(
             model,
             shapes,
             layers)

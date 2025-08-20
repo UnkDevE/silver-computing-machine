@@ -305,28 +305,35 @@ def graph_model(model, shapes, layers):
     sols = create_sols_from_system(solved_system)
     # convert from matrix
 
+    def sheafify(sheaf, solution):
+        sheaf = sheaf[0]
+        if sheaf.shape == solution.shape:
+            solution = solution * sheaf
+        else:
+            solution = jax.lax.transpose(solution, np.argsort(solution.shape))
+            sheaf = jax.lax.transpose(sheaf, np.argsort(sheaf.shape))
+            if sheaf.shape[:-1] == solution.shape[:-1]:
+                solution = np.tensordot(solution.T, sheaf)
+            elif len(sheaf.shape) != len(solution.shape):
+                # move greatest in centre
+                sheaf = jnp.swapaxes(sheaf, len(sheaf.shape) - 1,
+                                     len(sheaf.shape) // 2)
+                # inner product
+                solution = jnp.inner(sheaf, solution.T)
+            else:
+                solution = solution @ sheaf
+
+        return solution
+
     # sheafify
     solution = sols[0][0]
     outward = sols[0][0]
     for sheaf in sols[1:]:
-        sheaf = sheaf[0]
-        if sheaf.shape == solution.shape:
-            solution = solution * sheaf
-            outward = solution
-        else:
-            solution = jax.lax.transpose(solution, np.argsort(solution.shape))
-            sheaf = jax.lax.transpose(sheaf, np.argsort(sheaf.shape))
-            breakpoint()
-            if (sheaf.shape[:-1] == solution.shape[:-1]):  # and
-                #    sheaf.shape[-1] >= solution.shape[-1]):
-                solution = np.tensordot(solution.T, sheaf)
-            else:
-                solution = solution @ sheaf
+        solution = sheafify(sheaf, solution)
 
-    # sheafifed = irfftn(solution, shapes[0])
-    sheafifed = jnp.imag(rfftn(solution, shapes[0]))
+    sheafifed = rfftn(solution, solution.shape)
 
-    ret = [sheafifed, sols, outward, (solution.T @ outward).T]
+    ret = [sheafifed, sols, outward, sheafify(outward, solution)]
     return ret
 
 
