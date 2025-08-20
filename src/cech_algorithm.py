@@ -162,7 +162,8 @@ def maybematmul(a, b):
     # sort in gt to lt
     shapes_sorted = [np.flip(np.argsort(s)) for s in shapes]
 
-    if shapes[0] != shapes[1]:
+    if len(shapes[1]) >= len(
+       shapes[0]) or list(shapes_sorted[0]) != list(shapes_sorted[1]):
         a = jax.lax.transpose(a, shapes_sorted[0])
         b = jax.lax.transpose(b, shapes_sorted[1])
 
@@ -175,8 +176,11 @@ def maybematmul(a, b):
     else:
         if np.any(ors):
             # this isn't quite right as the sum returns something incorrect
-            if sum(shapes[0]) <= sum(shapes[1]):
+            if sum(shapes[0]) <= sum(shapes[1]) and len(shapes[1]) <= 3:
                 c = a.T * b.T
+            elif len(shapes[1]) > 3:
+                # double dot product
+                c = np.einsum("ij..., ij... ->...", a, b)
             else:
                 c = a @ b
         elif sum(shapes[0]) > sum(shapes[1]):
@@ -310,7 +314,14 @@ def graph_model(model, shapes, layers):
             solution = solution * sheaf
             outward = solution
         else:
-            solution = solution @ sheaf.T
+            solution = jax.lax.transpose(solution, np.argsort(solution.shape))
+            sheaf = jax.lax.transpose(sheaf, np.argsort(sheaf.shape))
+            breakpoint()
+            if (sheaf.shape[:-1] == solution.shape[:-1]):  # and
+                #    sheaf.shape[-1] >= solution.shape[-1]):
+                solution = np.tensordot(solution.T, sheaf)
+            else:
+                solution = solution @ sheaf
 
     # sheafifed = irfftn(solution, shapes[0])
     sheafifed = jnp.imag(rfftn(solution, shapes[0]))
