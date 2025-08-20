@@ -30,7 +30,7 @@ import torch
 import torch.linalg as t_linalg
 import jax.scipy.linalg as j_linalg
 
-from jax.numpy.fft import rfftn
+from jax.numpy.fft import irfftn
 import numpy as np
 
 from matplotlib import pyplot as plt
@@ -331,7 +331,7 @@ def graph_model(model, shapes, layers):
     for sheaf in sols[1:]:
         solution = sheafify(sheaf, solution)
 
-    sheafifed = rfftn(solution, solution.shape)
+    sheafifed = irfftn(solution, s=list(shapes[0][0]))
 
     ret = [sheafifed, sols, outward, sheafify(outward, solution)]
     return ret

@@ -59,9 +59,8 @@ def bucketize(prelims):
     return np.array(arr)
 
 
-def tester(model, sheafout, sheafs, sort_avg):
-    model_shape = [1 if x is None else x
-                   for x in list(model.parameters().size())]
+def tester(model, shapes, sheafout, sheafs, sort_avg):
+    model_shape = list(shapes[0][0])  # in shape from pytorch
     out = np.reshape(sheafout, model_shape)
     final_test = model(out)
 
@@ -137,7 +136,7 @@ def model_create_equation(model, model_name, dataset):
             shapes,
             layers)
 
-        control = tester(model, sheaf, outward, sort_avg)
+        control = tester(model, shapes, sheaf, outward, sort_avg)
 
         for _ in range(TEST_ROUNDS):
             # should we wipe the model every i in TRAIN_SIZE or leave it?
@@ -160,7 +159,7 @@ def model_create_equation(model, model_name, dataset):
                 bsplines.append([bspline, u])
                 systems.append(solved_system)
                 # and testing
-                test = tester(test_model, sheaf, outward, sort_avg)
+                test = tester(test_model, shapes, sheaf, outward, sort_avg)
                 plot_test(control, test, shapes[-1],
                           model_name + "-out-epoch-" + str(i) + ".png")
 
