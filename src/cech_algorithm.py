@@ -222,7 +222,7 @@ def quot_space(subset, space):
         else:
             new_diag = (s.T @ zs).T
 
-       if set(shapes[0]) != set(shapes[1]) or ZSr.shape == SL.shape:
+        if set(shapes[0]) != set(shapes[1]) or ZSr.shape == SL.shape:
             inputbasis = maybematmul(ZSr, SL) @ diag
             orthsout = zSl @ diag @ new_diag @ SR
         else:
