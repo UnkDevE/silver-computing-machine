@@ -23,6 +23,7 @@
 
 
 # jax for custom code
+import jax
 import jax.numpy as jnp
 import torch
 # torch for tensor LU
@@ -36,7 +37,7 @@ from matplotlib import pyplot as plt
 
 
 def jax_to_tensor(jax_arr):
-    return torch.from_numpy(np.asarray(jax_arr))
+    return torch.from_numpy(np.asarray(jax_arr).copy())
 
 
 def product(x):
@@ -154,6 +155,38 @@ def sortshape(a):
     return a
 
 
+# takes in two shapes to matmul if same mutliplies
+# sorts axes in greatest to least
+def maybematmul(a, b):
+    shapes = [list(a.shape), list(b.shape)]
+    # sort in gt to lt
+    shapes_sorted = [np.flip(np.argsort(s)) for s in shapes]
+
+    if shapes[0] != shapes[1]:
+        a = jax.lax.transpose(a, shapes_sorted[0])
+        b = jax.lax.transpose(b, shapes_sorted[1])
+
+    fs = shapes_sorted[0]
+    bools = [si == fs for si in shapes_sorted if sum(si) == sum(fs)]
+    ors = [len(si) > len(fs) for si in shapes_sorted]
+
+    if not np.any(ors) and np.all(bools):
+        c = b * a
+    else:
+        if np.any(ors):
+            # this isn't quite right as the sum returns something incorrect
+            if sum(shapes[0]) <= sum(shapes[1]):
+                c = a.T * b.T
+            else:
+                c = a @ b
+        elif sum(shapes[0]) > sum(shapes[1]):
+            c = a @ b
+        else:
+            c = b @ a
+
+    return jax.lax.transpose(c, np.flip(np.argsort(c.shape)))
+
+
 # where space is the space in matrix format
 # plus the subset of spaces
 def quot_space(subset, space):
@@ -181,19 +214,24 @@ def quot_space(subset, space):
         SL, s, SR = j_linalg.svd(sp)
         # differing approaches if even or odd dim
         # compose both matrices
-        if set(s.shape) == set(zs.shape):
+        shapes = [list(s.shape), list(zs.shape)]
+        [s.sort() for s in shapes]
+
+        if shapes[0] == shapes[1]:
             new_diag = s @ zs
         else:
             new_diag = (s.T @ zs).T
 
-        if len(zerosub.shape) % 2 == 0 or set(s.shape) == set(zs.shape):
-            inputbasis = (zSl * SR) @ diag  # err here
-            orthsout = SL @ new_diag @ ZSr
+       if set(shapes[0]) != set(shapes[1]) or ZSr.shape == SL.shape:
+            inputbasis = maybematmul(ZSr, SL) @ diag
+            orthsout = zSl @ diag @ new_diag @ SR
         else:
-            orthsout = ((ZSr * SL) @ new_diag.T)
-            inputbasis = zSl @ new_diag @ SR
+            inputbasis = maybematmul(ZSr, SR) @ new_diag
+            orthsout = maybematmul(SL @ diag @ new_diag, SR)
+            inputbasis = jnp.swapaxes(inputbasis,
+                                      len(inputbasis.shape) // 2, 0)
 
-        quot.append(inputbasis @ orthsout.T)
+        quot.append(maybematmul(inputbasis, orthsout))
 
     quot = jnp.sum(jnp.array(quot), axis=0)
     return quot
@@ -215,7 +253,7 @@ def cohomologies(layers):
     # don't forget append in start in reverse!
     [start.append(c) for c in cohol]
 
-    return start
+    return jnp.array(start)
 
 
 def create_sols_from_system(solved_system):
@@ -224,8 +262,9 @@ def create_sols_from_system(solved_system):
         outdim = system.shape[-1]
 
         # create output template to be rolled
-        template = jnp.zeros(outdim)
+        template = np.zeros(outdim)
         template[0] = 1
+        template = jnp.array(template)
         inv = t_linalg.pinv(jax_to_tensor(system)).numpy()
 
         SL, s, _ = j_linalg.svd(inv)
@@ -235,7 +274,7 @@ def create_sols_from_system(solved_system):
         sols = []
         for shift in outtemplate:
             # use svd with solve
-            sols.append(j_linalg.solve(SL, shift) * s @ inv)
+            sols.append(maybematmul(j_linalg.solve(SL, shift) * s, inv))
 
         solutions.append((jnp.array(sols), outtemplate))
 
