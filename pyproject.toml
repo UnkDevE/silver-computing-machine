@@ -11,6 +11,6 @@ dependencies = [
     "pandas",
     "matplotlib",
     "torch[rocm]", 
-    "torchvision"
+    "torchvision",
     #    "passagemath-standard",
 ]

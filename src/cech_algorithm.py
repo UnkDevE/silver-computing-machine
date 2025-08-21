@@ -50,7 +50,7 @@ def product(x):
 # helper
 def complete_bias(shapes, targets):
     def tup_complete(tup, tar):
-        return (tup[0], tar) if len(tup) < 2 else tup
+        return (tup[0], tar) if len(tup) <= 2 else tup
 
     shapes_new = [tup_complete(shapes[0], targets[0])]
     for shape, target in zip(shapes[1:], targets[1:]):
@@ -295,8 +295,6 @@ def graph_model(model, shapes, layers):
     # add output target
     targets[-1] = shapes[-1]
 
-    shapes = complete_bias(shapes, targets)
-
     # fft calculation goes through here
     # zeroth index of layer is weights
     solved_system = [cohomologies(layer[0]) for layer in layers]
@@ -331,8 +329,7 @@ def graph_model(model, shapes, layers):
     for sheaf in sols[1:]:
         solution = sheafify(sheaf, solution)
 
-    breakpoint()
-    sheafifed = irfftn(solution[:, np.newaxis], s=list(shapes[0][0]))
+    sheafifed = irfftn(solution[:, np.newaxis], s=shapes[0])
 
     ret = [sheafifed, sols, outward, sheafify(outward, solution)]
     return ret

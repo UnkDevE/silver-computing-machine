@@ -26,7 +26,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import torch
-from torchvision.models import vgg11
+from torchvision.models import vgg11, efficientnet_v2_s
 
 import src.cech_algorithm as ca
 import src.model_extractor as me
@@ -62,6 +62,8 @@ def bucketize(prelims):
 def tester(model, shapes, sheafout, sheafs, sort_avg):
     model_shape = list(shapes[0][0])  # in shape from pytorch
     out = np.reshape(sheafout, model_shape)
+    print(model)
+    breakpoint()
     final_test = model(ca.jax_to_tensor(out))
 
     prelim_shape = model_shape
@@ -103,7 +105,7 @@ def get_activations(model):
     return hooks
 
 
-def model_create_equation(model, model_name, dataset):
+def model_create_equation(model, model_name, dataset, in_shape):
     # check optional args
     # create prerequisites
     if model is not None:
@@ -114,11 +116,13 @@ def model_create_equation(model, model_name, dataset):
                                                      generator=GENERATOR)
 
         # calculate fft + shape
-        shapes = []
         layers = []
 
         # if no activation assume linear
         activations = get_activations(model)
+
+        # extract correct input size
+        shapes = [[in_shape, in_shape]]
 
         # main wb extraction loop
         from itertools import batched
@@ -173,9 +177,12 @@ def model_create_equation(model, model_name, dataset):
             test_model.save(model_name + "_only_interpolant")
 
 
-def model_test_batch(root, download=True):
-    datasets = me.download_data(root, download=download)
+def model_test_batch(root, res, download=True):
+    datasets = me.download_data(root, res, download=download)
 
     for ds in datasets:
         vgg11_model = vgg11(ds)
-        model_create_equation(vgg11_model, "vgg11_" + str(type(ds)), ds)
+        eff_model = efficientnet_v2_s(ds)
+
+        model_create_equation(vgg11_model, "vgg11_" + str(type(ds)), ds, res)
+        model_create_equation(eff_model, "effv2s_" + str(type(ds)), ds, res)

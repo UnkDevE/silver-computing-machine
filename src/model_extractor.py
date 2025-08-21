@@ -22,6 +22,7 @@
 """
 
 
+from torchvision.transforms import v2
 from torchvision import datasets
 
 import numpy as np
@@ -103,7 +104,7 @@ def get_ds(dataset):
 
 
 # download all inbuilt datasets and construct them
-def download_data(dataset_root, download=True):
+def download_data(dataset_root, res, download=True):
     import inspect
     datasets_names = [ds for ds in datasets.__dict__.keys()
                       if inspect.isclass(datasets.__dict__[ds])]
@@ -117,11 +118,13 @@ def download_data(dataset_root, download=True):
                      if param.kind != param.POSITIONAL_ONLY])
         args = len(sig.parameters.values())
 
-        print(args, kwargs)
         if (args - kwargs) < 2 and sig.parameters.get("download") is not None:
             try:
-                dataset = datasets.__dict__[ds_name](dataset_root,
-                                                     download)
+                dataset = datasets.__dict__[ds_name](
+                    dataset_root,
+                    download)
+
+                dataset.transform = v2.Resize([res, res])
                 ds_list.append(dataset)
             except Exception as e:
                 print("dataset download did not work not appending...")
