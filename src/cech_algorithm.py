@@ -331,7 +331,8 @@ def graph_model(model, shapes, layers):
     for sheaf in sols[1:]:
         solution = sheafify(sheaf, solution)
 
-    sheafifed = irfftn(solution, s=list(shapes[0][0]))
+    breakpoint()
+    sheafifed = irfftn(solution[:, np.newaxis], s=list(shapes[0][0]))
 
     ret = [sheafifed, sols, outward, sheafify(outward, solution)]
     return ret

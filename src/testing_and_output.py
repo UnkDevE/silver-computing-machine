@@ -62,7 +62,7 @@ def bucketize(prelims):
 def tester(model, shapes, sheafout, sheafs, sort_avg):
     model_shape = list(shapes[0][0])  # in shape from pytorch
     out = np.reshape(sheafout, model_shape)
-    final_test = model(out)
+    final_test = model(ca.jax_to_tensor(out))
 
     prelim_shape = model_shape
     prelim_shape[0] *= sheafs.shape[0]
