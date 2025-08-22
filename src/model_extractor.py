@@ -99,7 +99,8 @@ def bucketize_features(model, dataset):
 
 
 def get_ds(dataset):
-    [images, labels] = [dataset['train'], dataset['train'].classes]
+    breakpoint()
+    [images, labels] = [dataset, dataset.targets]
     return [images, labels]
 
 

@@ -329,7 +329,7 @@ def graph_model(model, shapes, layers):
     for sheaf in sols[1:]:
         solution = sheafify(sheaf, solution)
 
-    sheafifed = irfftn(solution[:, np.newaxis], s=shapes[0])
+    sheafifed = irfftn(solution, s=shapes[0])
 
     ret = [sheafifed, sols, outward, sheafify(outward, solution)]
     return ret
@@ -390,8 +390,8 @@ def interpolate_model_train(sols, model, train, step, shapes, vid_out=None):
     # solve for the new std_basis
     new_basis = j_linalg.solve(std_basis, jnp.zeros(std_basis.shape[0]))
     # create LU Decomposition towards new_basis
-    lu_decomp = t_linalg.lu_factor_ex(jax_to_tensor(jnp.vstack([ins,
-                                                    new_basis]).T))
+    lu_decomp = t_linalg.lu_factor_ex(jax_to_tensor(maybematmul(ins,
+                                                                new_basis).T))
 
     # multiply out the final answer column so it is at an equal outputs
     # we can't use this on LU decomposition as it would come out as zero.
@@ -405,7 +405,7 @@ def interpolate_model_train(sols, model, train, step, shapes, vid_out=None):
         return jnp.array(solved_decomp)
 
     # get dataset
-    import model_extractor as me
+    import src.model_extractor as me
     [images, labels] = me.get_ds(train)
 
     # interpolate

@@ -60,19 +60,18 @@ def bucketize(prelims):
 
 
 def tester(model, shapes, sheafout, sheafs, sort_avg):
-    model_shape = list(shapes[0][0])  # in shape from pytorch
-    out = np.reshape(sheafout, model_shape)
-    print(model)
-    breakpoint()
-    final_test = model(ca.jax_to_tensor(out))
+    model_shape = list(shapes[0])  # in shape from pytorch
+    out = np.reshape(sheafout, [-1, *model_shape])
+    out = out[np.newaxis, :]
 
-    prelim_shape = model_shape
-    prelim_shape[0] *= sheafs.shape[0]
-    prelimin = np.reshape(sheafs, prelim_shape)
-    prelims = model.predict(prelimin)
+    # needs batching
+    torch_out = ca.jax_to_tensor(out)
 
-    avg_outs = [avg for (_, (_, avg)) in sort_avg]
-    return [avg_outs, bucketize(prelims), final_test.numpy()]
+    model.eval()
+    final_test = model(torch_out)
+
+    print(sort_avg)
+    return [sort_avg, final_test.detach().numpy()]
 
 
 def plot_test(starttest, endtest, outshape, name):
@@ -82,11 +81,10 @@ def plot_test(starttest, endtest, outshape, name):
 
     colours = ["ro--", "bo--"]
 
-    for i, [avg_outs, prelims, final_test] in enumerate(tests):
+    for i, [avg_outs, final_test] in enumerate(tests):
         template = np.reshape(np.arange(1, len(avg_outs) + 1), outshape[-1])
         # plot our test
         plt.violinplot(np.transpose(avg_outs), showmeans=True)
-        plt.violinplot(np.transpose(prelims), showmeans=True)
         plt.plot(template, np.transpose(final_test), colours[i])
 
     plt.savefig(name)
@@ -144,7 +142,9 @@ def model_create_equation(model, model_name, dataset, in_shape):
 
         for _ in range(TEST_ROUNDS):
             # should we wipe the model every i in TRAIN_SIZE or leave it?
-            test_model = model.clone()
+
+            import copy
+            test_model = copy.copy(model)
 
             # using sols[0] shape as a template for input
             # this would be input, output shape of neural
@@ -183,6 +183,9 @@ def model_test_batch(root, res, download=True):
     for ds in datasets:
         vgg11_model = vgg11(ds)
         eff_model = efficientnet_v2_s(ds)
+
+        vgg11_model.eval()
+        eff_model.eval()
 
         model_create_equation(vgg11_model, "vgg11_" + str(type(ds)), ds, res)
         model_create_equation(eff_model, "effv2s_" + str(type(ds)), ds, res)
