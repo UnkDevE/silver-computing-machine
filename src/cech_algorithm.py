@@ -409,7 +409,8 @@ def interpolate_model_train(sols, model, train, step, shapes, vid_out=None):
     [images, labels] = me.get_ds(train)
 
     # interpolate
-    [spline, u] = make_splprep(lu_decomp[1].T.numpy(), k=outshape + 1)
+    breakpoint()
+    [spline, u] = make_splprep(lu_decomp[0].numpy().T, k=outshape + 1)
     mask_samples = reduce_basis(jnp.array(spline(images).swapaxes(0, 1)))
     mask_samples = jnp.reshape(mask_samples, [images.shape[0] * outshape,
                                *model_shape[1:]])

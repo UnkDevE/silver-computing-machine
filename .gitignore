@@ -1,3 +1,4 @@
+seeds
 *.png
 *.mp4
 EQUATION_OUTPUT.latex
@@ -54,4 +55,3 @@ setup.c
 ver2.c
 .vscode/
 datasets/
-seeds
