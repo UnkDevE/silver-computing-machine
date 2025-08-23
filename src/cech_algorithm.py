@@ -376,9 +376,16 @@ def save_interpol_video(model_name, trainset, interset, step):
     plt.clf()
 
 
+def minmax(arr):
+    arr[np.where(arr == -np.inf)] = 1
+    arr[np.where(arr == np.nan)] = 0
+    arr[np.where(arr == np.inf)] = 1
+    return arr
+
+
 def interpolate_model_train(sols, model, train, step, shapes, vid_out=None):
     # get shapes
-    outshape = len(sols[1])
+    outshape = product(sols[-1].shape)
     model_shape = [1 if x is None else x for x in shapes[0]]
     # sensible names
     ins = jnp.array(sols[0])
@@ -388,10 +395,12 @@ def interpolate_model_train(sols, model, train, step, shapes, vid_out=None):
     # so therefore the standard basis becomes 0
     _, _, std_basis = j_linalg.svd(ins)
     # solve for the new std_basis
-    new_basis = j_linalg.solve(std_basis, jnp.zeros(std_basis.shape[0]))
+    new_basis = j_linalg.inv(std_basis)
     # create LU Decomposition towards new_basis
-    lu_decomp = t_linalg.lu_factor_ex(jax_to_tensor(maybematmul(ins,
-                                                                new_basis).T))
+    jaxt = jax_to_tensor(jnp.outer(new_basis, ins))
+
+    breakpoint()
+    lu_decomp = t_linalg.lu_factor_ex(jaxt)
 
     # multiply out the final answer column so it is at an equal outputs
     # we can't use this on LU decomposition as it would come out as zero.
@@ -409,8 +418,11 @@ def interpolate_model_train(sols, model, train, step, shapes, vid_out=None):
     [images, labels] = me.get_ds(train)
 
     # interpolate
-    breakpoint()
-    [spline, u] = make_splprep(lu_decomp[0].numpy().T, k=outshape + 1)
+    # avoid inf and nan
+    lu_decomp = [decomp.detach().numpy() for decomp in lu_decomp]
+
+    [spline, u] = make_splprep(lu_decomp[0].T, k=outshape + 1)
+    breakpoint()  # next line has err
     mask_samples = reduce_basis(jnp.array(spline(images).swapaxes(0, 1)))
     mask_samples = jnp.reshape(mask_samples, [images.shape[0] * outshape,
                                *model_shape[1:]])

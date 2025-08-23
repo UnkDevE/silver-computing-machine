@@ -182,10 +182,9 @@ def model_test_batch(root, res, download=True):
 
     for ds in datasets:
         vgg11_model = vgg11(ds)
-        eff_model = efficientnet_v2_s(ds)
-
         vgg11_model.eval()
-        eff_model.eval()
-
         model_create_equation(vgg11_model, "vgg11_" + str(type(ds)), ds, res)
+
+        eff_model = efficientnet_v2_s(ds)
+        eff_model.eval()
         model_create_equation(eff_model, "effv2s_" + str(type(ds)), ds, res)
