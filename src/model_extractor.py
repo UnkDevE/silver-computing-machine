@@ -21,7 +21,7 @@
    Torch dataset wrangler
 """
 
-
+import torch
 from torchvision.transforms import v2
 from torchvision import datasets
 
@@ -98,9 +98,12 @@ def bucketize_features(model, dataset):
     return list(zip(labels, zip(inputimages, tensors)))
 
 
-def get_ds(dataset):
-    [images, labels] = [dataset, dataset.dataset.classes]
-    return [images, labels]
+def get_labels(names):
+    from torchvision.models import get_weight
+    weights = get_weight("{m}_Weights.{w}"
+                         .format(m=names[0].upper(), w=names[1]))
+    categories = weights.meta["categories"]
+    return categories
 
 
 # download all inbuilt datasets and construct them
@@ -124,7 +127,10 @@ def download_data(dataset_root, res, download=True):
                     dataset_root,
                     download)
 
-                dataset.transform = v2.Resize([res, res])
+                dataset.transform = v2.Compose([v2.ToImage(),
+                                                v2.ToDtype(torch.float32,
+                                                           scale=True),
+                                                v2.Resize([res, res])])
                 ds_list.append(dataset)
             except Exception as e:
                 print("dataset download did not work not appending...")

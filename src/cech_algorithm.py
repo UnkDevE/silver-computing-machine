@@ -383,9 +383,13 @@ def minmax(arr):
     return arr
 
 
-def interpolate_model_train(sols, model, train, step, shapes, vid_out=None):
+def interpolate_model_train(sols, model, train, step, shapes, names,
+                            vid_out=None):
     # get shapes
-    outshape = product(sols[-1].shape)
+    import src.model_extractor as me
+    labels = me.get_labels(names)
+    outshape = len(labels)
+
     model_shape = [1 if x is None else x for x in shapes[0]]
     # sensible names
     ins = jnp.array(sols[0])
@@ -397,9 +401,8 @@ def interpolate_model_train(sols, model, train, step, shapes, vid_out=None):
     # solve for the new std_basis
     new_basis = j_linalg.inv(std_basis)
     # create LU Decomposition towards new_basis
-    jaxt = jax_to_tensor(jnp.outer(new_basis, ins))
+    jaxt = jax_to_tensor(jnp.inner(new_basis, ins))
 
-    breakpoint()
     lu_decomp = t_linalg.lu_factor_ex(jaxt)
 
     # multiply out the final answer column so it is at an equal outputs
@@ -414,32 +417,37 @@ def interpolate_model_train(sols, model, train, step, shapes, vid_out=None):
         return jnp.array(solved_decomp)
 
     # get dataset
-    import src.model_extractor as me
-    [images, labels] = me.get_ds(train)
+    # unzip training sets
+    from torch.utils.data import DataLoader
+    loader = DataLoader(train)
 
     # interpolate
     # avoid inf and nan
     lu_decomp = [decomp.detach().numpy() for decomp in lu_decomp]
-
+    breakpoint()
     [spline, u] = make_splprep(lu_decomp[0].T, k=outshape + 1)
+
     breakpoint()  # next line has err
-    mask_samples = reduce_basis(jnp.array(spline(images).swapaxes(0, 1)))
-    mask_samples = jnp.reshape(mask_samples, [images.shape[0] * outshape,
-                               *model_shape[1:]])
+    for i, [sample, label] in enumerate(loader):
+        mask_samples = reduce_basis(jnp.array(spline(sample).swapaxes(0, 1)))
+        breakpoint()
+        mask_samples = jnp.reshape(mask_samples, [sample.shape[0] * outshape,
+                                   *model_shape[1:]])
 
-    solved_samples = jnp.repeat(images, outshape, axis=0)
-    solved_samples = jnp.reshape(solved_samples, solved_samples.shape[:-1])
+        solved_samples = jnp.repeat(sample, outshape, axis=0)
+        solved_samples = jnp.reshape(solved_samples, solved_samples.shape[:-1])
 
-    # check model, reshape jnputs
-    mask = mask_samples > solved_samples
-    import numpy.ma as ma
-    masked_samples = ma.array(solved_samples, mask=mask, fill_value=0)
+        # check model, reshape jnputs
+        mask = mask_samples > solved_samples
+        import numpy.ma as ma
+        masked_samples = ma.array(solved_samples, mask=mask, fill_value=0)
 
-    # this is internal testing and so must be baked in?
-    # save video output as vid_out directory
-    if vid_out is not None:
-        save_interpol_video(str(vid_out), solved_samples, mask_samples, step)
+        # this is internal testing and so must be baked in?
+        # save video output as vid_out directory
+        if vid_out is not None:
+            save_interpol_video("{out}{i}".format(out=vid_out, i=i),
+                                solved_samples, mask_samples, step)
 
-    rep_labels = jnp.repeat(labels, outshape)
-    model.fit(masked_samples, rep_labels, epochs=5)
+        rep_labels = jnp.repeat(label, outshape)
+        model.fit(masked_samples, rep_labels, epochs=5)
     return [model, lu_decomp[1].numpy(), spline, u]

@@ -24,9 +24,8 @@ from pathlib import Path
 
 import numpy as np
 import matplotlib.pyplot as plt
-
 import torch
-from torchvision.models import vgg11, efficientnet_v2_s
+from torchvision.models import get_model
 
 import src.cech_algorithm as ca
 import src.model_extractor as me
@@ -46,6 +45,7 @@ with open("seeds", "a") as f:
 
 # needs to be _global_ here otherwise generation of seed will start at 0
 # multiple times
+torch.manual_seed(GENERATOR_SEED)
 GENERATOR = generator1 = torch.Generator().manual_seed(GENERATOR_SEED)
 
 
@@ -103,7 +103,7 @@ def get_activations(model):
     return hooks
 
 
-def model_create_equation(model, model_name, dataset, in_shape):
+def model_create_equation(model, names, dataset, in_shape):
     # check optional args
     # create prerequisites
     if model is not None:
@@ -159,32 +159,32 @@ def model_create_equation(model, model_name, dataset, in_shape):
                         sols[-1],
                         test_model,
                         train_dataset,
-                        i, shapes)
+                        i,
+                        shapes,
+                        names,
+                        vid_out="{names[0]}{names[1]}_hotspots.mp4")
+
                 bsplines.append([bspline, u])
                 systems.append(solved_system)
                 # and testing
                 test = tester(test_model, shapes, sheaf, outward, sort_avg)
                 plot_test(control, test, shapes[-1],
-                          model_name + "-out-epoch-" + str(i) + ".png")
+                          "{names[0]}-out-epoch-{i}.png")
 
-                test_dataset = me.get_ds(test_dataset)
+                labels = me.get_labels(names)
                 print("EVALUATION:")
-                test_model.evaluate(test_dataset[0], test_dataset[1],
+                test_model.evaluate(test_dataset, labels,
                                     verbose=2)
                 print("CONTROL:")
-                model.evaluate(test_dataset[0], test_dataset[1], verbose=2)
+                model.evaluate(test_dataset, labels, verbose=2)
 
-            test_model.save(model_name + "_only_interpolant")
+            test_model.save(names[0] + "_only_interpolant")
 
 
-def model_test_batch(root, res, download=True):
+def model_test_batch(root, res, names, download=True):
     datasets = me.download_data(root, res, download=download)
 
     for ds in datasets:
-        vgg11_model = vgg11(ds)
-        vgg11_model.eval()
-        model_create_equation(vgg11_model, "vgg11_" + str(type(ds)), ds, res)
-
-        eff_model = efficientnet_v2_s(ds)
-        eff_model.eval()
-        model_create_equation(eff_model, "effv2s_" + str(type(ds)), ds, res)
+        model = get_model(names[0], weights=names[1])
+        model.eval()
+        model_create_equation(model, names, ds, res)
