@@ -20,12 +20,13 @@
 
     Jax module - does heavy lifting of topology analysis
 """
-
+import importlib
 
 # jax for custom code
 import jax
 import jax.numpy as jnp
 import torch
+
 # torch for tensor LU
 import torch.linalg as t_linalg
 import jax.scipy.linalg as j_linalg
@@ -350,6 +351,12 @@ def save_interpol_video(model_name, trainset, interset, step):
     import matplotlib.animation as animation
 
     fig = plt.figure()
+    # un-batch images
+    trainset = trainset.reshape([product(trainset.shape[:-2]),
+                                *trainset.shape[-2:]])
+    interset = interset.reshape([product(interset.shape[:-2]),
+                                 *interset.shape[-2:]])
+
     img1 = plt.imshow(trainset[0], cmap='gray',
                       interpolation=None,
                       animated=True)
@@ -365,7 +372,7 @@ def save_interpol_video(model_name, trainset, interset, step):
     ani = animation.FuncAnimation(
         fig=fig,
         func=update,
-        interval=20,
+        interval=200,
         save_count=200,
         blit=True)
 
@@ -383,14 +390,27 @@ def minmax(arr):
     return arr
 
 
+# multiply out the final answer column so it is at an equal outputs
+# we can't use this on LU decomposition as it would come out as zero.
+def reduce_basis(decomp):
+    solved_decomp = []
+    for sample in decomp:
+        tomul = sample[:-1]
+        mul = sample[-1]
+        solved_sheafs = tomul * mul
+        solved_decomp.append(solved_sheafs)
+    return jnp.array(solved_decomp)
+
+
+# import class e.g. loss or opt and return it
+def get_class(module, classname):
+    return getattr(importlib.import_module(module), classname)
+
+
 def interpolate_model_train(sols, model, train, step, shapes, names,
                             vid_out=None):
     # get shapes
-    import src.model_extractor as me
-    labels = me.get_labels(names)
-    outshape = len(labels)
-
-    model_shape = [1 if x is None else x for x in shapes[0]]
+    interpol_shape = sols[-1].shape
     # sensible names
     ins = jnp.array(sols[0])
     # out = jnp.array(sols[1])
@@ -401,20 +421,9 @@ def interpolate_model_train(sols, model, train, step, shapes, names,
     # solve for the new std_basis
     new_basis = j_linalg.inv(std_basis)
     # create LU Decomposition towards new_basis
-    jaxt = jax_to_tensor(jnp.inner(new_basis, ins))
+    jaxt = jax_to_tensor(jnp.outer(new_basis, ins))
 
     lu_decomp = t_linalg.lu_factor_ex(jaxt)
-
-    # multiply out the final answer column so it is at an equal outputs
-    # we can't use this on LU decomposition as it would come out as zero.
-    def reduce_basis(decomp):
-        solved_decomp = []
-        for sample in decomp:
-            tomul = sample[:-1]
-            mul = sample[-1]
-            solved_sheafs = tomul * mul
-            solved_decomp.append(solved_sheafs)
-        return jnp.array(solved_decomp)
 
     # get dataset
     # unzip training sets
@@ -422,20 +431,26 @@ def interpolate_model_train(sols, model, train, step, shapes, names,
     loader = DataLoader(train)
 
     # interpolate
-    # avoid inf and nan
     lu_decomp = [decomp.detach().numpy() for decomp in lu_decomp]
-    breakpoint()
-    [spline, u] = make_splprep(lu_decomp[0].T, k=outshape + 1)
+    # spline shaping err
+    [spline, u] = make_splprep(lu_decomp[0].T, k=sum(interpol_shape) + 1)
 
-    breakpoint()  # next line has err
+    # setup for training loop
+    loss = get_class("torch.nn", names[2])()
+    opt = get_class("torch.optim", names[3])(model.parameters())
+    model.train()
     for i, [sample, label] in enumerate(loader):
-        mask_samples = reduce_basis(jnp.array(spline(sample).swapaxes(0, 1)))
-        breakpoint()
-        mask_samples = jnp.reshape(mask_samples, [sample.shape[0] * outshape,
-                                   *model_shape[1:]])
+        mask_samples = reduce_basis(jnp.array(spline(sample)
+                                              .swapaxes(0, 1))).squeeze()
 
-        solved_samples = jnp.repeat(sample, outshape, axis=0)
-        solved_samples = jnp.reshape(solved_samples, solved_samples.shape[:-1])
+        rep_shape = product(mask_samples.shape[:(len(mask_samples.shape) -
+                                                 len(sample.shape[1:]))])
+
+        solved_samples = jnp.repeat(jnp.array(sample.numpy()),
+                                    rep_shape)
+
+        solved_samples = jnp.reshape(solved_samples,
+                                     mask_samples.shape)
 
         # check model, reshape jnputs
         mask = mask_samples > solved_samples
@@ -448,6 +463,13 @@ def interpolate_model_train(sols, model, train, step, shapes, names,
             save_interpol_video("{out}{i}".format(out=vid_out, i=i),
                                 solved_samples, mask_samples, step)
 
-        rep_labels = jnp.repeat(label, outshape)
-        model.fit(masked_samples, rep_labels, epochs=5)
+        rep_labels = np.repeat(label[0], rep_shape)
+
+        # training loop
+        pred = model(jax_to_tensor(masked_samples))
+        loss(pred, jax_to_tensor(rep_labels))
+        loss.backward()
+        opt.step()
+        opt.zero_grad()
+
     return [model, lu_decomp[1].numpy(), spline, u]

@@ -162,14 +162,16 @@ def model_create_equation(model, names, dataset, in_shape):
                         i,
                         shapes,
                         names,
-                        vid_out="{names[0]}{names[1]}_hotspots.mp4")
+                        vid_out="{name}_hotspots.mp4".format(
+                            name="".join(names)))
 
                 bsplines.append([bspline, u])
                 systems.append(solved_system)
                 # and testing
                 test = tester(test_model, shapes, sheaf, outward, sort_avg)
                 plot_test(control, test, shapes[-1],
-                          "{names[0]}-out-epoch-{i}.png")
+                          "{name}-out-epoch-{i}.png"
+                          .format(name="".join(names), i=i))
 
                 labels = me.get_labels(names)
                 print("EVALUATION:")
@@ -177,8 +179,6 @@ def model_create_equation(model, names, dataset, in_shape):
                                     verbose=2)
                 print("CONTROL:")
                 model.evaluate(test_dataset, labels, verbose=2)
-
-            test_model.save(names[0] + "_only_interpolant")
 
 
 def model_test_batch(root, res, names, download=True):
