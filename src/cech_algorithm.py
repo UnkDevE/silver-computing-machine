@@ -381,6 +381,7 @@ def save_interpol_video(model_name, trainset, interset, step):
     # clear figures and axes
     plt.cla()
     plt.clf()
+    plt.close()
 
 
 def minmax(arr):
@@ -438,6 +439,8 @@ def interpolate_model_train(sols, model, train, step, shapes, names,
     # setup for training loop
     loss = get_class("torch.nn", names[2])()
     opt = get_class("torch.optim", names[3])(model.parameters())
+    solves = []
+    masks = []
     model.train()
     for i, [sample, label] in enumerate(loader):
         mask_samples = reduce_basis(jnp.array(spline(sample)
@@ -459,17 +462,20 @@ def interpolate_model_train(sols, model, train, step, shapes, names,
 
         # this is internal testing and so must be baked in?
         # save video output as vid_out directory
-        if vid_out is not None:
-            save_interpol_video("{out}{i}".format(out=vid_out, i=i),
-                                solved_samples, mask_samples, step)
-
         rep_labels = np.repeat(label[0], rep_shape)
 
         # training loop
         pred = model(jax_to_tensor(masked_samples))
-        loss(pred, jax_to_tensor(rep_labels))
-        loss.backward()
+        out = loss(pred, jax_to_tensor(rep_labels))
+        out.backward()
         opt.step()
         opt.zero_grad()
+
+        solves.append(solved_samples)
+        masks.append(mask_samples)
+
+    if vid_out is not None:
+        save_interpol_video("{out}".format(out=vid_out),
+                            solves, masks, step)
 
     return [model, lu_decomp[1].numpy(), spline, u]
