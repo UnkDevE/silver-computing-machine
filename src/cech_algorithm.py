@@ -20,7 +20,11 @@
 
     Jax module - does heavy lifting of topology analysis
 """
+from random import randint
+import sys
+from pathlib import Path
 import importlib
+import datetime
 
 # jax for custom code
 import jax
@@ -29,12 +33,27 @@ import torch
 
 # torch for tensor LU
 import torch.linalg as t_linalg
-import jax.scipy.linalg as j_linalg
+from torch.utils.tensorboard import SummaryWriter
 
+import jax.scipy.linalg as j_linalg
 from jax.numpy.fft import irfftn
 import numpy as np
 
 from matplotlib import pyplot as plt
+
+# for reproduciblity purposes
+GENERATOR_SEED = randint(0, sys.maxsize)
+print("REPRODUCUBLE RANDOM SEED IS:" + str(GENERATOR_SEED))
+
+sd = Path("seeds")
+sd.touch()
+with open("seeds", "a") as f:
+    f.write(str(GENERATOR_SEED) + "\n")
+
+# needs to be _global_ here otherwise generation of seed will start at 0
+# multiple times
+torch.manual_seed(GENERATOR_SEED)
+GENERATOR = generator1 = torch.Generator().manual_seed(GENERATOR_SEED)
 
 
 def jax_to_tensor(jax_arr):
@@ -408,8 +427,7 @@ def get_class(module, classname):
     return getattr(importlib.import_module(module), classname)
 
 
-def interpolate_model_train(sols, model, train, step, shapes, names,
-                            vid_out=None):
+def make_spline(sols):
     # get shapes
     interpol_shape = sols[-1].shape
     # sensible names
@@ -425,23 +443,114 @@ def interpolate_model_train(sols, model, train, step, shapes, names,
     jaxt = jax_to_tensor(jnp.outer(new_basis, ins))
 
     lu_decomp = t_linalg.lu_factor_ex(jaxt)
+    # interpolate
+    lu_decomp = [decomp.detach().numpy() for decomp in lu_decomp]
+    # spline shaping err
+    [spline, u] = make_splprep(lu_decomp[0].T, k=sum(interpol_shape) + 1)
+
+    return [spline, u, lu_decomp]
+
+
+def epoch(model, epochs, names, train, test):
+    # init writer loss and opt
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    writer = SummaryWriter('runs/fashion_trainer_{}'.format(timestamp))
+    loss_fn = get_class("torch.nn", names[2])()
+    opt = get_class("torch.optim", names[3])(model.parameters())
+    best_vloss = 1_000_000.
+
+    def train_one_epoch(epoch_num, tb_writer):
+        running_loss = 0.
+        last_loss = 0.
+
+        # Here, we use enumerate(train) instead of
+        # iter(train) so that we can track the batch
+        # index and do some intra-epoch reporting
+        for i, data in enumerate(train):
+            # Every data instance is an input + label pair
+            inputs, labels = data
+
+            # Zero your gradients for every batch!
+            opt.zero_grad()
+
+            # Make predictions for this batch
+            outputs = model(inputs)
+
+            # Compute the loss and its gradients
+            loss = loss_fn(outputs, labels)
+            loss.backward()
+
+            # Adjust learning weights
+            opt.step()
+
+            # Gather data and report
+            running_loss += loss.item()
+            if i % 1000 == 999:
+                last_loss = running_loss / 1000  # loss per batch
+                print('  batch {} loss: {}'.format(i + 1, last_loss))
+                tb_x = epoch_num * len(train) + i + 1
+                tb_writer.add_scalar('Loss/train', last_loss, tb_x)
+                running_loss = 0.
+
+        return last_loss
+
+    for epoch_number, epoch in enumerate(epochs):
+        print('EPOCH {}:'.format(epoch_number))
+
+        # Make sure gradient tracking is on, and do a pass over the data
+        model.train(True)
+        avg_loss = train_one_epoch(epoch_number, writer)
+
+        running_vloss = 0.0
+        # Set the model to evaluation mode, disabling dropout and
+        # using population statistics for batch normalization.
+        model.eval()
+
+        # Disable gradient computation and reduce memory consumption.
+        with torch.no_grad():
+            for i, vdata in enumerate(test):
+                vinputs, vlabels = vdata
+                voutputs = model(vinputs)
+                vloss = loss_fn(voutputs, vlabels)
+                running_vloss += vloss
+
+        avg_vloss = running_vloss / (i + 1)
+        print('LOSS train {} valid {}'.format(avg_loss, avg_vloss))
+
+        # Log the running loss averaged per batch
+        # for both training and validation
+        writer.add_scalars('Training vs. Validation Loss',
+                           {'Training': avg_loss, 'Validation': avg_vloss},
+                           epoch_number + 1)
+        writer.flush()
+
+        # Track best performance, and save the model's state
+        if avg_vloss < best_vloss:
+            best_vloss = avg_vloss
+            model_path = '{}_{}_{}'.format("".join(names), timestamp,
+                                           epoch_number)
+            torch.save(model.state_dict(), model_path)
+
+    return model
+
+
+def interpolate_model_train(sols, model, train, step, shapes, names,
+                            vid_out=None):
 
     # get dataset
     # unzip training sets
     from torch.utils.data import DataLoader
     loader = DataLoader(train)
 
-    # interpolate
-    lu_decomp = [decomp.detach().numpy() for decomp in lu_decomp]
-    # spline shaping err
-    [spline, u] = make_splprep(lu_decomp[0].T, k=sum(interpol_shape) + 1)
+    # make spline interpolator
+    [spline, u, lu_decomp] = make_spline(sols)
 
     # setup for training loop
-    loss = get_class("torch.nn", names[2])()
-    opt = get_class("torch.optim", names[3])(model.parameters())
+    # init
     solves = []
     masks = []
-    model.train()
+    rep_labels = []
+
     for i, [sample, label] in enumerate(loader):
         mask_samples = reduce_basis(jnp.array(spline(sample)
                                               .swapaxes(0, 1))).squeeze()
@@ -459,21 +568,25 @@ def interpolate_model_train(sols, model, train, step, shapes, names,
         mask = mask_samples > solved_samples
         import numpy.ma as ma
         masked_samples = ma.array(solved_samples, mask=mask, fill_value=0)
-
-        # this is internal testing and so must be baked in?
         # save video output as vid_out directory
-        rep_labels = np.repeat(label[0], rep_shape)
-
-        # training loop
-        pred = model(jax_to_tensor(masked_samples))
-        out = loss(pred, jax_to_tensor(rep_labels))
-        out.backward()
-        opt.step()
-        opt.zero_grad()
+        rep_label = np.repeat(label[0], rep_shape)
 
         solves.append(solved_samples)
-        masks.append(mask_samples)
+        masks.append(masked_samples)
+        rep_labels.append(rep_label)
 
+    from torch.utils.data import TensorDataset, DataLoader
+    from torch.utils.data import random_split
+    # model loader
+    mask_tensor = jax_to_tensor(jnp.array(masks))
+    y_tensor = jax_to_tensor(jnp.array(rep_labels))
+    ds = TensorDataset(mask_tensor, y_tensor)
+    [train, test] = random_split(ds, [0.7, 0.3],
+                                 generator=GENERATOR)
+
+    # training loop
+    epoch(model, 5, names, train, test)
+    # this is internal testing and so must be baked in!
     if vid_out is not None:
         save_interpol_video("{out}".format(out=vid_out),
                             solves, masks, step)

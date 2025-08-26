@@ -17,36 +17,13 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
-
-from random import randint
-import sys
-from pathlib import Path
-
 import numpy as np
 import matplotlib.pyplot as plt
-import torch
+
 from torchvision.models import get_model
 
 import src.cech_algorithm as ca
 import src.model_extractor as me
-
-# TUNE THESE INPUT PARAMS
-TEST_ROUNDS = 1
-TRAIN_SIZE = 1
-
-# for reproduciblity purposes
-GENERATOR_SEED = randint(0, sys.maxsize)
-print("REPRODUCUBLE RANDOM SEED IS:" + str(GENERATOR_SEED))
-
-sd = Path("seeds")
-sd.touch()
-with open("seeds", "a") as f:
-    f.write(str(GENERATOR_SEED) + "\n")
-
-# needs to be _global_ here otherwise generation of seed will start at 0
-# multiple times
-torch.manual_seed(GENERATOR_SEED)
-GENERATOR = generator1 = torch.Generator().manual_seed(GENERATOR_SEED)
 
 
 def bucketize(prelims):
@@ -103,7 +80,7 @@ def get_activations(model):
     return hooks
 
 
-def model_create_equation(model, names, dataset, in_shape):
+def model_create_equation(model, names, dataset, in_shape, test_rounds):
     # check optional args
     # create prerequisites
     if model is not None:
@@ -111,7 +88,7 @@ def model_create_equation(model, names, dataset, in_shape):
 
         from torch.utils.data import random_split
         [train_dataset, test_dataset] = random_split(dataset, [0.7, 0.3],
-                                                     generator=GENERATOR)
+                                                     generator=ca.GENERATOR)
 
         # calculate fft + shape
         layers = []
@@ -140,7 +117,7 @@ def model_create_equation(model, names, dataset, in_shape):
 
         control = tester(model, shapes, sheaf, outward, sort_avg)
 
-        for _ in range(TEST_ROUNDS):
+        for _ in range(test_rounds):
             # should we wipe the model every i in TRAIN_SIZE or leave it?
 
             import copy
@@ -152,7 +129,7 @@ def model_create_equation(model, names, dataset, in_shape):
             systems = []
 
             bsplines = []
-            for i in range(TRAIN_SIZE):
+            for i in range(test_rounds):
                 # find variance in solved systems
                 [test_model, solved_system,
                     bspline, u] = ca.interpolate_model_train(
@@ -181,10 +158,10 @@ def model_create_equation(model, names, dataset, in_shape):
                 model.evaluate(test_dataset, labels, verbose=2)
 
 
-def model_test_batch(root, res, names, download=True):
+def model_test_batch(root, res, rounds, names, download=True):
     datasets = me.download_data(root, res, download=download)
 
     for ds in datasets:
         model = get_model(names[0], weights=names[1])
         model.eval()
-        model_create_equation(model, names, ds, res)
+        model_create_equation(model, names, ds, res, rounds)
