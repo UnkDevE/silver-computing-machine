@@ -584,11 +584,11 @@ def save_ds_batch(imgs, label):
     if not os.path.exists(dirs):
         os.mkdir(dirs)
 
-    imgs = imgs.reshape([product(imgs.shape[:-2]), *imgs.shape[-2:]])
     for i, img in enumerate(imgs):
-        io.imsave("{}/{}.png".format(DATASET_DIR, i), img)
+        img = (img * 255).astype(np.uint8)
+        io.imsave("{}/{}/{}.png".format(DATASET_DIR, label, i), img.T)
 
-    with open("{}/labels.csv", "a") as csvlabel:
+    with open("{}/labels.csv".format(DATASET_DIR), "a") as csvlabel:
         for i in range(len(imgs)):
             csvlabel.write(label)
             if i != len(imgs) - 1:
