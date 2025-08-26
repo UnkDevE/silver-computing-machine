@@ -20,8 +20,10 @@
 
     Jax module - does heavy lifting of topology analysis
 """
-from random import randint
 import sys
+import os
+
+from random import randint
 from pathlib import Path
 import importlib
 import datetime
@@ -34,12 +36,18 @@ import torch
 # torch for tensor LU
 import torch.linalg as t_linalg
 from torch.utils.tensorboard import SummaryWriter
+from torch.utils.data import Dataset
+from torchvision.transforms import v2
 
 import jax.scipy.linalg as j_linalg
 from jax.numpy.fft import irfftn
 import numpy as np
 
 from matplotlib import pyplot as plt
+from skimage import io
+import pandas as pd
+
+DATASET_DIR = "./datasets_masked"
 
 # for reproduciblity purposes
 GENERATOR_SEED = randint(0, sys.maxsize)
@@ -534,6 +542,59 @@ def epoch(model, epochs, names, train, test):
     return model
 
 
+class MaskedDataset(Dataset):
+    """Masked dataset"""
+
+    def __init__(self, csv_file, root_dir, transform=None):
+        """
+        Arguments:
+            csv_file (string): Path to the csv file with labels.
+            root_dir (string): Directory with all the images.
+            transform (callable, optional): Optional transform to be applied
+                on a sample.
+        """
+        self.labels = pd.read_csv(csv_file)
+        self.root_dir = root_dir
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.labels)
+
+    def __getitem__(self, idx):
+        if torch.is_tensor(idx):
+            idx = idx.tolist()
+
+        img_name = os.path.join(self.root_dir, self.labels.iloc[idx, 0])
+        label = self.labels.iloc[idx, 1:]
+        image = io.imread(img_name)
+
+        sample = {'image': image, 'label': label}
+
+        if self.transform:
+            sample = self.transform(sample)
+
+        return sample
+
+
+def save_ds_batch(imgs, label):
+    if not os.path.exists(DATASET_DIR):
+        os.mkdir(DATASET_DIR)
+
+    dirs = "{}/{}".format(DATASET_DIR, str(label))
+    if not os.path.exists(dirs):
+        os.mkdir(dirs)
+
+    imgs = imgs.reshape([product(imgs.shape[:-2]), *imgs.shape[-2:]])
+    for i, img in enumerate(imgs):
+        io.imsave("{}/{}.png".format(DATASET_DIR, i), img)
+
+    with open("{}/labels.csv", "a") as csvlabel:
+        for i in range(len(imgs)):
+            csvlabel.write(label)
+            if i != len(imgs) - 1:
+                csvlabel.write(",")
+
+
 def interpolate_model_train(sols, model, train, step, shapes, names,
                             vid_out=None):
 
@@ -549,7 +610,6 @@ def interpolate_model_train(sols, model, train, step, shapes, names,
     # init
     solves = []
     masks = []
-    rep_labels = []
 
     for i, [sample, label] in enumerate(loader):
         mask_samples = reduce_basis(jnp.array(spline(sample)
@@ -569,18 +629,16 @@ def interpolate_model_train(sols, model, train, step, shapes, names,
         import numpy.ma as ma
         masked_samples = ma.array(solved_samples, mask=mask, fill_value=0)
         # save video output as vid_out directory
-        rep_label = np.repeat(label[0], rep_shape)
+        save_ds_batch(masked_samples, label[0])
 
-        solves.append(solved_samples)
-        masks.append(masked_samples)
-        rep_labels.append(rep_label)
-
-    from torch.utils.data import TensorDataset, DataLoader
+    from torch.utils.data import DataLoader
     from torch.utils.data import random_split
     # model loader
-    mask_tensor = jax_to_tensor(jnp.array(masks))
-    y_tensor = jax_to_tensor(jnp.array(rep_labels))
-    ds = TensorDataset(mask_tensor, y_tensor)
+    ds = MaskedDataset("{}/labels.csv".format(DATASET_DIR), DATASET_DIR,
+                       transforms=v2.Compose([v2.ToImage(),
+                                              v2.ToDtype(torch.float32,
+                                              scale=True)]))
+
     [train, test] = random_split(ds, [0.7, 0.3],
                                  generator=GENERATOR)
 

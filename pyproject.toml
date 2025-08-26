@@ -12,5 +12,7 @@ dependencies = [
     "matplotlib",
     "torch[rocm]", 
     "torchvision",
+    "tensorboard",
+    "scikit-image"
     #    "passagemath-standard",
 ]

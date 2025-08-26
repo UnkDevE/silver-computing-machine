@@ -5,7 +5,6 @@ from src import testing_and_output as to
 if __name__ == "__main__":
     if len(sys.argv) > 5:
         # set download to false so we don't download more datasets
-        print(sys.argv[2:])
         to.model_test_batch("./datasets", int(sys.argv[1]), int(sys.argv[2]),
                             sys.argv[3:], download=True)
     else:
