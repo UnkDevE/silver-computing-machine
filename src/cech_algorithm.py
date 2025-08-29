@@ -614,32 +614,28 @@ def interpolate_model_train(sols, model, train, step, shapes, names,
     masks = []
 
     for i, [sample, label] in enumerate(loader):
-        mask_samples = reduce_basis(jnp.array(spline(sample)
-                                              .swapaxes(0, 1))).squeeze()
+        sample = sample.numpy().squeeze().T
+        mask_samples = spline(sample)
 
         rep_shape = product(mask_samples.shape[:(len(mask_samples.shape) -
-                                                 len(sample.shape[1:]))])
+                                                 len(sample.shape))])
 
-        solved_samples = jnp.repeat(jnp.array(sample.numpy()),
-                                    rep_shape)
-
-        solved_samples = jnp.reshape(solved_samples,
-                                     mask_samples.shape)
+        solved_samples = jnp.repeat(sample,
+                                    rep_shape).reshape(mask_samples.shape)
 
         # check model, reshape jnputs
         mask = mask_samples > solved_samples
-        import numpy.ma as ma
-        masked_samples = ma.array(solved_samples, mask=mask, fill_value=0)
+        applied_samples = np.where(~mask, solved_samples, 0)
         # save video output as vid_out directory
-        save_ds_batch(masked_samples, label[0])
+        save_ds_batch(applied_samples, label[0])
 
     from torch.utils.data import DataLoader
     from torch.utils.data import random_split
     # model loader
     ds = MaskedDataset("{}/labels.csv".format(DATASET_DIR), DATASET_DIR,
-                       transforms=v2.Compose([v2.ToImage(),
-                                              v2.ToDtype(torch.float32,
-                                              scale=True)]))
+                       transform=v2.Compose([v2.ToImage(),
+                                             v2.ToDtype(torch.float32,
+                                             scale=True)]))
 
     [train, test] = random_split(ds, [0.7, 0.3],
                                  generator=GENERATOR)
