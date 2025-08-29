@@ -1,5 +1,5 @@
 seeds*
-masked_dataset/
+datasets_masked/
 *.png
 *.mp4
 EQUATION_OUTPUT.latex

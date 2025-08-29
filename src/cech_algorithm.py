@@ -22,6 +22,7 @@
 """
 import sys
 import os
+import re
 
 from random import randint
 from pathlib import Path
@@ -577,6 +578,7 @@ class MaskedDataset(Dataset):
 
 
 def save_ds_batch(imgs, label):
+    label = re.sub(os.sep, "", label)
     if not os.path.exists(DATASET_DIR):
         os.mkdir(DATASET_DIR)
 
