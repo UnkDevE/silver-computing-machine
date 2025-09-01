@@ -577,7 +577,7 @@ class MaskedDataset(Dataset):
         return sample
 
 
-def save_ds_batch(imgs, label):
+def save_ds_batch(imgs, label, itr):
     label = re.sub(os.sep, "", label)
     if not os.path.exists(DATASET_DIR):
         os.mkdir(DATASET_DIR)
@@ -588,7 +588,8 @@ def save_ds_batch(imgs, label):
 
     for i, img in enumerate(imgs):
         img = (img * 255).astype(np.uint8)
-        io.imsave("{}/{}/{}.png".format(DATASET_DIR, label, i), img.T)
+        io.imsave("{}/{}/{}.png".format(DATASET_DIR, label, i * itr), img.T,
+                  check_contrast=False)
 
     with open("{}/labels.csv".format(DATASET_DIR), "a") as csvlabel:
         for i in range(len(imgs)):
@@ -627,7 +628,7 @@ def interpolate_model_train(sols, model, train, step, shapes, names,
         mask = mask_samples > solved_samples
         applied_samples = np.where(~mask, solved_samples, 0)
         # save video output as vid_out directory
-        save_ds_batch(applied_samples, label[0])
+        save_ds_batch(applied_samples, label[0], i)
 
     from torch.utils.data import DataLoader
     from torch.utils.data import random_split
