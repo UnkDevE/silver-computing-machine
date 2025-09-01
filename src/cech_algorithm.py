@@ -594,8 +594,7 @@ def save_ds_batch(imgs, label, itr):
     with open("{}/labels.csv".format(DATASET_DIR), "a") as csvlabel:
         for i in range(len(imgs)):
             csvlabel.write(label)
-            if i != len(imgs) - 1:
-                csvlabel.write(",")
+            csvlabel.write(",")
 
 
 def interpolate_model_train(sols, model, train, step, shapes, names,
