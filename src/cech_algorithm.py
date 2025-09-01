@@ -578,7 +578,7 @@ class MaskedDataset(Dataset):
 
 
 def save_ds_batch(imgs, label, itr):
-    label = re.sub(os.sep, "", label)
+    label = re.sub(os.sep, "", str(label.item()))
     if not os.path.exists(DATASET_DIR):
         os.mkdir(DATASET_DIR)
 
