@@ -27,7 +27,7 @@ import re
 from random import randint
 from pathlib import Path
 import importlib
-import datetime
+from datetime import datetime
 
 # jax for custom code
 import jax
@@ -379,7 +379,7 @@ def save_interpol_video(model_name, trainset, interset, step):
     import matplotlib.animation as animation
 
     fig = plt.figure()
-    # un-batch images
+    # un-batch images re:fix
     trainset = trainset.reshape([product(trainset.shape[:-2]),
                                 *trainset.shape[-2:]])
     interset = interset.reshape([product(interset.shape[:-2]),
@@ -503,7 +503,7 @@ def epoch(model, epochs, names, train, test):
 
         return last_loss
 
-    for epoch_number, epoch in enumerate(epochs):
+    for epoch_number, epoch in enumerate(range(epochs)):
         print('EPOCH {}:'.format(epoch_number))
 
         # Make sure gradient tracking is on, and do a pass over the data
@@ -523,7 +523,7 @@ def epoch(model, epochs, names, train, test):
                 vloss = loss_fn(voutputs, vlabels)
                 running_vloss += vloss
 
-        avg_vloss = running_vloss / (i + 1)
+        avg_vloss = running_vloss / (epoch_number + 1)
         print('LOSS train {} valid {}'.format(avg_loss, avg_vloss))
 
         # Log the running loss averaged per batch
@@ -578,7 +578,7 @@ class MaskedDataset(Dataset):
 
 
 def save_ds_batch(imgs, label, itr):
-    label = re.sub(os.sep, "", str(label.item()))
+    label = re.sub(os.sep, "", str(label))
     if not os.path.exists(DATASET_DIR):
         os.mkdir(DATASET_DIR)
 
@@ -613,21 +613,24 @@ def interpolate_model_train(sols, model, train, step, shapes, names,
     solves = []
     masks = []
 
-    for i, [sample, label] in enumerate(loader):
-        sample = sample.numpy().squeeze().T
-        mask_samples = spline(sample)
+    if not os.path.exists(DATASET_DIR):
+        for i, [sample, label] in enumerate(loader):
+            sample = sample.numpy().squeeze().T
+            mask_samples = spline(sample)
 
-        rep_shape = product(mask_samples.shape[:(len(mask_samples.shape) -
-                                                 len(sample.shape))])
+            rep_shape = product(mask_samples.shape[:(len(mask_samples.shape) -
+                                                   len(sample.shape))])
 
-        solved_samples = jnp.repeat(sample,
-                                    rep_shape).reshape(mask_samples.shape)
+            solved_samples = jnp.repeat(sample,
+                                        rep_shape).reshape(mask_samples.shape)
 
-        # check model, reshape jnputs
-        mask = mask_samples > solved_samples
-        applied_samples = np.where(~mask, solved_samples, 0)
-        # save video output as vid_out directory
-        save_ds_batch(applied_samples, label[0], i)
+            # check model, reshape jnputs
+            mask = mask_samples > solved_samples
+            applied_samples = np.where(~mask, solved_samples, 0)
+            # save video output as vid_out directory
+            save_ds_batch(applied_samples, label[0], i)
+    else:
+        print("using cached masked_dataset delete if want to regenerate")
 
     from torch.utils.data import DataLoader
     from torch.utils.data import random_split
