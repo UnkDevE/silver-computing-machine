@@ -13,6 +13,7 @@ dependencies = [
     "torch[rocm]", 
     "torchvision",
     "tensorboard",
-    "scikit-image"
+    "scikit-image",
+    "pyarrow"
     #    "passagemath-standard",
 ]

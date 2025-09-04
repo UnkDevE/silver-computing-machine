@@ -46,7 +46,6 @@ import numpy as np
 
 from matplotlib import pyplot as plt
 from skimage import io
-import pandas as pd
 
 DATASET_DIR = "./datasets_masked"
 
@@ -546,7 +545,7 @@ def epoch(model, epochs, names, train, test):
 class MaskedDataset(Dataset):
     """Masked dataset"""
 
-    def __init__(self, csv_file, root_dir, transform=None):
+    def __init__(self, label_file, root_dir, transform=None):
         """
         Arguments:
             csv_file (string): Path to the csv file with labels.
@@ -554,9 +553,10 @@ class MaskedDataset(Dataset):
             transform (callable, optional): Optional transform to be applied
                 on a sample.
         """
-        self.labels = pd.read_csv(csv_file)
         self.root_dir = root_dir
         self.transform = transform
+        with open(label_file) as f:
+            self.labels = f.readlines()
 
     def __len__(self):
         return len(self.labels)
@@ -592,9 +592,8 @@ def save_ds_batch(imgs, label, itr):
                   check_contrast=False)
 
     with open("{}/labels.csv".format(DATASET_DIR), "a") as csvlabel:
-        for i in range(len(imgs)):
-            csvlabel.write(label)
-            csvlabel.write(",")
+        csvlabel.write(label)
+        csvlabel.write("\n")
 
 
 def interpolate_model_train(sols, model, train, step, shapes, names,
@@ -625,8 +624,8 @@ def interpolate_model_train(sols, model, train, step, shapes, names,
                                         rep_shape).reshape(mask_samples.shape)
 
             # check model, reshape jnputs
-            mask = mask_samples > solved_samples
-            applied_samples = np.where(~mask, solved_samples, 0)
+            mask = jax.lax.lt(mask_samples, solved_samples)
+            applied_samples = jnp.where(mask, solved_samples, 0)
             # save video output as vid_out directory
             save_ds_batch(applied_samples, label[0], i)
     else:
