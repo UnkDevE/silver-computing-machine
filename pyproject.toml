@@ -1,7 +1,7 @@
 [project]
 name = "clean-silver-computing-machine"
 version = "0.1.0"
-description = "Add your description here"
+description = "AI research project using topology"
 readme = "README.md"
 requires-python = ">=3.11.11"
 license = "GPL"

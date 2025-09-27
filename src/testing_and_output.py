@@ -47,7 +47,7 @@ def tester(model, shapes, sheafout, sheafs, sort_avg):
     model.eval()
     final_test = model(torch_out)
 
-    print(sort_avg)
+    # print(sort_avg)
     return [sort_avg, final_test.detach().numpy()]
 
 

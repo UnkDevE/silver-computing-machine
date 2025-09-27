@@ -565,19 +565,38 @@ class MaskedDataset(Dataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
-        img_name = os.path.join(self.root_dir, self.labels.iloc[idx, 0])
-        label = self.labels.iloc[idx, 1:]
-        image = io.imread(img_name)
+        if len(idx) > 1:
+            # go to the image folder of label
+            img_name = os.path.join(self.root_dir, self.labels[idx[0]],
+                                    os.sep, idx[1])
+            label = (self.labels[idx[0]], idx[1])
+            image = io.imread(img_name)
 
-        sample = {'image': image, 'label': label}
+            sample = {'image': image, 'label': label}
 
-        if self.transform:
-            sample = self.transform(sample)
+            if self.transform:
+                sample = self.transform(sample)
 
-        return sample
+            return [sample]
+        else:
+            img_folder = os.path.join(self.root_dir, self.labels[idx[0]])
+            imgs = [img.endswith(".png") for img in os.listdir(img_folder)
+                    if os.path.isfile(''.join([img_folder, os.sep, img]))]
+            samples = []
+
+            for img_name in imgs:
+                label = (self.labels[idx[0]], img_name.split('.')[0])
+                image = io.imread(img_name)
+                sample = {'image': image, 'label': label}
+
+                if self.transform:
+                    sample = self.transform(sample)
+                samples.append(sample)
+
+            return samples
 
 
-def save_ds_batch(imgs, label, itr):
+def save_ds_batch(imgs, label):
     label = re.sub(os.sep, "", str(label))
     if not os.path.exists(DATASET_DIR):
         os.mkdir(DATASET_DIR)
@@ -588,7 +607,7 @@ def save_ds_batch(imgs, label, itr):
 
     for i, img in enumerate(imgs):
         img = (img * 255).astype(np.uint8)
-        io.imsave("{}/{}/{}.png".format(DATASET_DIR, label, i * itr), img.T,
+        io.imsave("{}/{}/{}.png".format(DATASET_DIR, label, i), img.T,
                   check_contrast=False)
 
     with open("{}/labels.csv".format(DATASET_DIR), "a") as csvlabel:
@@ -627,7 +646,7 @@ def interpolate_model_train(sols, model, train, step, shapes, names,
             mask = jax.lax.lt(mask_samples, solved_samples)
             applied_samples = jnp.where(mask, solved_samples, 0)
             # save video output as vid_out directory
-            save_ds_batch(applied_samples, label[0], i)
+            save_ds_batch(applied_samples, label[0])
     else:
         print("using cached masked_dataset delete if want to regenerate")
 
