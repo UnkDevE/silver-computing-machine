@@ -565,35 +565,21 @@ class MaskedDataset(Dataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
-        if len(idx) > 1:
-            # go to the image folder of label
-            img_name = os.path.join(self.root_dir, self.labels[idx[0]],
-                                    os.sep, idx[1])
-            label = (self.labels[idx[0]], idx[1])
-            image = io.imread(img_name)
+        img_folder = os.path.join(self.root_dir, self.labels[idx])
+        imgs = [img.endswith(".png") for img in os.listdir(img_folder)
+                if os.path.isfile(''.join([img_folder, os.sep, img]))]
+        samples = []
 
+        for img_name in imgs:
+            label = (self.labels[idx], img_name.split('.')[0])
+            image = io.imread(img_name)
             sample = {'image': image, 'label': label}
 
             if self.transform:
                 sample = self.transform(sample)
+            samples.append(sample)
 
-            return [sample]
-        else:
-            img_folder = os.path.join(self.root_dir, self.labels[idx[0]])
-            imgs = [img.endswith(".png") for img in os.listdir(img_folder)
-                    if os.path.isfile(''.join([img_folder, os.sep, img]))]
-            samples = []
-
-            for img_name in imgs:
-                label = (self.labels[idx[0]], img_name.split('.')[0])
-                image = io.imread(img_name)
-                sample = {'image': image, 'label': label}
-
-                if self.transform:
-                    sample = self.transform(sample)
-                samples.append(sample)
-
-            return samples
+        return samples
 
 
 def save_ds_batch(imgs, label):
