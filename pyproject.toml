@@ -14,6 +14,6 @@ dependencies = [
     "torchvision",
     "tensorboard",
     "scikit-image",
-    "pyarrow"
+    "opencv-python",
     #    "passagemath-standard",
 ]

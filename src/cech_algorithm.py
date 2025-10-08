@@ -582,7 +582,7 @@ class MaskedDataset(Dataset):
         return samples
 
 
-def save_ds_batch(imgs, label):
+def save_hdr_batch(imgs, label):
     label = re.sub(os.sep, "", str(label))
     if not os.path.exists(DATASET_DIR):
         os.mkdir(DATASET_DIR)
@@ -591,6 +591,7 @@ def save_ds_batch(imgs, label):
     if not os.path.exists(dirs):
         os.mkdir(dirs)
 
+    # create artifical exposure time
     for i, img in enumerate(imgs):
         img = (img * 255).astype(np.uint8)
         io.imsave("{}/{}/{}.png".format(DATASET_DIR, label, i), img.T,
@@ -603,7 +604,6 @@ def save_ds_batch(imgs, label):
 
 def interpolate_model_train(sols, model, train, step, shapes, names,
                             vid_out=None):
-
     # get dataset
     # unzip training sets
     from torch.utils.data import DataLoader
@@ -618,7 +618,7 @@ def interpolate_model_train(sols, model, train, step, shapes, names,
     masks = []
 
     if not os.path.exists(DATASET_DIR):
-        for i, [sample, label] in enumerate(loader):
+        for [sample, label] in loader:
             sample = sample.numpy().squeeze().T
             mask_samples = spline(sample)
 
@@ -628,11 +628,12 @@ def interpolate_model_train(sols, model, train, step, shapes, names,
             solved_samples = jnp.repeat(sample,
                                         rep_shape).reshape(mask_samples.shape)
 
+            # we want in full colour but dunno how to do that
             # check model, reshape jnputs
             mask = jax.lax.lt(mask_samples, solved_samples)
             applied_samples = jnp.where(mask, solved_samples, 0)
             # save video output as vid_out directory
-            save_ds_batch(applied_samples, label[0])
+            save_hdr_batch(applied_samples, label[0])
     else:
         print("using cached masked_dataset delete if want to regenerate")
 
