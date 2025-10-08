@@ -587,15 +587,21 @@ def save_hdr_batch(imgs, label):
     if not os.path.exists(DATASET_DIR):
         os.mkdir(DATASET_DIR)
 
-    dirs = "{}/{}".format(DATASET_DIR, str(label))
-    if not os.path.exists(dirs):
-        os.mkdir(dirs)
+    if not os.path.exists(DATASET_DIR):
+        os.mkdir(DATASET_DIR)
 
     # create artifical exposure time
-    for i, img in enumerate(imgs):
-        img = (img * 255).astype(np.uint8)
-        io.imsave("{}/{}/{}.png".format(DATASET_DIR, label, i), img.T,
-                  check_contrast=False)
+    imgs = (imgs * 255).astype(np.uint8)
+    times = np.exp(np.arange(imgs.shape[0]))
+
+    import cv2 as cv
+    calibrate = cv.createCalibrateDebevec()
+    response = calibrate.process(imgs, times)
+    merge_debevec = cv.createMergeDebevec()
+    hdr = merge_debevec.process(imgs, times, response)
+
+    io.imsave("{}/{}.png".format(DATASET_DIR, label), hdr.T,
+              check_contrast=False)
 
     with open("{}/labels.csv".format(DATASET_DIR), "a") as csvlabel:
         csvlabel.write(label)
