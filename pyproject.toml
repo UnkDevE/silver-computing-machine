@@ -10,10 +10,9 @@ dependencies = [
     "scipy",
     "pandas",
     "matplotlib",
-    "torch[rocm]", 
+    "torch[rocm]",
     "torchvision",
     "tensorboard",
     "scikit-image",
-    "opencv-python",
-    #    "passagemath-standard",
+    "opencv-contrib-python>=4.12.0.88",
 ]

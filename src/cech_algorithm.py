@@ -584,19 +584,15 @@ def save_hdr_batch(imgs, label):
         os.mkdir(DATASET_DIR)
 
     # create artifical exposure time
-    imgs = (imgs * 255).astype(np.uint8)
-    times = np.exp(np.arange(imgs.shape[0]))
-
     import cv2 as cv
-    calibrate = cv.createCalibrateDebevec()
-    response = calibrate.process(imgs, times)
-    merge_debevec = cv.createMergeDebevec()
-    hdr = merge_debevec.process(imgs, times, response)
+    merge_mertens = cv.createMergeMertens()
+    hdr = merge_mertens.process(np.asarray(imgs))
 
-    io.imsave("{}/{}.png".format(DATASET_DIR, label), hdr.T,
+    hdr = np.clip(hdr * 255, 0, 255).astype('uint8')
+    io.imsave("{}/{}.png".format(DATASET_DIR, label), hdr,
               check_contrast=False)
 
-    with open("{}/labels.csv".format(DATASET_DIR), "w+") as csvlabel:
+    with open("{}/labels.csv".format(DATASET_DIR), "a+") as csvlabel:
         csvlabel.write(label)
         csvlabel.write("\n")
 
@@ -632,7 +628,7 @@ def interpolate_model_train(sols, model, train, step, shapes, names,
             mask = jax.lax.lt(mask_samples, solved_samples)
             applied_samples = jnp.where(mask, solved_samples, 0)
             # save video output as vid_out directory
-            save_hdr_batch(applied_samples, label[0])
+            save_hdr_batch(applied_samples, label)
     else:
         print("using cached masked_dataset delete if want to regenerate")
 
