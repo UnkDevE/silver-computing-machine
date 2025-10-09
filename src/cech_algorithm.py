@@ -565,21 +565,14 @@ class MaskedDataset(Dataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
-        img_folder = os.path.join(self.root_dir, self.labels[idx])
-        imgs = [img.endswith(".png") for img in os.listdir(img_folder)
-                if os.path.isfile(''.join([img_folder, os.sep, img]))]
-        samples = []
+        label = self.labels[idx]
+        image = io.imread(self.labels[idx])
+        sample = {'image': image, 'label': label}
 
-        for img_name in imgs:
-            label = (self.labels[idx], img_name.split('.')[0])
-            image = io.imread(img_name)
-            sample = {'image': image, 'label': label}
+        if self.transform:
+            sample = self.transform(sample)
 
-            if self.transform:
-                sample = self.transform(sample)
-            samples.append(sample)
-
-        return samples
+        return sample
 
 
 def save_hdr_batch(imgs, label):
@@ -603,7 +596,7 @@ def save_hdr_batch(imgs, label):
     io.imsave("{}/{}.png".format(DATASET_DIR, label), hdr.T,
               check_contrast=False)
 
-    with open("{}/labels.csv".format(DATASET_DIR), "a") as csvlabel:
+    with open("{}/labels.csv".format(DATASET_DIR), "w+") as csvlabel:
         csvlabel.write(label)
         csvlabel.write("\n")
 
