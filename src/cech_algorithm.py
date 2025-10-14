@@ -586,7 +586,10 @@ def save_hdr_batch(imgs, label):
     # create artifical exposure time
     import cv2 as cv
     merge_mertens = cv.createMergeMertens()
-    hdr = merge_mertens.process(np.asarray(imgs))
+    imgs = np.asarray(imgs)
+    cv.imshow("start", imgs[0])
+    hdr = merge_mertens.process(np.flip(imgs))
+    cv.imshow("hdr", hdr)
 
     hdr = np.clip(hdr * 255, 0, 255).astype('uint8')
     io.imsave("{}/{}.png".format(DATASET_DIR, label), hdr,
@@ -628,7 +631,7 @@ def interpolate_model_train(sols, model, train, step, shapes, names,
             mask = jax.lax.lt(mask_samples, solved_samples)
             applied_samples = jnp.where(mask, solved_samples, 0)
             # save video output as vid_out directory
-            save_hdr_batch(applied_samples, label)
+            save_hdr_batch(applied_samples, label[0])
     else:
         print("using cached masked_dataset delete if want to regenerate")
 
