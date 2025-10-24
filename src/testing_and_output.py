@@ -138,12 +138,7 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
                         train_dataset,
                         i,
                         shapes,
-                        names,
-                        vid_out="{name}_hotspots.mp4".format(
-                            name="".join(names)))
-
-                from shuutil import rmtree
-                rmtree(ca.DATASET_DIR)  # delete temporary dataset directory
+                        names)
 
                 bsplines.append([bspline, u])
                 systems.append(solved_system)

@@ -21,8 +21,6 @@
     Jax module - does heavy lifting of topology analysis
 """
 import sys
-import os
-import re
 
 from random import randint
 from pathlib import Path
@@ -38,16 +36,14 @@ import torch
 import torch.linalg as t_linalg
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import Dataset
-from torchvision.transforms import v2
+
+from torchvision.transforms.v2 import ToTensor, Compose
 
 import jax.scipy.linalg as j_linalg
 from jax.numpy.fft import irfftn
 import numpy as np
 
 from matplotlib import pyplot as plt
-from skimage import io
-
-DATASET_DIR = "./datasets_masked"
 
 # for reproduciblity purposes
 GENERATOR_SEED = randint(0, sys.maxsize)
@@ -462,7 +458,7 @@ def make_spline(sols):
 def epoch(model, epochs, names, train, test):
     # init writer loss and opt
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    writer = SummaryWriter('runs/fashion_trainer_{}'.format(timestamp))
+    writer = SummaryWriter('runs/imagenet_{}'.format(timestamp))
     loss_fn = get_class("torch.nn", names[2])()
     opt = get_class("torch.optim", names[3])(model.parameters())
     best_vloss = 1_000_000.
@@ -482,6 +478,7 @@ def epoch(model, epochs, names, train, test):
             opt.zero_grad()
 
             # Make predictions for this batch
+            breakpoint()
             outputs = model(inputs)
 
             # Compute the loss and its gradients
@@ -542,113 +539,75 @@ def epoch(model, epochs, names, train, test):
     return model
 
 
-class MaskedDataset(Dataset):
-    """Masked dataset"""
+class HDRMaskTransform(object):
+    """Hdr resample the splined solved sample
 
-    def __init__(self, label_file, root_dir, transform=None):
-        """
-        Arguments:
-            csv_file (string): Path to the csv file with labels.
-            root_dir (string): Directory with all the images.
-            transform (callable, optional): Optional transform to be applied
-                on a sample.
-        """
-        self.root_dir = root_dir
+    Args:
+        spline (bspline object): spline object to call when using saved sample
+    """
+
+    def __init__(self, spline):
+        self.spline = spline
+
+    def __call__(self, sample):
+        sample = sample.numpy().squeeze().T
+        mask_samples = self.spline(sample)
+
+        rep_shape = product(mask_samples.shape[:(
+            len(mask_samples.shape) - len(sample.shape))])
+
+        solved_samples = jnp.repeat(
+            sample,
+            rep_shape).reshape(mask_samples.shape)
+
+        # we want in full colour but dunno how to do that
+        # check model, reshape inputs
+        mask = jax.lax.lt(mask_samples, solved_samples)
+        applied_samples = jnp.where(mask, solved_samples, 0)
+
+        # hdr code here
+        import cv2 as cv
+        merge_mertens = cv.createMergeMertens()
+        imgs = np.asarray(applied_samples)
+        # no need for exposure times
+        hdr = merge_mertens.process(imgs)
+
+        # values too small here, maybe look at mertens, fix was scalar issue
+        hdr *= 255
+        return hdr
+
+
+# refuse to reload samples as it will re randomize the output
+class TransformDatasetWrapper(Dataset):
+    def __init__(self, subset, transform=None):
+        self.subset = subset
         self.transform = transform
-        with open(label_file) as f:
-            self.labels = f.readlines()
+
+    def __getitem__(self, index):
+        x, y = self.subset[index]
+        if self.transform:
+            x = self.transform(x)
+        return x, y
 
     def __len__(self):
-        return len(self.labels)
-
-    def __getitem__(self, idx):
-        if torch.is_tensor(idx):
-            idx = idx.tolist()
-
-        label = self.labels[idx]
-        image = io.imread(self.labels[idx])
-        sample = {'image': image, 'label': label}
-
-        if self.transform:
-            sample = self.transform(sample)
-
-        return sample
+        return len(self.subset)
 
 
-def save_hdr_batch(imgs, label):
-    label = re.sub(os.sep, "", str(label))
-    if not os.path.exists(DATASET_DIR):
-        os.mkdir(DATASET_DIR)
-
-    if not os.path.exists(DATASET_DIR):
-        os.mkdir(DATASET_DIR)
-
-    # create artfical exposure time
-    import cv2 as cv
-    merge_mertens = cv.createMergeMertens()
-    imgs = np.asarray(imgs)
-    hdr = merge_mertens.process(imgs)
-
-    hdr = np.clip(hdr * (255 ** 2), 0, 255).astype('uint8')
-    io.imsave("{}/{}.png".format(DATASET_DIR, label), hdr,
-              check_contrast=True)
-
-    with open("{}/labels.csv".format(DATASET_DIR), "a+") as csvlabel:
-        csvlabel.write(label)
-        csvlabel.write("\n")
-
-
-def interpolate_model_train(sols, model, train, step, shapes, names,
-                            vid_out=None):
-    # get dataset
-    # unzip training sets
-    from torch.utils.data import DataLoader
-    loader = DataLoader(train)
-
-    # make spline Trueinterpolator
+def interpolate_model_train(sols, model, train, step, shapes, names):
     [spline, u, lu_decomp] = make_spline(sols)
 
     # setup for training loop
-    # init
-    solves = []
-    masks = []
+    # re-transform dataset with spline & HDR resample
+    tds = TransformDatasetWrapper(train,
+                                  transform=Compose([HDRMaskTransform(spline),
+                                                     ToTensor()]))
 
-    if not os.path.exists(DATASET_DIR):
-        for [sample, label] in loader:
-            sample = sample.numpy().squeeze().T
-            mask_samples = spline(sample)
-
-            rep_shape = product(mask_samples.shape[:(len(mask_samples.shape) -
-                                                   len(sample.shape))])
-
-            solved_samples = jnp.repeat(sample,
-                                        rep_shape).reshape(mask_samples.shape)
-
-            # we want in full colour but dunno how to do that
-            # check model, reshape inputs
-            mask = jax.lax.lt(mask_samples, solved_samples)
-            applied_samples = jnp.where(mask, solved_samples, 0)
-            # save video output as vid_out directory
-            save_hdr_batch(applied_samples, label[0])
-    else:
-        print("using cached masked_dataset delete if want to regenerate")
-
-    from torch.utils.data import DataLoader
     from torch.utils.data import random_split
-    # model loader
-    ds = MaskedDataset("{}/labels.csv".format(DATASET_DIR), DATASET_DIR,
-                       transform=v2.Compose([v2.ToImage(),
-                                             v2.ToDtype(torch.float32,
-                                             scale=True)]))
-
-    [train, test] = random_split(ds, [0.7, 0.3],
+    # random split for training
+    [train, test] = random_split(tds, [0.7, 0.3],
                                  generator=GENERATOR)
 
     # training loop
     epoch(model, 5, names, train, test)
-    # this is internal testing and so must be baked in!
-    if vid_out is not None:
-        save_interpol_video("{out}".format(out=vid_out),
-                            solves, masks, step)
 
     return [model, lu_decomp[1].numpy(), spline, u]
