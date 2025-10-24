@@ -583,17 +583,15 @@ def save_hdr_batch(imgs, label):
     if not os.path.exists(DATASET_DIR):
         os.mkdir(DATASET_DIR)
 
-    # create artifical exposure time
+    # create artfical exposure time
     import cv2 as cv
     merge_mertens = cv.createMergeMertens()
     imgs = np.asarray(imgs)
-    cv.imshow("start", imgs[0])
-    hdr = merge_mertens.process(np.flip(imgs))
-    cv.imshow("hdr", hdr)
+    hdr = merge_mertens.process(imgs)
 
-    hdr = np.clip(hdr * 255, 0, 255).astype('uint8')
+    hdr = np.clip(hdr * (255 ** 2), 0, 255).astype('uint8')
     io.imsave("{}/{}.png".format(DATASET_DIR, label), hdr,
-              check_contrast=False)
+              check_contrast=True)
 
     with open("{}/labels.csv".format(DATASET_DIR), "a+") as csvlabel:
         csvlabel.write(label)
@@ -607,7 +605,7 @@ def interpolate_model_train(sols, model, train, step, shapes, names,
     from torch.utils.data import DataLoader
     loader = DataLoader(train)
 
-    # make spline interpolator
+    # make spline Trueinterpolator
     [spline, u, lu_decomp] = make_spline(sols)
 
     # setup for training loop
@@ -627,7 +625,7 @@ def interpolate_model_train(sols, model, train, step, shapes, names,
                                         rep_shape).reshape(mask_samples.shape)
 
             # we want in full colour but dunno how to do that
-            # check model, reshape jnputs
+            # check model, reshape inputs
             mask = jax.lax.lt(mask_samples, solved_samples)
             applied_samples = jnp.where(mask, solved_samples, 0)
             # save video output as vid_out directory
