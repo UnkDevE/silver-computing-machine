@@ -37,7 +37,7 @@ import torch.linalg as t_linalg
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import Dataset
 
-from torchvision.transforms.v2 import ToTensor, Compose
+from torchvision.transforms.v2 import ToDtype, Compose, ToImage
 
 import jax.scipy.linalg as j_linalg
 from jax.numpy.fft import irfftn
@@ -479,10 +479,11 @@ def epoch(model, epochs, names, train, test):
 
             # Make predictions for this batch
             breakpoint()
-            outputs = model(inputs)
+            batch = torch.unsqueeze(inputs, dim=0)
+            outputs = model(batch)
 
             # Compute the loss and its gradients
-            loss = loss_fn(outputs, labels)
+            loss = loss_fn(outputs, train.class_to_idx(labels))
             loss.backward()
 
             # Adjust learning weights
@@ -600,7 +601,9 @@ def interpolate_model_train(sols, model, train, step, shapes, names):
     # re-transform dataset with spline & HDR resample
     tds = TransformDatasetWrapper(train,
                                   transform=Compose([HDRMaskTransform(spline),
-                                                     ToTensor()]))
+                                                     ToImage(),
+                                                     ToDtype(torch.float32,
+                                                             scale=True)]))
 
     from torch.utils.data import random_split
     # random split for training
