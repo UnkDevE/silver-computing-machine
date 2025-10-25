@@ -472,18 +472,19 @@ def epoch(model, epochs, names, train, test):
         # index and do some intra-epoch reporting
         for i, data in enumerate(train):
             # Every data instance is an input + label pair
-            inputs, labels = data
+            inputs, label = data
 
             # Zero your gradients for every batch!
             opt.zero_grad()
 
             # Make predictions for this batch
-            breakpoint()
             batch = torch.unsqueeze(inputs, dim=0)
+            from torch.nn.functional import one_hot
+            b_label = one_hot(train.dataset.target[label], len(train.dataset))
             outputs = model(batch)
 
             # Compute the loss and its gradients
-            loss = loss_fn(outputs, train.class_to_idx(labels))
+            loss = loss_fn(outputs, b_label)
             loss.backward()
 
             # Adjust learning weights
@@ -583,6 +584,11 @@ class TransformDatasetWrapper(Dataset):
     def __init__(self, subset, transform=None):
         self.subset = subset
         self.transform = transform
+        from torchvision.datasets import SBU
+        if isinstance(subset.dataset, SBU):
+            self.target = {k: i for i, k in enumerate(subset.dataset.captions)}
+        else:
+            self.target = subset.dataset.class_to_idx
 
     def __getitem__(self, index):
         x, y = self.subset[index]
