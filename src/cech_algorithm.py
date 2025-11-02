@@ -472,19 +472,17 @@ def epoch(model, epochs, names, train, test):
         # index and do some intra-epoch reporting
         for i, data in enumerate(train):
             # Every data instance is an input + label pair
-            inputs, label = data
+            inputs, labels = data
 
             # Zero your gradients for every batch!
             opt.zero_grad()
 
             # Make predictions for this batch
-            batch = torch.unsqueeze(inputs, dim=0)
-            from torch.nn.functional import one_hot
-            b_label = one_hot(train.dataset.target[label], len(train.dataset))
-            outputs = model(batch)
+            outputs = model(inputs)
 
             # Compute the loss and its gradients
-            loss = loss_fn(outputs, b_label)
+            # no need for one hot here
+            loss = loss_fn(outputs, labels)
             loss.backward()
 
             # Adjust learning weights
@@ -584,17 +582,27 @@ class TransformDatasetWrapper(Dataset):
     def __init__(self, subset, transform=None):
         self.subset = subset
         self.transform = transform
-        from torchvision.datasets import SBU
-        if isinstance(subset.dataset, SBU):
-            self.target = {k: i for i, k in enumerate(subset.dataset.captions)}
-        else:
-            self.target = subset.dataset.class_to_idx
+
+        with open("imagenet1000_clsidx_to_labels.json") as classes:
+            import json
+            self.targets = json.load(classes)
+            # reverse dict for ease of use
+            self.targets = {v: i for i, v in self.targets.items()}
 
     def __getitem__(self, index):
         x, y = self.subset[index]
         if self.transform:
             x = self.transform(x)
-        return x, y
+
+        x = torch.unsqueeze(x, dim=0)
+        y = np.array([int(self.targets[v]) for v in
+                      self.targets.keys() if v in y])
+
+        one_hot = np.zeros(len(self.subset))
+        one_hot[y] = 1.0
+        hot_y = torch.from_numpy(one_hot)
+
+        return x, hot_y
 
     def __len__(self):
         return len(self.subset)
@@ -619,4 +627,4 @@ def interpolate_model_train(sols, model, train, step, shapes, names):
     # training loop
     epoch(model, 5, names, train, test)
 
-    return [model, lu_decomp[1].numpy(), spline, u]
+    return [model, lu_decomp[1], spline, u]
