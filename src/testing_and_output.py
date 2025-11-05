@@ -52,6 +52,7 @@ def tester(model, shapes, sheafout, sheafs, sort_avg):
 
 
 def plot_test(starttest, endtest, outshape, name):
+    breakpoint()
     tests = [starttest, endtest]
     plt.xlabel("features")
     plt.ylabel("activation")
@@ -59,7 +60,9 @@ def plot_test(starttest, endtest, outshape, name):
     colours = ["ro--", "bo--"]
 
     for i, [avg_outs, final_test] in enumerate(tests):
-        template = np.reshape(np.arange(1, len(avg_outs) + 1), outshape[-1])
+        template = np.reshape(np.arange(1,
+                              ca.product(list(avg_outs.shape[1:])) + 1),
+                              outshape[1][0] * (outshape[0][1] // 4))
         # plot our test
         plt.violinplot(np.transpose(avg_outs), showmeans=True)
         plt.plot(template, np.transpose(final_test), colours[i])
