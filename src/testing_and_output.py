@@ -59,18 +59,21 @@ def plot_test(starttest, endtest, outshape, name):
     colours = ["ro--", "bo--"]
 
     for i, [avg_outs, final_test] in enumerate(tests):
-        breakpoint()
         template = np.reshape(avg_outs, [ca.product(list(avg_outs.shape[1:])),
                               avg_outs.shape[0]])
         # plot our test
         plt.violinplot(template, showmeans=True)
 
         # interpolate spline with nearest round up power of two
-        from math import log, ceil
-        p2_shape = pow(2, ceil(log(final_test.shape[1]) / log(2)))
+        p2_shape = 1
+        while p2_shape < final_test.shape[-1]:
+            p2_shape *= 2
+
         from scipy.interpolate import make_interp_spline
-        interp = make_interp_spline(final_test, np.linspace(0,
-                                    p2_shape))
+        breakpoint()
+        final_test = np.reshape(final_test, final_test.shape[-1])
+        interp = make_interp_spline(np.linspace(0.0, 1.0, final_test.shape[0]),
+                                    final_test)
 
         yaxis = interp(np.linspace(0, p2_shape))
 
