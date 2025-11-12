@@ -70,7 +70,6 @@ def plot_test(starttest, endtest, outshape, name):
             p2_shape *= 2
 
         from scipy.interpolate import make_interp_spline
-        breakpoint()
         final_test = np.reshape(final_test, final_test.shape[-1])
         interp = make_interp_spline(np.linspace(0.0, 1.0, final_test.shape[0]),
                                     final_test)
@@ -163,12 +162,24 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
                           "{name}-out-epoch-{i}.png"
                           .format(name="".join(names), i=i))
 
+                c_eval = model(test_dataset)
+                test_eval = test_model(test_dataset)
+
                 labels = me.get_labels(names)
-                print("EVALUATION:")
-                test_model.evaluate(test_dataset, labels,
-                                    verbose=2)
+                acc_weight = 1.0 / len(labels)
+                control_acc = 1.0
+                test_acc = 1.0
+
+                for [control, test, act] in zip(c_eval, test_eval, labels):
+                    if test != act:
+                        test_acc -= acc_weight
+                    if control != act:
+                        control_acc -= acc_weight
+
                 print("CONTROL:")
-                model.evaluate(test_dataset, labels, verbose=2)
+                print(control_acc)
+                print("EVALUATION:")
+                print(test_acc)
 
 
 def model_test_batch(root, res, rounds, names, download=True):
