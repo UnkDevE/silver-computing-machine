@@ -52,7 +52,6 @@ def tester(model, shapes, sheafout, sheafs, sort_avg):
 
 
 def plot_test(starttest, endtest, outshape, name):
-    breakpoint()
     tests = [starttest, endtest]
     plt.xlabel("features")
     plt.ylabel("activation")
@@ -60,12 +59,22 @@ def plot_test(starttest, endtest, outshape, name):
     colours = ["ro--", "bo--"]
 
     for i, [avg_outs, final_test] in enumerate(tests):
-        template = np.reshape(np.arange(1,
-                              ca.product(list(avg_outs.shape[1:])) + 1),
-                              outshape[1][0] * (outshape[0][1] // 4))
+        breakpoint()
+        template = np.reshape(avg_outs, [ca.product(list(avg_outs.shape[1:])),
+                              avg_outs.shape[0]])
         # plot our test
-        plt.violinplot(np.transpose(avg_outs), showmeans=True)
-        plt.plot(template, np.transpose(final_test), colours[i])
+        plt.violinplot(template, showmeans=True)
+
+        # interpolate spline with nearest round up power of two
+        from math import log, ceil
+        p2_shape = pow(2, ceil(log(final_test.shape[1]) / log(2)))
+        from scipy.interpolate import make_interp_spline
+        interp = make_interp_spline(final_test, np.linspace(0,
+                                    p2_shape))
+
+        yaxis = interp(np.linspace(0, p2_shape))
+
+        plt.plot(yaxis.T, colours[i])
 
     plt.savefig(name)
     # clear figures and axes
