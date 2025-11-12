@@ -21,6 +21,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from torchvision.models import get_model
+from scipy.stats import chisquare
 
 import src.cech_algorithm as ca
 import src.model_extractor as me
@@ -162,24 +163,34 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
                           "{name}-out-epoch-{i}.png"
                           .format(name="".join(names), i=i))
 
-                c_eval = model(test_dataset)
-                test_eval = test_model(test_dataset)
+                # onehots labels
+                train_dataset = ca.TransformDatasetWrapper(train_dataset)
 
-                labels = me.get_labels(names)
-                acc_weight = 1.0 / len(labels)
-                control_acc = 1.0
-                test_acc = 1.0
+                chis = []
+                for [data, actual] in train_dataset:
+                    control = model(data)
+                    test = test_model(data)
 
-                for [control, test, act] in zip(c_eval, test_eval, labels):
-                    if test != act:
-                        test_acc -= acc_weight
-                    if control != act:
-                        control_acc -= acc_weight
+                    test_chi = chisquare(test, f_exp=actual)
+                    c_chi = chisquare(control, f_exp=actual)
+                    diff_chi = chisquare(test, f_exp=control)
+                    chis.append(np.array([test_chi, c_chi, diff_chi]))
+
+                chis = np.array(chis).T
+                breakpoint()
+                test_acc = np.mean(chis)
+                control_acc = np.mean(chis)
+                diff_acc = np.mean(chis)
+                diff_mean = test_acc - control_acc
 
                 print("CONTROL:")
                 print(control_acc)
                 print("EVALUATION:")
                 print(test_acc)
+                print("CHI DIFF")
+                print(diff_acc)
+                print("MEAN DIFF")
+                print(diff_mean)
 
 
 def model_test_batch(root, res, rounds, names, download=True):

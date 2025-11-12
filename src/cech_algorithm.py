@@ -473,15 +473,16 @@ def epoch(model, epochs, names, train, test):
         for i, data in enumerate(train):
             # Every data instance is an input + label pair
             inputs, labels = data
+            breakpoint()
 
             # Zero your gradients for every batch!
             opt.zero_grad()
 
             # Make predictions for this batch
+            # need for one hot here
             outputs = model(inputs)
 
             # Compute the loss and its gradients
-            # no need for one hot here
             loss = loss_fn(outputs, labels)
             loss.backward()
 
