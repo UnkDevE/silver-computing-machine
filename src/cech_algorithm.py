@@ -473,13 +473,14 @@ def epoch(model, epochs, names, train, test):
         for i, data in enumerate(train):
             # Every data instance is an input + label pair
             inputs, labels = data
-            breakpoint()
 
             # Zero your gradients for every batch!
             opt.zero_grad()
 
             # Make predictions for this batch
-            # need for one hot here
+            if inputs.shape[0] == 1:
+                breakpoint()
+
             outputs = model(inputs)
 
             # Compute the loss and its gradients
@@ -597,7 +598,7 @@ class TransformDatasetWrapper(Dataset):
 
         x = torch.unsqueeze(x, dim=0)
         y = np.array([int(self.targets[v]) for v in
-                      self.targets.keys() if v in y])
+                     self.targets.keys() if y == v])
 
         one_hot = np.zeros(len(self.subset))
         one_hot[y] = 1.0

@@ -164,12 +164,10 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
                           .format(name="".join(names), i=i))
 
                 # onehots labels
-                train_dataset = ca.TransformDatasetWrapper(train_dataset)
-
                 chis = []
-                for [data, actual] in train_dataset:
-                    control = model(data)
-                    test = test_model(data)
+                for [data, actual] in test_dataset:
+                    control = model(data).detach().numpy()
+                    test = test_model(data).detach().numpy()
 
                     test_chi = chisquare(test, f_exp=actual)
                     c_chi = chisquare(control, f_exp=actual)
