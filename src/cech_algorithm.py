@@ -35,7 +35,7 @@ import torch
 # torch for tensor LU
 import torch.linalg as t_linalg
 from torch.utils.tensorboard import SummaryWriter
-from torch.utils.data import Dataset
+from torch.utils.data import DataLoader, Dataset
 
 from torchvision.transforms.v2 import ToDtype, Compose, ToImage
 
@@ -596,12 +596,13 @@ class TransformDatasetWrapper(Dataset):
         if self.transform:
             x = self.transform(x)
 
-        x = torch.unsqueeze(x, dim=0)
         y = np.array([int(self.targets[v]) for v in
-                     self.targets.keys() if y == v])
+                     self.targets.keys() if v in y])
 
         one_hot = np.zeros(len(self.subset))
+        # classifier is not multiclass
         one_hot[y] = 1.0
+
         hot_y = torch.from_numpy(one_hot)
 
         return x, hot_y
@@ -625,6 +626,10 @@ def interpolate_model_train(sols, model, train, step, shapes, names):
     # random split for training
     [train, test] = random_split(tds, [0.7, 0.3],
                                  generator=GENERATOR)
+
+    from src.model_extractor import BATCH_SIZE
+    train = DataLoader(train, batch_size=BATCH_SIZE)
+    test = DataLoader(test, batch_size=BATCH_SIZE)
 
     # training loop
     epoch(model, 5, names, train, test)

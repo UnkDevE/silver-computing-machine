@@ -165,7 +165,12 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
 
                 # onehots labels
                 chis = []
-                for [data, actual] in test_dataset:
+                from torch.utils.data import DataLoader
+                test_dataset = ca.TransformDatasetWrapper(test_dataset)
+                test_loader = DataLoader(test_dataset,
+                                         batch_size=me.BATCH_SIZE)
+
+                for [data, actual] in test_loader:
                     control = model(data).detach().numpy()
                     test = test_model(data).detach().numpy()
 
