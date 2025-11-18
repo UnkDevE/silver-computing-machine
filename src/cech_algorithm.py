@@ -592,16 +592,18 @@ class TransformDatasetWrapper(Dataset):
             self.targets = {v: i for i, v in self.targets.items()}
 
     def __getitem__(self, index):
-        x, y = self.subset[index]
+        x, ysub = self.subset[index]
         if self.transform:
             x = self.transform(x)
 
         y = np.array([int(self.targets[v]) for v in
-                     self.targets.keys() if v in y])
+                     self.targets.keys() if v in ysub])
 
         one_hot = np.zeros(len(self.subset))
         # classifier is not multiclass
-        one_hot[y] = 1.0
+        if y != []:
+            for xy in y:
+                one_hot[xy] = 1.0
 
         hot_y = torch.from_numpy(one_hot)
 
