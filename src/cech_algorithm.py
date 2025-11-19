@@ -597,7 +597,7 @@ class TransformDatasetWrapper(Dataset):
 
         one_hot = np.zeros(len(self.targets) + 1)
         # classifier is not multiclass
-        if np.size() != 0:
+        if np.size(y) != 0:
             one_hot[y[0]] = 1.0
 
         hot_y = torch.from_numpy(one_hot)
