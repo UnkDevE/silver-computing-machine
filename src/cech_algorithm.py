@@ -478,12 +478,10 @@ def epoch(model, epochs, names, train, test):
             opt.zero_grad()
 
             # Make predictions for this batch
-            if inputs.shape[0] == 1:
-                breakpoint()
-
             outputs = model(inputs)
 
             # Compute the loss and its gradients
+            breakpoint()
             loss = loss_fn(outputs, labels)
             loss.backward()
 
@@ -574,8 +572,6 @@ class HDRMaskTransform(object):
         # no need for exposure times
         hdr = merge_mertens.process(imgs)
 
-        # values too small here, maybe look at mertens, fix was scalar issue
-        hdr *= 255
         return hdr
 
 
@@ -599,11 +595,10 @@ class TransformDatasetWrapper(Dataset):
         y = np.array([int(self.targets[v]) for v in
                      self.targets.keys() if v in ysub])
 
-        one_hot = np.zeros(len(self.subset))
+        one_hot = np.zeros(len(self.targets) + 1)
         # classifier is not multiclass
-        if y != []:
-            for xy in y:
-                one_hot[xy] = 1.0
+        if np.size() != 0:
+            one_hot[y[0]] = 1.0
 
         hot_y = torch.from_numpy(one_hot)
 
