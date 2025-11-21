@@ -481,7 +481,6 @@ def epoch(model, epochs, names, train, test):
             outputs = model(inputs)
 
             # Compute the loss and its gradients
-            breakpoint()
             loss = loss_fn(outputs, labels)
             loss.backward()
 
