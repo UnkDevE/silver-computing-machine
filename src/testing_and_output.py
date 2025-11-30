@@ -26,6 +26,19 @@ from scipy.stats import chisquare
 import src.cech_algorithm as ca
 import src.model_extractor as me
 
+import torch
+
+device_str = 'cpu'
+if torch.backends.mkldnn.is_available():
+    # enable AVX
+    torch.backends.mkldnn.enabled = True
+    import mkl
+    mkl.set_num_threads(mkl.get_max_threads())
+elif torch.cuda.is_available():
+    device_str = 'cuda'
+
+TORCH_DEVICE = torch.device(device_str)
+
 
 def bucketize(prelims):
     arr = []
@@ -171,23 +184,23 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
                                          batch_size=me.BATCH_SIZE)
 
                 for [data, actual] in test_loader:
-                    control = model(data).detach().numpy()
+                    ctrl = model(data).detach().numpy()
                     test = test_model(data).detach().numpy()
 
                     test_chi = chisquare(test, f_exp=actual)
-                    c_chi = chisquare(control, f_exp=actual)
-                    diff_chi = chisquare(test, f_exp=control)
+                    c_chi = chisquare(ctrl, f_exp=actual)
+                    diff_chi = chisquare(test, f_exp=ctrl)
                     chis.append(np.array([test_chi, c_chi, diff_chi]))
 
                 chis = np.array(chis).T
                 breakpoint()
                 test_acc = np.mean(chis)
-                control_acc = np.mean(chis)
+                ctrl_acc = np.mean(chis)
                 diff_acc = np.mean(chis)
-                diff_mean = test_acc - control_acc
+                diff_mean = test_acc - ctrl_acc
 
                 print("CONTROL:")
-                print(control_acc)
+                print(ctrl_acc)
                 print("EVALUATION:")
                 print(test_acc)
                 print("CHI DIFF")
@@ -201,5 +214,6 @@ def model_test_batch(root, res, rounds, names, download=True):
 
     for ds in datasets:
         model = get_model(names[0], weights=names[1])
+        model.to(TORCH_DEVICE)
         model.eval()
         model_create_equation(model, names, ds, res, rounds)

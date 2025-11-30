@@ -608,6 +608,7 @@ class TransformDatasetWrapper(Dataset):
 
 
 def interpolate_model_train(sols, model, train, step, shapes, names):
+    print("STEP {}".format(step))
     [spline, u, lu_decomp] = make_spline(sols)
 
     # setup for training loop
