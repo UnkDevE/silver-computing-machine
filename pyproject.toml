@@ -10,11 +10,27 @@ dependencies = [
     "scipy",
     "pandas",
     "matplotlib",
-    "torch[rocm]",
-    "mkl",
-    "mkl-service",
+    "torch",
     "torchvision",
+    "pytorch-triton-rocm ; sys_platform == 'linux'",
     "tensorboard",
     "scikit-image",
-    "opencv-contrib-python>=4.12.0.88",
+    "opencv-contrib-python",
 ]
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-rocm", marker = "sys_platform == 'linux'" },
+]
+torchvision = [
+  { index = "pytorch-rocm", marker = "sys_platform == 'linux'" },
+]
+pytorch-triton-rocm = [
+  { index = "pytorch-rocm", marker = "sys_platform == 'linux'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-rocm"
+url = "https://download.pytorch.org/whl/nightly/rocm7.1"
+explicit = true
+

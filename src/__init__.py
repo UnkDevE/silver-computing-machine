@@ -4,3 +4,4 @@ __all__ = ["cech_algorithm", "model_extractor",
 from . import cech_algorithm
 from . import model_extractor
 from . import testing_and_output
+from . import training

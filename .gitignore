@@ -57,3 +57,4 @@ setup.c
 ver2.c
 .vscode/
 datasets/
+data/*

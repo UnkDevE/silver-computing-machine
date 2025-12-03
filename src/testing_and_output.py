@@ -25,19 +25,7 @@ from scipy.stats import chisquare
 
 import src.cech_algorithm as ca
 import src.model_extractor as me
-
-import torch
-
-device_str = 'cpu'
-if torch.backends.mkldnn.is_available():
-    # enable AVX
-    torch.backends.mkldnn.enabled = True
-    import mkl
-    mkl.set_num_threads(mkl.get_max_threads())
-elif torch.cuda.is_available():
-    device_str = 'cuda'
-
-TORCH_DEVICE = torch.device(device_str)
+import src.training as tr
 
 
 def bucketize(prelims):
@@ -160,7 +148,7 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
             for i in range(test_rounds):
                 # find variance in solved systems
                 [test_model, solved_system,
-                    bspline, u] = ca.interpolate_model_train(
+                    bspline, u] = tr.interpolate_model_train(
                         sols[-1],
                         test_model,
                         train_dataset,
@@ -179,7 +167,7 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
                 # onehots labels
                 chis = []
                 from torch.utils.data import DataLoader
-                test_dataset = ca.TransformDatasetWrapper(test_dataset)
+                test_dataset = tr.TransformDatasetWrapper(test_dataset)
                 test_loader = DataLoader(test_dataset,
                                          batch_size=me.BATCH_SIZE)
 
@@ -214,6 +202,6 @@ def model_test_batch(root, res, rounds, names, download=True):
 
     for ds in datasets:
         model = get_model(names[0], weights=names[1])
-        model.to(TORCH_DEVICE)
+        model.to(ca.TORCH_DEVICE)
         model.eval()
         model_create_equation(model, names, ds, res, rounds)
