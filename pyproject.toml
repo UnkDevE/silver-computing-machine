@@ -13,7 +13,6 @@ dependencies = [
     "torch",
     "torchvision",
     "pytorch-triton-rocm ; sys_platform == 'linux'",
-    "tensorboard",
     "scikit-image",
     "opencv-contrib-python",
 ]

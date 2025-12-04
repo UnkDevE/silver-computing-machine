@@ -1,0 +1,2 @@
+optimize mergemertens C++ function is not on GPU
+same with splines -> goes to fortran function might be quicker as a call
