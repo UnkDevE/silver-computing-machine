@@ -21,6 +21,7 @@
     pytorch module - trains models
 """
 
+import os
 import importlib
 from datetime import datetime
 
@@ -39,6 +40,8 @@ import jax.scipy.linalg as j_linalg
 import numpy as np
 
 import src.cech_algorithm as ca
+
+DL_WORKERS = os.cpu_count() - 2
 
 
 # import class e.g. loss or opt and return it
@@ -88,6 +91,8 @@ def epoch(model, epochs, names, train, test):
         for i, data in enumerate(train):
             # Every data instance is an input + label pair
             inputs, labels = data
+            inputs = inputs.to(ca.TORCH_DEVICE)
+            labels = labels.to(ca.TORCH_DEVICE)
 
             # Zero your gradients for every batch!
             opt.zero_grad()
@@ -180,7 +185,7 @@ class HDRMaskTransform(object):
         # we want in full colour but dunno how to do that
         # check model, reshape inputs
         mask = mask_samples < solved_samples
-        applied_samples = jnp.where(mask, solved_samples, 0)
+        applied_samples = np.where(mask, solved_samples, 0)
 
         # hdr code here
         import cv2 as cv
@@ -243,8 +248,8 @@ def interpolate_model_train(sols, model, train, step, shapes, names):
                                  generator=ca.GENERATOR)
 
     from src.model_extractor import BATCH_SIZE
-    train = DataLoader(train, batch_size=BATCH_SIZE, num_workers=10)
-    test = DataLoader(test, batch_size=BATCH_SIZE, num_workers=10)
+    train = DataLoader(train, batch_size=BATCH_SIZE, num_workers=DL_WORKERS)
+    test = DataLoader(test, batch_size=BATCH_SIZE, num_workers=DL_WORKERS)
 
     # training loop
     epoch(model, 5, names, train, test)

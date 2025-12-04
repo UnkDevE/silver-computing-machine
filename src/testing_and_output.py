@@ -45,12 +45,13 @@ def tester(model, shapes, sheafout, sheafs, sort_avg):
 
     # needs batching
     torch_out = ca.jax_to_tensor(out)
+    torch_out = torch_out.to(ca.TORCH_DEVICE)
 
     model.eval()
     final_test = model(torch_out)
 
     # print(sort_avg)
-    return [sort_avg, final_test.detach().numpy()]
+    return [sort_avg, final_test.cpu().detach().numpy()]
 
 
 def plot_test(starttest, endtest, outshape, name):
@@ -122,8 +123,8 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
 
             shapes.append([weights.size(), biases.size()])
             # make a copy of weights and biases to work off of
-            layers.append([np.copy(weights.detach().numpy()),
-                           np.copy(biases.detach().numpy()),
+            layers.append([np.copy(weights.cpu().detach().numpy()),
+                           np.copy(biases.cpu().detach().numpy()),
                            act, shapes[-1]])
 
         [sheaf, sols, outward, sort_avg] = ca.graph_model(
