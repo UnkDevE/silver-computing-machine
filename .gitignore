@@ -2,7 +2,6 @@ vgg*
 runs/
 seeds*
 datasets_masked/
-*.png
 *.mp4
 EQUATION_OUTPUT.latex
 .ropeproject
