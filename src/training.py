@@ -188,12 +188,9 @@ class HDRMaskTransform(object):
         applied_samples = np.where(mask, solved_samples, 0)
 
         # hdr code here
-        import cv2 as cv
-        merge_mertens = cv.createMergeMertens()
+        # no need for opencv as meterns is quite simple
         imgs = np.asarray(applied_samples)
         # no need for exposure times
-        hdr = merge_mertens.process(imgs)
-
         return hdr
 
 
