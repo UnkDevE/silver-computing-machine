@@ -22,8 +22,9 @@
 """
 import torch
 
-from torchvision.transforms.v2 import Grayscale, GuassianBlur
+from torchvision.transforms.v2 import Grayscale, GaussianBlur
 
+from torch import nn
 import torch.nn.functional as F
 
 # Define the 4 - neighbor negative Laplacian kernel
@@ -38,24 +39,53 @@ SIGMA = 0.2
 
 # QUALITY MEASURES
 def quality(img):
-    gray = Grayscale.forwards(img)
+    Grays = Grayscale()
+    gray = Grays(img)
+    # convert from numpy
+    gray = torch.from_numpy(gray)
     # use padding to keep size
-    contrast = F.conv2d(gray, laplacian_kernel, padding=1)
+    l_conv = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=3,
+                       bias=False)
+    l_conv.weight = nn.Parameter(laplacian_kernel)
+
+    contrast = l_conv(gray)
     saturation = torch.std(img, keepdim=True)
     # exposure algorithm is how close exp is to 0.5 in Guass curve
     exposure = torch.sqrt((torch.log(img)) * 2 * (SIGMA ** 2)) + 0.5
     return contrast * saturation * exposure
 
 
-def meterns(imgs, dims):
-    qs = [F.normalize(quality(img)) for img in imgs]
-    # compute blurs and laplace pyramid
-    blurs = [GuassianBlur.forwards(imgs)]
+def laplace_pyramid(imgs, dims, Guass):
+    blurs = [Guass(imgs)]
     laplaces = []
 
-    for i in range(dims - 1):
-        blurs.append(GuassianBlur.forwards(blurs[-1]))
+    for _ in range(dims - 1):
+        blurs.append(Guass(blurs[-1]))
+        # upsample current blur to last size
+        upsample = F.upsample(blurs[-1], blurs[-2].size)
+        laplaces.append(blurs[-2] - upsample)
+
+    return laplaces
 
 
+def meterns(imgs, dims):
+    Guass = GaussianBlur(kernel_size=dims)
+    qs = F.normalize(quality(imgs))
 
-    return qs
+    # compute blurs and laplace pyramid
+    blurs = [Guass(qs)]
+    for _ in range(dims - 1):
+        blurs.append(Guass(blurs[-1]))
+
+    laplaces = laplace_pyramid(imgs, dims, Guass)
+
+    # create partials
+    partials = [sum(laplace * blur) for laplace, blur in zip(laplaces, blurs)]
+    partials.reverse()
+
+    image = None
+    for i in range(len(partials), 1):
+        upsample = F.upsample(partials[i - 1], partials[i].size())
+        image = partials[i] + upsample
+
+    return image

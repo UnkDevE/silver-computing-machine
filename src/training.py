@@ -40,6 +40,7 @@ import jax.scipy.linalg as j_linalg
 import numpy as np
 
 import src.cech_algorithm as ca
+import src.meterns as M
 
 DL_WORKERS = os.cpu_count() - 2
 
@@ -160,6 +161,10 @@ def epoch(model, epochs, names, train, test):
     return model
 
 
+def round_up_to_odd(f):
+    return np.ceil(f) // 2 * 2 + 1
+
+
 class HDRMaskTransform(object):
     """Hdr resample the splined solved sample
 
@@ -190,6 +195,9 @@ class HDRMaskTransform(object):
         # hdr code here
         # no need for opencv as meterns is quite simple
         imgs = np.asarray(applied_samples)
+
+        # kernel has to be odd for guass to work
+        hdr = M.meterns(imgs, round_up_to_odd(imgs.shape[0]))
         # no need for exposure times
         return hdr
 
