@@ -22,7 +22,6 @@
 """
 import torch
 import torch.nn.functional as F
-from torch.func import hessian, vmap, functional_call
 
 from torchvision.transforms.v2 import Grayscale, GaussianBlur
 
@@ -39,6 +38,12 @@ def round_up_to_odd(f):
     return np.ceil(f) // 2 * 2 + 1
 
 
+def next_odd_if_even(x):
+    if x % 2 == 0:
+        return round_up_to_odd(x)
+    return x
+
+
 class HDRMaskTransform(object):
     """Hdr resample the splined solved sample
 
@@ -46,39 +51,16 @@ class HDRMaskTransform(object):
         spline (bspline object): spline object to call when using saved sample
     """
 
-    # define laplace via hessian
-    def get_laplace(self, model):
-        # params (need to be an input for torch.func to work)
-        params = dict(model.named_parameters())
-
-        # functionalize version (params are now an input to the model)
-        def fcall(params, x):
-            return functional_call(model, params, x)
-
-        def compute_laplacian(params, img):
-            # forward-over-reverse hessian calc.
-            hessian_ = hessian(fcall, argnums=1)(params, img)
-            # use relative dims for vmap
-            # (function doesn't see the batch dim of the input)
-            _laplacian = hessian_.diagonal(0, -2, -1)
-            return _laplacian
-
-        # We define a laplacian func for a single function,
-        # then vectorize over the batch.
-        from functools import partial
-        laplacian = partial(vmap(compute_laplacian, in_dims=(None, 0))(params))
-
-        return laplacian
-
     # QUALITY MEASURES
     def quality(self, img):
         Grays = Grayscale()
         gray = Grays(img)
         # convert from numpy
-        gray = torch.from_numpy(gray)
-        # use padding to keep size
-        contrast = self.laplace(gray)
-        saturation = torch.std(img, keepdim=True)
+        img = torch.tensor(img)
+        gray = torch.tensor(gray)
+        # use calculate second order deriviatives (laplacian) by autograd
+        contrast = sum(list(torch.gradient(sum(list(torch.gradient(gray))))))
+        saturation = torch.std(img)
         # exposure algorithm is how close exp is to 0.5 in Guass curve
         exposure = torch.sqrt((torch.log(img)) * 2 * (SIGMA ** 2)) + 0.5
         return contrast * saturation * exposure
@@ -89,18 +71,17 @@ class HDRMaskTransform(object):
 
         for _ in range(dims - 1):
             blurs.append(Guass(blurs[-1]))
-            # upsample current blur to last size
-            upsample = F.upsample(blurs[-1], blurs[-2].size)
-            laplaces.append(blurs[-2] - upsample)
+            # upsample not needed done already from pytorch
+            laplaces.append(blurs[-2] - blurs[-1])
 
         return laplaces
 
     def meterns(self, imgs, dims):
-        Guass = GaussianBlur(kernel_size=dims)
+        Guass = GaussianBlur(kernel_size=dims, sigma=(SIGMA, 0.5))
         qs = F.normalize(self.quality(imgs))
 
         # compute blurs and laplace pyramid
-        blurs = [Guass(qs)]
+        blurs = [Guass(qs.numpy())]
         for _ in range(dims - 1):
             blurs.append(Guass(blurs[-1]))
 
@@ -113,14 +94,12 @@ class HDRMaskTransform(object):
 
         image = None
         for i in range(len(partials), 1):
-            upsample = F.upsample(partials[i - 1], partials[i].size())
-            image = partials[i] + upsample
+            image = partials[i] + partials[i - 1]
 
         return image
 
-    def __init__(self, spline, model):
+    def __init__(self, spline):
         self.spline = spline
-        self.laplace = self.get_laplace(model)
 
     def __call__(self, sample):
         # WE HAVE TO USE NUMPY HERE SO THAT TORCH DOES NOT FORK JAX
@@ -144,6 +123,6 @@ class HDRMaskTransform(object):
         imgs = np.asarray(applied_samples)
 
         # kernel has to be odd for guass to work
-        hdr = self.meterns(imgs, round_up_to_odd(imgs.shape[0]))
+        hdr = self.meterns(imgs, next_odd_if_even(len(imgs.shape)))
         # no need for exposure times
         return hdr

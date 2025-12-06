@@ -34,7 +34,7 @@ import torch.linalg as t_linalg
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader, Dataset
 
-from torchvision.transforms.v2 import ToDtype, Compose, ToImage
+from torchvision.transforms.v2 import ToDtype, Compose
 
 import jax.scipy.linalg as j_linalg
 import numpy as np
@@ -201,11 +201,9 @@ def interpolate_model_train(sols, model, train, step, shapes, names):
     # setup for training loop
     # re-transform dataset with spline & HDR resample
     tds = TransformDatasetWrapper(train,
-                                  transform=Compose([HDRMaskTransform(spline,
-                                                                      model),
-                                                     ToImage(),
-                                                     ToDtype(torch.float32,
-                                                             scale=True)]))
+                                  transform=Compose([
+                                      ToDtype(torch.float32, scale=True),
+                                      HDRMaskTransform(spline)]))
 
     from torch.utils.data import random_split
     # random split for training
