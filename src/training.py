@@ -40,7 +40,7 @@ import jax.scipy.linalg as j_linalg
 import numpy as np
 
 import src.cech_algorithm as ca
-import src.meterns as M
+from src.meterns import HDRMaskTransform
 
 DL_WORKERS = os.cpu_count() - 2
 
@@ -161,47 +161,6 @@ def epoch(model, epochs, names, train, test):
     return model
 
 
-def round_up_to_odd(f):
-    return np.ceil(f) // 2 * 2 + 1
-
-
-class HDRMaskTransform(object):
-    """Hdr resample the splined solved sample
-
-    Args:
-        spline (bspline object): spline object to call when using saved sample
-    """
-
-    def __init__(self, spline):
-        self.spline = spline
-
-    def __call__(self, sample):
-        # WE HAVE TO USE NUMPY HERE SO THAT TORCH DOES NOT FORK JAX
-        sample = sample.numpy().squeeze().T
-        mask_samples = self.spline(sample)
-
-        rep_shape = ca.product(mask_samples.shape[:(
-            len(mask_samples.shape) - len(sample.shape))])
-
-        solved_samples = np.repeat(
-            sample,
-            rep_shape).reshape(mask_samples.shape)
-
-        # we want in full colour but dunno how to do that
-        # check model, reshape inputs
-        mask = mask_samples < solved_samples
-        applied_samples = np.where(mask, solved_samples, 0)
-
-        # hdr code here
-        # no need for opencv as meterns is quite simple
-        imgs = np.asarray(applied_samples)
-
-        # kernel has to be odd for guass to work
-        hdr = M.meterns(imgs, round_up_to_odd(imgs.shape[0]))
-        # no need for exposure times
-        return hdr
-
-
 # refuse to reload samples as it will re randomize the output
 class TransformDatasetWrapper(Dataset):
     def __init__(self, subset, transform=None):
@@ -242,7 +201,8 @@ def interpolate_model_train(sols, model, train, step, shapes, names):
     # setup for training loop
     # re-transform dataset with spline & HDR resample
     tds = TransformDatasetWrapper(train,
-                                  transform=Compose([HDRMaskTransform(spline),
+                                  transform=Compose([HDRMaskTransform(spline,
+                                                                      model),
                                                      ToImage(),
                                                      ToDtype(torch.float32,
                                                              scale=True)]))
