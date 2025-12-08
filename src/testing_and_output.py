@@ -145,7 +145,7 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
             # nets e.g. 784,10 for mnist
             systems = []
 
-            [bspline, _, lu_decomp] = tr.make_spline(sols)
+            [bspline, _, lu_decomp] = tr.make_spline(sols[-1])
             solved_system = lu_decomp[1]
             systems.append(solved_system)
 
