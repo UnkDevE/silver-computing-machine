@@ -194,10 +194,9 @@ class TransformDatasetWrapper(Dataset):
         return len(self.subset)
 
 
-def interpolate_model_train(sols, model, train, step, shapes, names):
+# PYTORCH CODE ONLY
+def interpolate_model_train(spline, model, train, step, names):
     print("STEP {}".format(step))
-    [spline, u, lu_decomp] = make_spline(sols)
-
     # setup for training loop
     # re-transform dataset with spline & HDR resample
     tds = TransformDatasetWrapper(train,
@@ -217,4 +216,4 @@ def interpolate_model_train(sols, model, train, step, shapes, names):
     # training loop
     epoch(model, 5, names, train, test)
 
-    return [model, lu_decomp[1], spline, u]
+    return model

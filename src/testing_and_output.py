@@ -145,20 +145,19 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
             # nets e.g. 784,10 for mnist
             systems = []
 
-            bsplines = []
+            [bspline, _, lu_decomp] = tr.make_spline(sols)
+            solved_system = lu_decomp[1]
+            systems.append(solved_system)
+
             for i in range(test_rounds):
                 # find variance in solved systems
-                [test_model, solved_system,
-                    bspline, u] = tr.interpolate_model_train(
-                        sols[-1],
-                        test_model,
-                        train_dataset,
-                        i,
-                        shapes,
-                        names)
 
-                bsplines.append([bspline, u])
-                systems.append(solved_system)
+                test_model = tr.interpolate_model_train(
+                    bspline,
+                    test_model,
+                    train_dataset, i,
+                    names)
+
                 # and testing
                 test = tester(test_model, shapes, sheaf, outward, sort_avg)
                 plot_test(control, test, shapes[-1],
