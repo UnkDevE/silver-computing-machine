@@ -92,8 +92,8 @@ def epoch(model, epochs, names, train, test):
         for i, data in enumerate(train):
             # Every data instance is an input + label pair
             inputs, labels = data
-            inputs = inputs.to(ca.TORCH_DEVICE)
-            labels = labels.to(ca.TORCH_DEVICE)
+            inputs = inputs.to(ca.TORCH_DEVICE, non_blocking=True)
+            labels = labels.to(ca.TORCH_DEVICE, non_blocking=True)
 
             # Zero your gradients for every batch!
             opt.zero_grad()
@@ -135,8 +135,8 @@ def epoch(model, epochs, names, train, test):
         with torch.no_grad():
             for i, vdata in enumerate(test):
                 vinputs, vlabels = vdata
-                vinputs = vinputs.to(ca.TORCH_DEVICE)
-                vlabels = vlabels.to(ca.TORCH_DEVICE)
+                vinputs = vinputs.to(ca.TORCH_DEVICE, non_blocking=True)
+                vlabels = vlabels.to(ca.TORCH_DEVICE, non_blocking=True)
                 voutputs = model(vinputs)
                 vloss = loss_fn(voutputs, vlabels)
                 running_vloss += vloss
@@ -206,14 +206,15 @@ def interpolate_model_train(spline, model, train, step, names):
 
     from torch.utils.data import random_split
     # random split for training
-    [train, test] = random_split(tds, [0.7, 0.3],
-                                 generator=ca.GENERATOR)
+    [train_s, test_s] = random_split(tds, [0.7, 0.3], generator=ca.GENERATOR)
 
     from src.model_extractor import BATCH_SIZE
-    train = DataLoader(train, batch_size=BATCH_SIZE, num_workers=DL_WORKERS)
-    test = DataLoader(test, batch_size=BATCH_SIZE, num_workers=DL_WORKERS)
+    train_s = DataLoader(train_s,
+                         batch_size=BATCH_SIZE, num_workers=DL_WORKERS)
+
+    test_s = DataLoader(test_s, batch_size=BATCH_SIZE, num_workers=DL_WORKERS)
 
     # training loop
-    epoch(model, 5, names, train, test)
+    epoch(model, 5, names, train_s, test_s)
 
     return model

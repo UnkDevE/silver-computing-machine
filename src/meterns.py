@@ -27,8 +27,6 @@ from torchvision.transforms.v2 import Grayscale, GaussianBlur
 
 import numpy as np
 
-from src import cech_algorithm as ca
-
 # defined from merge meterns paper
 # https://onlinelibrary.wiley.com/doi/abs/10.1111/j.1467-8659.2008.01171.x
 SIGMA = 0.2
@@ -44,6 +42,14 @@ def next_odd_if_even(x):
     return x
 
 
+@torch.compile
+def product(xs):
+    y = xs[0]
+    for x in xs[1:]:
+        y *= x
+    return y
+
+
 class HDRMaskTransform(object):
     """Hdr resample the splined solved sample
 
@@ -52,6 +58,7 @@ class HDRMaskTransform(object):
     """
 
     # QUALITY MEASURES
+    @torch.compile
     def quality(self, img):
         Grays = Grayscale()
         gray = Grays(img)
@@ -65,6 +72,7 @@ class HDRMaskTransform(object):
         exposure = torch.sqrt((torch.log(img)) * 2 * (SIGMA ** 2)) + 0.5
         return contrast * saturation * exposure
 
+    @torch.compile
     def laplace_pyramid(self, imgs, dims, Guass):
         blurs = [Guass(imgs)]
         laplaces = []
@@ -76,12 +84,13 @@ class HDRMaskTransform(object):
 
         return laplaces
 
+    @torch.compile
     def meterns(self, imgs, dims):
         Guass = GaussianBlur(kernel_size=dims, sigma=(SIGMA, 0.5))
         qs = F.normalize(self.quality(imgs))
 
         # compute blurs and laplace pyramid
-        blurs = [Guass(qs.numpy())]
+        blurs = [Guass(qs)]
         for _ in range(dims - 1):
             blurs.append(Guass(blurs[-1]))
 
@@ -105,22 +114,21 @@ class HDRMaskTransform(object):
         # WE HAVE TO USE NUMPY HERE SO THAT TORCH DOES NOT FORK JAX
         sample = sample.numpy().squeeze().T
         mask_samples = self.spline(sample)
+        mask_samples = torch.tensor(mask_samples)
 
-        rep_shape = ca.product(mask_samples.shape[:(
+        rep_shape = product(mask_samples.shape[:(
             len(mask_samples.shape) - len(sample.shape))])
 
-        solved_samples = np.repeat(
-            sample,
+        solved_samples = sample.repeat(
             rep_shape).reshape(mask_samples.shape)
 
         # we want in full colour but dunno how to do that
         # check model, reshape inputs
-        mask = mask_samples < solved_samples
-        applied_samples = np.where(mask, solved_samples, 0)
+        mask = mask_samples.le(solved_samples)
+        imgs = torch.where(mask, solved_samples, 0)
 
         # hdr code here
         # no need for opencv as meterns is quite simple
-        imgs = np.asarray(applied_samples)
 
         # kernel has to be odd for guass to work
         hdr = self.meterns(imgs, next_odd_if_even(len(imgs.shape)))
