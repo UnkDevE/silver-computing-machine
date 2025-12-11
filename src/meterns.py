@@ -58,7 +58,6 @@ class HDRMaskTransform(object):
     """
 
     # QUALITY MEASURES
-    @torch.compile
     def quality(self, img):
         Grays = Grayscale()
         gray = Grays(img)
@@ -72,7 +71,6 @@ class HDRMaskTransform(object):
         exposure = torch.sqrt((torch.log(img)) * 2 * (SIGMA ** 2)) + 0.5
         return contrast * saturation * exposure
 
-    @torch.compile
     def laplace_pyramid(self, imgs, dims, Guass):
         blurs = [Guass(imgs)]
         laplaces = []
@@ -84,7 +82,6 @@ class HDRMaskTransform(object):
 
         return laplaces
 
-    @torch.compile
     def meterns(self, imgs, dims):
         Guass = GaussianBlur(kernel_size=dims, sigma=(SIGMA, 0.5))
         qs = F.normalize(self.quality(imgs))

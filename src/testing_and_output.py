@@ -21,11 +21,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from torchvision.models import get_model
+from torchvision.transforms import v2
+
 from scipy.stats import chisquare
 
 import src.cech_algorithm as ca
 import src.model_extractor as me
 import src.training as tr
+
+from copy import copy
 
 
 def bucketize(prelims):
@@ -101,11 +105,15 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
     # check optional args
     # create prerequisites
     if model is not None:
-        # load dataset for training
+        # works for IMAGENET ONLY
+        if "imagenet" in model.__class__.__name__.lower():
+            dataset.target_transform = tr.ClassLabelWrapper()
 
         from torch.utils.data import random_split
         [train_dataset, test_dataset] = random_split(dataset, [0.7, 0.3],
                                                      generator=ca.GENERATOR)
+
+        train_dataset.dataset = copy(dataset)
 
         # calculate fft + shape
         layers = []
@@ -134,20 +142,21 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
 
         control = tester(model, shapes, sheaf, outward, sort_avg)
 
+        [bspline, _, _] = tr.make_spline(sols[-1])
+
+        from src.meterns import HDRMaskTransform
+        train_dataset.dataset.transforms = v2.Compose([
+            train_dataset.dataset.transforms,
+            HDRMaskTransform])
+
         for _ in range(test_rounds):
             # should we wipe the model every i in TRAIN_SIZE or leave it?
 
-            import copy
-            test_model = copy.copy(model)
+            test_model = copy(model)
 
             # using sols[0] shape as a template for input
             # this would be input, output shape of neural
             # nets e.g. 784,10 for mnist
-            systems = []
-
-            [bspline, _, lu_decomp] = tr.make_spline(sols[-1])
-            solved_system = lu_decomp[1]
-            systems.append(solved_system)
 
             for i in range(test_rounds):
                 # find variance in solved systems
@@ -167,7 +176,6 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
                 # onehots labels
                 chis = []
                 from torch.utils.data import DataLoader
-                test_dataset = tr.TransformDatasetWrapper(test_dataset)
                 test_loader = DataLoader(test_dataset,
                                          batch_size=me.BATCH_SIZE)
 

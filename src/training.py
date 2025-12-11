@@ -32,17 +32,14 @@ import torch
 # torch for tensor LU
 import torch.linalg as t_linalg
 from torch.utils.tensorboard import SummaryWriter
-from torch.utils.data import DataLoader, Dataset
-
-from torchvision.transforms.v2 import ToDtype, Compose
+from torch.utils.data import DataLoader
 
 import jax.scipy.linalg as j_linalg
 import numpy as np
 
 import src.cech_algorithm as ca
-from src.meterns import HDRMaskTransform
 
-DL_WORKERS = os.cpu_count() - 2
+DL_WORKERS = os.cpu_count() // 2
 
 
 # import class e.g. loss or opt and return it
@@ -162,22 +159,15 @@ def epoch(model, epochs, names, train, test):
 
 
 # refuse to reload samples as it will re randomize the output
-class TransformDatasetWrapper(Dataset):
-    def __init__(self, subset, transform=None):
-        self.subset = subset
-        self.transform = transform
-
+class ClassLabelWrapper(object):
+    def __init__(self):
         with open("imagenet1000_clsidx_to_labels.json") as classes:
             import json
             self.targets = json.load(classes)
             # reverse dict for ease of use
             self.targets = {v: i for i, v in self.targets.items()}
 
-    def __getitem__(self, index):
-        x, ysub = self.subset[index]
-        if self.transform:
-            x = self.transform(x)
-
+    def __call__(self, ysub):
         y = np.array([int(self.targets[v]) for v in
                      self.targets.keys() if v in ysub])
 
@@ -188,31 +178,25 @@ class TransformDatasetWrapper(Dataset):
 
         hot_y = torch.from_numpy(one_hot)
 
-        return x, hot_y
-
-    def __len__(self):
-        return len(self.subset)
+        return hot_y
 
 
 # PYTORCH CODE ONLY
-def interpolate_model_train(spline, model, train, step, names):
+def interpolate_model_train(model, train, step, names):
     print("STEP {}".format(step))
     # setup for training loop
-    # re-transform dataset with spline & HDR resample
-    tds = TransformDatasetWrapper(train,
-                                  transform=Compose([
-                                      ToDtype(torch.float32, scale=True),
-                                      HDRMaskTransform(spline)]))
-
+    # works for IMAGENET ONLY
     from torch.utils.data import random_split
     # random split for training
-    [train_s, test_s] = random_split(tds, [0.7, 0.3], generator=ca.GENERATOR)
+    [train_s, test_s] = random_split(train, [0.7, 0.3], generator=ca.GENERATOR)
 
     from src.model_extractor import BATCH_SIZE
     train_s = DataLoader(train_s,
+                         persistent_workers=True,
                          batch_size=BATCH_SIZE, num_workers=DL_WORKERS)
 
-    test_s = DataLoader(test_s, batch_size=BATCH_SIZE, num_workers=DL_WORKERS)
+    test_s = DataLoader(test_s, persistent_workers=True,
+                        batch_size=BATCH_SIZE, num_workers=DL_WORKERS)
 
     # training loop
     epoch(model, 5, names, train_s, test_s)
