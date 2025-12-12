@@ -11,6 +11,7 @@ dependencies = [
     "pandas",
     "matplotlib",
     "torch",
+    "tensorboard",
     "torchvision",
     "pytorch-triton-rocm ; sys_platform == 'linux'",
     "scikit-image",

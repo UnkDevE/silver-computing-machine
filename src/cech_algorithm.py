@@ -411,7 +411,7 @@ def save_interpol_video(model_name, trainset, interset, step):
 
 
 def minmax(arr):
-    arr[np.where(arr == -np.inf)] = 1
+    arr[np.where(arr == -np.inf)] = -1
     arr[np.where(arr == np.nan)] = 0
     arr[np.where(arr == np.inf)] = 1
     return arr

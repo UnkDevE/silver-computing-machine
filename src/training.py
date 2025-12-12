@@ -114,6 +114,9 @@ def epoch(model, epochs, names, train, test):
                 tb_writer.add_scalar('Loss/train', last_loss, tb_x)
                 running_loss = 0.
 
+        if ca.TORCH_DEVICE == "cuda":
+            torch.cuda.empty_cache()
+
         return last_loss
 
     for epoch_number, epoch in enumerate(range(epochs)):
@@ -151,9 +154,9 @@ def epoch(model, epochs, names, train, test):
         # Track best performance, and save the model's state
         if avg_vloss < best_vloss:
             best_vloss = avg_vloss
-            model_path = '{}_{}_{}'.format("".join(names), timestamp,
-                                           epoch_number)
-            torch.save(model.state_dict(), model_path)
+
+        if ca.TORCH_DEVICE == "cuda":
+            torch.cuda.empty_cache()
 
     return model
 
@@ -192,10 +195,10 @@ def interpolate_model_train(model, train, step, names):
 
     from src.model_extractor import BATCH_SIZE
     train_s = DataLoader(train_s,
-                         persistent_workers=True,
+                         persistent_workers=True, pin_memory=True,
                          batch_size=BATCH_SIZE, num_workers=DL_WORKERS)
 
-    test_s = DataLoader(test_s, persistent_workers=True,
+    test_s = DataLoader(test_s, persistent_workers=True, pin_memory=True,
                         batch_size=BATCH_SIZE, num_workers=DL_WORKERS)
 
     # training loop

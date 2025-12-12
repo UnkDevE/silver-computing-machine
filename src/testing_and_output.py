@@ -179,8 +179,11 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
                                          batch_size=me.BATCH_SIZE)
 
                 for [data, actual] in test_loader:
-                    ctrl = model(data).detach().numpy()
-                    test = test_model(data).detach().numpy()
+                    data = data.float().to(ca.TORCH_DEVICE, non_blocking=True)
+                    actual = actual.float().cpu().numpy()
+
+                    ctrl = model(data).cpu().detach().numpy()
+                    test = test_model(data).cpu().detach().numpy()
 
                     test_chi = chisquare(test, f_exp=actual)
                     c_chi = chisquare(ctrl, f_exp=actual)

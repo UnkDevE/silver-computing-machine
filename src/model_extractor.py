@@ -28,7 +28,8 @@ from torchvision import datasets
 import numpy as np
 
 # something sane here
-BATCH_SIZE = 512
+# 512 just over 24 GB of VRAM
+BATCH_SIZE = 256
 
 
 # looks up each activation from csv and then defines a function to it
