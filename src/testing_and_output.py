@@ -66,8 +66,9 @@ def plot_test(starttest, endtest, outshape, name):
     colours = ["ro--", "bo--"]
 
     for i, [avg_outs, final_test] in enumerate(tests):
-        template = np.reshape(avg_outs, [ca.product(list(avg_outs.shape[1:])),
-                              avg_outs.shape[0]])
+        template = np.reshape(avg_outs,
+                              [ca.product(list(avg_outs.shape[1:])),
+                               avg_outs.shape[0]])
         # plot our test
         plt.violinplot(template, showmeans=True)
 
@@ -152,7 +153,9 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
         for _ in range(test_rounds):
             # should we wipe the model every i in TRAIN_SIZE or leave it?
 
-            test_model = copy(model)
+            from copy import deepcopy
+            # MUST use deepcopy here otherwise model is used twice
+            test_model = deepcopy(model)
 
             # using sols[0] shape as a template for input
             # this would be input, output shape of neural
@@ -173,11 +176,16 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
                           .format(name="".join(names), i=i))
 
                 # onehots labels
-                chis = []
+                fits = []
                 from torch.utils.data import DataLoader
                 test_loader = DataLoader(test_dataset,
                                          batch_size=me.BATCH_SIZE)
 
+                # safety code so no training happens
+                model.eval()
+                test_model.eval()
+
+                print("TESTING...")
                 for [data, actual] in test_loader:
                     data = data.float().to(ca.TORCH_DEVICE, non_blocking=True)
                     actual = actual.float().cpu().numpy()
@@ -185,17 +193,17 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
                     ctrl = model(data).cpu().detach().numpy()
                     test = test_model(data).cpu().detach().numpy()
 
-                    test_chi = chisquare(test, f_exp=actual)
-                    c_chi = chisquare(ctrl, f_exp=actual)
-                    diff_chi = chisquare(test, f_exp=ctrl)
-                    chis.append(np.array([test_chi, c_chi, diff_chi]))
-
-                chis = np.array(chis).T
+                    fits.append(np.mean(ctrl), np.mean(test)])
                 breakpoint()
-                test_acc = np.mean(chis)
-                ctrl_acc = np.mean(chis)
-                diff_acc = np.mean(chis)
-                diff_mean = test_acc - ctrl_acc
+
+                fits = np.array(fits).T
+                breakpoint()
+                # linear distro
+                actual_freq = np.ones_like(fits[0]) / len(fits)
+
+                ctrl_acc = chisquare(fits[0], f_exp=actual_freq)
+                test_acc = chisquare(fits[1], f_exp=actual_freq)
+                diff_acc = ctrl_acc.pvalue - test_acc.pvalue
 
                 print("CONTROL:")
                 print(ctrl_acc)
@@ -203,8 +211,6 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
                 print(test_acc)
                 print("CHI DIFF")
                 print(diff_acc)
-                print("MEAN DIFF")
-                print(diff_mean)
 
 
 def model_test_batch(root, res, rounds, names, download=True):
