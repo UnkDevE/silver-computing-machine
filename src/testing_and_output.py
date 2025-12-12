@@ -106,7 +106,7 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
     # create prerequisites
     if model is not None:
         # works for IMAGENET ONLY
-        if "imagenet" in model.__class__.__name__.lower():
+        if "imagenet" in names[1].lower():
             dataset.target_transform = tr.ClassLabelWrapper()
 
         from torch.utils.data import random_split
@@ -162,7 +162,6 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
                 # find variance in solved systems
 
                 test_model = tr.interpolate_model_train(
-                    bspline,
                     test_model,
                     train_dataset, i,
                     names)

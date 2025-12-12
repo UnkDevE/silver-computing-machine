@@ -28,7 +28,7 @@ from torchvision import datasets
 import numpy as np
 
 # something sane here
-BATCH_SIZE = 1024
+BATCH_SIZE = 512
 
 
 # looks up each activation from csv and then defines a function to it
