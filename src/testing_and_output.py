@@ -20,10 +20,11 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+import torch
 from torchvision.models import get_model
 from torchvision.transforms import v2
 
-from scipy.stats import chisquare
+from scipy import stats
 
 import src.cech_algorithm as ca
 import src.model_extractor as me
@@ -105,6 +106,7 @@ def get_activations(model):
 def model_create_equation(model, names, dataset, in_shape, test_rounds):
     # check optional args
     # create prerequisites
+    tests = []
     if model is not None:
         # works for IMAGENET ONLY
         if "imagenet" in names[1].lower():
@@ -150,7 +152,7 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
             train_dataset.dataset.transforms,
             HDRMaskTransform])
 
-        for _ in range(test_rounds):
+        for i in range(test_rounds):
             # should we wipe the model every i in TRAIN_SIZE or leave it?
 
             from copy import deepcopy
@@ -161,63 +163,96 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
             # this would be input, output shape of neural
             # nets e.g. 784,10 for mnist
 
-            for i in range(test_rounds):
-                # find variance in solved systems
+            # find variance in solved systems
 
-                test_model = tr.interpolate_model_train(
-                    test_model,
-                    train_dataset, i,
-                    names)
+            test_model = tr.interpolate_model_train(
+                test_model,
+                train_dataset, i,
+                names)
 
-                # and testing
-                test = tester(test_model, shapes, sheaf, outward, sort_avg)
-                plot_test(control, test, shapes[-1],
-                          "{name}-out-epoch-{i}.png"
-                          .format(name="".join(names), i=i))
+            # and testing
+            test = tester(test_model, shapes, sheaf, outward, sort_avg)
+            plot_test(control, test, shapes[-1],
+                      "{name}-out-epoch-{i}.png".format(name="".join(names),
+                                                        i=i))
 
-                # onehots labels
-                fits = []
-                from torch.utils.data import DataLoader
-                test_loader = DataLoader(test_dataset,
-                                         batch_size=me.BATCH_SIZE)
+            # onehots labels
+            from torch.utils.data import DataLoader
+            test_loader = DataLoader(test_dataset, batch_size=me.BATCH_SIZE)
 
-                # safety code so no training happens
-                model.eval()
-                test_model.eval()
+            # safety code so no training happens
+            model.eval()
+            test_model.eval()
 
-                print("TESTING...")
-                for [data, actual] in test_loader:
-                    data = data.float().to(ca.TORCH_DEVICE, non_blocking=True)
-                    actual = actual.float().cpu().numpy()
+            print("TESTING...")
+            accs = []
+            for [data, actual] in test_loader:
+                data = data.float().to(ca.TORCH_DEVICE, non_blocking=True)
+                actual = actual.float().cpu().numpy()
 
-                    ctrl = model(data).cpu().detach().numpy()
-                    test = test_model(data).cpu().detach().numpy()
+                ctrl = model(data).cpu().detach().numpy()
+                test = test_model(data).cpu().detach().numpy()
 
-                    fits.append(np.mean(ctrl), np.mean(test)])
-                breakpoint()
+                # find mean over batch
+                ctrl_t = stats.ttest_ind(ctrl, actual)
+                test_t = stats.ttest_ind(test, actual)
+                diff = stats.ttest_ind(test, ctrl)
+                accs.append([ctrl_t.pvalue, test_t.pvalue, diff.pvalue])
+                # use chisquare for AB test
 
-                fits = np.array(fits).T
-                breakpoint()
-                # linear distro
-                actual_freq = np.ones_like(fits[0]) / len(fits)
+            accs = np.array(accs)
+            m1 = np.mean(accs[0])
+            m2 = np.mean(accs[1])
+            diff = np.mean(accs[1] - accs[0])
+            tvsctrl = np.mean(accs[2])
+            print("INDEPENDENT EVAL VS ACT PVALUE:")
+            print(m1)
+            print("INDEPENDENT TEST VS ACT PVALUE:")
+            print(m2)
+            print("PVALUE DIFF:")
+            print(diff)
+            print("TTEST TEST VS CTRL DIFF:")
+            print(tvsctrl)
 
-                ctrl_acc = chisquare(fits[0], f_exp=actual_freq)
-                test_acc = chisquare(fits[1], f_exp=actual_freq)
-                diff_acc = ctrl_acc.pvalue - test_acc.pvalue
+            tests.append({'eval': m1,
+                          'test': m2,
+                          'diff': diff,
+                          'testvsctrl': tvsctrl,
+                          })
 
-                print("CONTROL:")
-                print(ctrl_acc)
-                print("EVALUATION:")
-                print(test_acc)
-                print("CHI DIFF")
-                print(diff_acc)
+        # clean up
+        model.to('cpu')
+        del model
+        import gc
+        gc.collect()
+        torch.cuda.empty_cache()
+        return tests
 
 
 def model_test_batch(root, res, rounds, names, download=True):
     datasets = me.download_data(root, res, download=download)
+    tests = []
 
     for ds in datasets:
+        print("USING {} DATSET".format(ds.__class__.__name__))
         model = get_model(names[0], weights=names[1])
         model.to(ca.TORCH_DEVICE)
         model.eval()
-        model_create_equation(model, names, ds, res, rounds)
+        test = None
+        try:
+            test = {
+                'dataset': ds.__class__.__name__,
+                'test_output': model_create_equation(model, names,
+                                                     ds, res, rounds)}
+        except Exception as e:
+            test = {'dataset': ds.__class__.__name__,
+                    'test_output': 'failure err {}'.format(e)}
+        finally:
+            tests.append(test)
+
+        # just in case
+        model = None
+
+    import json
+    with open("test_output.json", "wa+") as f:
+        f.write(json.dumps(tests))
