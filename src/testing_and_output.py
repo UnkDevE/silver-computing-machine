@@ -109,7 +109,7 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
     tests = []
     if model is not None:
         # works for IMAGENET ONLY
-        if "imagenet" in names[1].lower():
+        if "sbu" in dataset.__class__.__name__.lower():
             dataset.target_transform = tr.ClassLabelWrapper()
 
         from torch.utils.data import random_split
@@ -214,10 +214,10 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
             print("TTEST TEST VS CTRL DIFF:")
             print(tvsctrl)
 
-            tests.append({'eval': m1,
-                          'test': m2,
-                          'diff': diff,
-                          'testvsctrl': tvsctrl,
+            tests.append({'eval': float(m1),
+                          'test': float(m2),
+                          'diff': float(diff),
+                          'testvsctrl': float(tvsctrl),
                           })
 
         # clean up
@@ -240,10 +240,10 @@ def model_test_batch(root, res, rounds, names, download=True):
         model.eval()
         test = None
         try:
+            out = model_create_equation(model, names, ds, res, rounds)
             test = {
                 'dataset': ds.__class__.__name__,
-                'test_output': model_create_equation(model, names,
-                                                     ds, res, rounds)}
+                'test_output': out}
         except Exception as e:
             test = {'dataset': ds.__class__.__name__,
                     'test_output': 'failure err {}'.format(e)}
@@ -254,5 +254,5 @@ def model_test_batch(root, res, rounds, names, download=True):
         model = None
 
     import json
-    with open("test_output.json", "wa+") as f:
-        f.write(json.dumps(tests))
+    with open("test_output.json", "a+") as f:
+        json.dump(tests, f, indent=4)
