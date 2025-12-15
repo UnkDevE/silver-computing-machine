@@ -31,4 +31,20 @@
         "dataset": "SEMEION",
         "test_output": "failure err Given groups=1, weight of size [64, 3, 3, 3], expected input[256, 1, 225, 225] to have 3 channels, but got 1 channels instead"
     }
+][
+    {
+        "dataset": "SBU",
+        "test_output": [
+            {
+                "eval": 0.017339536920189857,
+                "test": 0.01965651661157608,
+                "diff": 0.0023169771302491426,
+                "testvsctrl": 0.018322201445698738
+            }
+        ]
+    },
+    {
+        "dataset": "SEMEION",
+        "test_output": "failure err Given groups=1, weight of size [64, 3, 3, 3], expected input[256, 1, 225, 225] to have 3 channels, but got 1 channels instead"
+    }
 ]
