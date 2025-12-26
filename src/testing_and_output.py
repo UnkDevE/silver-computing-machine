@@ -200,7 +200,7 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
                 accs.append([ctrl_t.pvalue, test_t.pvalue, diff.pvalue])
                 # use chisquare for AB test
 
-            accs = np.array(accs)
+            accs = np.array(accs).T
             m1 = np.mean(accs[0])
             m2 = np.mean(accs[1])
             diff = np.mean(accs[1] - accs[0])
