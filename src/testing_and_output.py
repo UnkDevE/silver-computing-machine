@@ -109,8 +109,7 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
     tests = []
     if model is not None:
         # works for IMAGENET ONLY
-        if "sbu" in dataset.__class__.__name__.lower():
-            dataset.target_transform = tr.ClassLabelWrapper()
+        dataset.target_transform = tr.ClassLabelWrapper()
 
         from torch.utils.data import random_split
         [train_dataset, test_dataset] = random_split(dataset, [0.7, 0.3],
@@ -203,7 +202,7 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
             accs = np.array(accs).T
             m1 = np.mean(accs[0])
             m2 = np.mean(accs[1])
-            diff = np.mean(accs[1] - accs[0])
+            diff = m2 - m1
             tvsctrl = np.mean(accs[2])
             print("INDEPENDENT EVAL VS ACT PVALUE:")
             print(m1)
@@ -245,6 +244,7 @@ def model_test_batch(root, res, rounds, names, download=True):
                 'dataset': ds.__class__.__name__,
                 'test_output': out}
         except Exception as e:
+            print(e)
             test = {'dataset': ds.__class__.__name__,
                     'test_output': 'failure err {}'.format(e)}
         finally:

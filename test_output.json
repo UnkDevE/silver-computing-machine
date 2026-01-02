@@ -1,0 +1,100 @@
+[
+    {
+        "dataset": "SBU",
+        "test_output": [
+            {
+                "eval": 0.06164361163973808,
+                "test": 0.0641346424818039,
+                "diff": 0.002491030842065811,
+                "testvsctrl": 0.2869892716407776
+            }
+        ]
+    },
+    {
+        "dataset": "SEMEION",
+        "test_output": "failure err Caught TypeError in DataLoader worker process 0.\nOriginal Traceback (most recent call last):\n  File \"/home/ethan/silver-computing-machine/.venv/lib/python3.13/site-packages/torch/utils/data/_utils/worker.py\", line 358, in _worker_loop\n    data = fetcher.fetch(index)  # type: ignore[possibly-undefined]\n  File \"/home/ethan/silver-computing-machine/.venv/lib/python3.13/site-packages/torch/utils/data/_utils/fetch.py\", line 52, in fetch\n    data = self.dataset.__getitems__(possibly_batched_index)\n  File \"/home/ethan/silver-computing-machine/.venv/lib/python3.13/site-packages/torch/utils/data/dataset.py\", line 411, in __getitems__\n    return self.dataset.__getitems__([self.indices[idx] for idx in indices])  # type: ignore[attr-defined]\n           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ethan/silver-computing-machine/.venv/lib/python3.13/site-packages/torch/utils/data/dataset.py\", line 413, in __getitems__\n    return [self.dataset[self.indices[idx]] for idx in indices]\n            ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^\n  File \"/home/ethan/silver-computing-machine/.venv/lib/python3.13/site-packages/torchvision/datasets/semeion.py\", line 73, in __getitem__\n    target = self.target_transform(target)\n  File \"/home/ethan/silver-computing-machine/src/training.py\", line 175, in __call__\n    self.targets.keys() if v in ysub])\n                           ^^^^^^^^^\nTypeError: argument of type 'int' is not iterable\n"
+    }
+]
+[
+    {
+        "dataset": "SBU",
+        "test_output": [
+            {
+                "eval": 0.1036481261253357,
+                "test": 0.0594763420522213,
+                "diff": -0.044171784073114395,
+                "testvsctrl": 0.2591395676136017
+            }
+        ]
+    },
+    {
+        "dataset": "SEMEION",
+        "test_output": "failure err Caught TypeError in DataLoader worker process 0.\nOriginal Traceback (most recent call last):\n  File \"/home/ethan/silver-computing-machine/.venv/lib/python3.13/site-packages/torch/utils/data/_utils/worker.py\", line 358, in _worker_loop\n    data = fetcher.fetch(index)  # type: ignore[possibly-undefined]\n  File \"/home/ethan/silver-computing-machine/.venv/lib/python3.13/site-packages/torch/utils/data/_utils/fetch.py\", line 52, in fetch\n    data = self.dataset.__getitems__(possibly_batched_index)\n  File \"/home/ethan/silver-computing-machine/.venv/lib/python3.13/site-packages/torch/utils/data/dataset.py\", line 411, in __getitems__\n    return self.dataset.__getitems__([self.indices[idx] for idx in indices])  # type: ignore[attr-defined]\n           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ethan/silver-computing-machine/.venv/lib/python3.13/site-packages/torch/utils/data/dataset.py\", line 413, in __getitems__\n    return [self.dataset[self.indices[idx]] for idx in indices]\n            ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^\n  File \"/home/ethan/silver-computing-machine/.venv/lib/python3.13/site-packages/torchvision/datasets/semeion.py\", line 73, in __getitem__\n    target = self.target_transform(target)\n  File \"/home/ethan/silver-computing-machine/src/training.py\", line 176, in __call__\n    self.targets.keys() if v in ysub])\n                           ^^^^^^^^^\nTypeError: argument of type 'int' is not iterable\n"
+    }
+]
+[
+    {
+        "dataset": "SBU",
+        "test_output": [
+            {
+                "eval": 0.6964600086212158,
+                "test": 0.4210900366306305,
+                "diff": -0.2753699719905853,
+                "testvsctrl": 0.9449979662895203
+            }
+        ]
+    },
+    {
+        "dataset": "SEMEION",
+        "test_output": "failure err Caught TypeError in DataLoader worker process 0.\nOriginal Traceback (most recent call last):\n  File \"/home/ethan/silver-computing-machine/.venv/lib/python3.13/site-packages/torch/utils/data/_utils/worker.py\", line 358, in _worker_loop\n    data = fetcher.fetch(index)  # type: ignore[possibly-undefined]\n  File \"/home/ethan/silver-computing-machine/.venv/lib/python3.13/site-packages/torch/utils/data/_utils/fetch.py\", line 52, in fetch\n    data = self.dataset.__getitems__(possibly_batched_index)\n  File \"/home/ethan/silver-computing-machine/.venv/lib/python3.13/site-packages/torch/utils/data/dataset.py\", line 411, in __getitems__\n    return self.dataset.__getitems__([self.indices[idx] for idx in indices])  # type: ignore[attr-defined]\n           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ethan/silver-computing-machine/.venv/lib/python3.13/site-packages/torch/utils/data/dataset.py\", line 413, in __getitems__\n    return [self.dataset[self.indices[idx]] for idx in indices]\n            ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^\n  File \"/home/ethan/silver-computing-machine/.venv/lib/python3.13/site-packages/torchvision/datasets/semeion.py\", line 73, in __getitem__\n    target = self.target_transform(target)\n  File \"/home/ethan/silver-computing-machine/src/training.py\", line 175, in __call__\n    ysub = ysub[0]\n           ~~~~^^^\nTypeError: 'int' object is not subscriptable\n"
+    }
+][
+    {
+        "dataset": "SBU",
+        "test_output": [
+            {
+                "eval": 0.3566131889820099,
+                "test": 0.041969459503889084,
+                "diff": -0.3146437406539917,
+                "testvsctrl": 0.31412965059280396
+            }
+        ]
+    },
+    {
+        "dataset": "SEMEION",
+        "test_output": "failure err Caught TypeError in DataLoader worker process 0.\nOriginal Traceback (most recent call last):\n  File \"/home/ethan/silver-computing-machine/.venv/lib/python3.13/site-packages/torch/utils/data/_utils/worker.py\", line 358, in _worker_loop\n    data = fetcher.fetch(index)  # type: ignore[possibly-undefined]\n  File \"/home/ethan/silver-computing-machine/.venv/lib/python3.13/site-packages/torch/utils/data/_utils/fetch.py\", line 52, in fetch\n    data = self.dataset.__getitems__(possibly_batched_index)\n  File \"/home/ethan/silver-computing-machine/.venv/lib/python3.13/site-packages/torch/utils/data/dataset.py\", line 411, in __getitems__\n    return self.dataset.__getitems__([self.indices[idx] for idx in indices])  # type: ignore[attr-defined]\n           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ethan/silver-computing-machine/.venv/lib/python3.13/site-packages/torch/utils/data/dataset.py\", line 413, in __getitems__\n    return [self.dataset[self.indices[idx]] for idx in indices]\n            ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^\n  File \"/home/ethan/silver-computing-machine/.venv/lib/python3.13/site-packages/torchvision/datasets/semeion.py\", line 73, in __getitem__\n    target = self.target_transform(target)\n  File \"/home/ethan/silver-computing-machine/src/training.py\", line 178, in __call__\n    self.targets.keys() if v in ysub])\n                           ^^^^^^^^^\nTypeError: argument of type 'int' is not iterable\n"
+    }
+]
+[
+    {
+        "dataset": "SBU",
+        "test_output": [
+            {
+                "eval": 0.061966847628355026,
+                "test": 0.016711411997675896,
+                "diff": -0.04525543749332428,
+                "testvsctrl": 0.286472886800766
+            }
+        ]
+    },
+    {
+        "dataset": "SEMEION",
+        "test_output": "failure err Caught TypeError in DataLoader worker process 0.\nOriginal Traceback (most recent call last):\n  File \"/home/ethan/silver-computing-machine/.venv/lib/python3.13/site-packages/torch/utils/data/_utils/worker.py\", line 358, in _worker_loop\n    data = fetcher.fetch(index)  # type: ignore[possibly-undefined]\n  File \"/home/ethan/silver-computing-machine/.venv/lib/python3.13/site-packages/torch/utils/data/_utils/fetch.py\", line 52, in fetch\n    data = self.dataset.__getitems__(possibly_batched_index)\n  File \"/home/ethan/silver-computing-machine/.venv/lib/python3.13/site-packages/torch/utils/data/dataset.py\", line 411, in __getitems__\n    return self.dataset.__getitems__([self.indices[idx] for idx in indices])  # type: ignore[attr-defined]\n           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ethan/silver-computing-machine/.venv/lib/python3.13/site-packages/torch/utils/data/dataset.py\", line 413, in __getitems__\n    return [self.dataset[self.indices[idx]] for idx in indices]\n            ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^\n  File \"/home/ethan/silver-computing-machine/.venv/lib/python3.13/site-packages/torchvision/datasets/semeion.py\", line 73, in __getitem__\n    target = self.target_transform(target)\n  File \"/home/ethan/silver-computing-machine/src/training.py\", line 178, in __call__\n    self.targets.keys() if v in ysub])\n                           ^^^^^^^^^\nTypeError: argument of type 'int' is not iterable\n"
+    }
+][
+    {
+        "dataset": "SBU",
+        "test_output": [
+            {
+                "eval": 0.516491174697876,
+                "test": 0.3670990467071533,
+                "diff": -0.14939212799072266,
+                "testvsctrl": 0.5281359553337097
+            }
+        ]
+    },
+    {
+        "dataset": "SEMEION",
+        "test_output": "failure err Given groups=1, weight of size [64, 3, 3, 3], expected input[256, 1, 225, 225] to have 3 channels, but got 1 channels instead"
+    }
+]

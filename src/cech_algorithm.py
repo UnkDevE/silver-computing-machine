@@ -38,6 +38,8 @@ import numpy as np
 
 from matplotlib import pyplot as plt
 
+jax.config.update("jax_enable_x64", True)
+
 # for reproduciblity purposes
 GENERATOR_SEED = randint(0, sys.maxsize)
 print("REPRODUCUBLE RANDOM SEED IS:" + str(GENERATOR_SEED))
@@ -64,7 +66,8 @@ TORCH_DEVICE = torch.device(device_str)
 
 
 def jax_to_tensor(jax_arr):
-    return torch.from_numpy(np.asarray(jax_arr).copy())
+    return torch.from_numpy(np.asarray(
+        jax_arr.astype(jnp.float32)).copy())
 
 
 def product(x):

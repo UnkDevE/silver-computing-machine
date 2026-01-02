@@ -171,13 +171,15 @@ class ClassLabelWrapper(object):
             self.targets = {v: i for i, v in self.targets.items()}
 
     def __call__(self, ysub):
-        y = np.array([int(self.targets[v]) for v in
-                     self.targets.keys() if v in ysub])
+        if ysub is not list:
+            ysub = [ysub]
+
+        y = np.array([self.targets[v] for v in
+                      self.targets.keys() if v in ysub])
 
         one_hot = np.zeros(len(self.targets) + 1)
-        # classifier is not multiclass
         if np.size(y) != 0:
-            one_hot[y[0]] = 1.0
+            one_hot[int(y[0])] = 1.0
 
         hot_y = torch.from_numpy(one_hot)
 
