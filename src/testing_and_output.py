@@ -31,6 +31,7 @@ import src.model_extractor as me
 import src.training as tr
 
 from copy import copy
+import os
 
 
 def bucketize(prelims):
@@ -197,13 +198,12 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
                 test_t = stats.ttest_ind(test, actual)
                 diff = stats.ttest_ind(test, ctrl)
                 accs.append([ctrl_t.pvalue, test_t.pvalue, diff.pvalue])
-                # use chisquare for AB test
 
             accs = np.array(accs).T
-            m1 = np.mean(accs[0])
-            m2 = np.mean(accs[1])
-            diff = m2 - m1
-            tvsctrl = np.mean(accs[2])
+            m1 = stats.combine_pvalues(accs[0]).pvalue
+            m2 = stats.combine_pvalues(accs[1]).pvalue
+            diff = m1 - m2
+            tvsctrl = stats.combine_pvalues(accs[2]).pvalue
             print("INDEPENDENT EVAL VS ACT PVALUE:")
             print(m1)
             print("INDEPENDENT TEST VS ACT PVALUE:")
@@ -225,6 +225,16 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
         import gc
         gc.collect()
         torch.cuda.empty_cache()
+
+        import shutil
+        # remove runs directory that contains caches of models
+        # as it affects model weight preformance and changes control
+        # file is in src so go up one to dir and remove runs
+        cache_path = os.path.join(os.path.join(
+            os.path.realpath(__file__), '..'), "runs")
+        if os.path.exists(cache_path):
+            shutil.rmtree(cache_path)
+
         return tests
 
 

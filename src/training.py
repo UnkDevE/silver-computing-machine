@@ -151,7 +151,7 @@ def epoch(model, epochs, names, train, test):
                            epoch_number + 1)
         writer.flush()
 
-        # Track best performance, and save the model's state
+        # Track best performance
         if avg_vloss < best_vloss:
             best_vloss = avg_vloss
 
