@@ -45,7 +45,7 @@ else:
 
 TORCH_DEVICE = torch.device(device_str)
 
-GENERATOR = generator1 = torch.Generator().manual_seed(torch.seed())
+GENERATOR = generator1 = torch.Generator().manual_seed(torch.initial_seed())
 
 
 def jax_to_tensor(jax_arr):

@@ -5,7 +5,6 @@ import torch
 from src import testing_and_output as to
 
 torch.backends.cudnn.deterministic = True
-torch.use_deterministic_algorithms(True)
 
 GENERATOR_SEED = randint(0, sys.maxsize)
 if len(sys.argv) > 6:
@@ -16,8 +15,9 @@ if len(sys.argv) > 6:
     # needs to be _global_ here otherwise generation of seed will start at 0
     # multiple times
     torch.manual_seed(GENERATOR_SEED)
+    torch.cuda.manual_seed(GENERATOR_SEED)
     print("MANUAL SANITY CHECK RANDOM SEED IS {}".format(str(GENERATOR_SEED)))
-    print("REPRODUCEABLE RANDOM SEED IS: {}".format(str(torch.seed())))
+    print("REPRODUCEABLE RANDOM SEED IS: {}".format(str(torch.initial_seed())))
 
     to.model_test_batch("./datasets", int(sys.argv[1]), int(sys.argv[2]),
                         sys.argv[3:7], download=True, seed=sys.argv[7])

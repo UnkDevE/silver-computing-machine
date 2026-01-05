@@ -244,7 +244,7 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
                           'test': m2.tolist(),
                           'diff': diff.tolist(),
                           'testvsctrl': tvsctrl.tolist(),
-                          'randomseed': int(torch.seed())
+                          'randomseed': int(torch.initial_seed())
                           })
 
         # clean up

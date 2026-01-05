@@ -304,3 +304,238 @@
         ]
     }
 ]
+[
+    {
+        "dataset": "SBU",
+        "test_output": "failure err adaptive_avg_pool2d_backward_cuda does not have a deterministic implementation, but you set 'torch.use_deterministic_algorithms(True)'. You can turn off determinism just for this operation, or you can use the 'warn_only=True' option, if that's acceptable for your application. You can also file an issue at https://github.com/pytorch/pytorch/issues to help us prioritize adding deterministic support for this operation."
+    },
+    {
+        "dataset": "SEMEION",
+        "test_output": "failure err adaptive_avg_pool2d_backward_cuda does not have a deterministic implementation, but you set 'torch.use_deterministic_algorithms(True)'. You can turn off determinism just for this operation, or you can use the 'warn_only=True' option, if that's acceptable for your application. You can also file an issue at https://github.com/pytorch/pytorch/issues to help us prioritize adding deterministic support for this operation."
+    }
+][
+    {
+        "dataset": "SBU",
+        "test_output": [
+            {
+                "eval": [
+                    0.7633334994316101
+                ],
+                "test": [
+                    0.03515668585896492
+                ],
+                "diff": [
+                    0.7281768321990967
+                ],
+                "testvsctrl": [
+                    0.9999839663505554
+                ],
+                "randomseed": 18073989344423765254
+            }
+        ]
+    },
+    {
+        "dataset": "SEMEION",
+        "test_output": [
+            {
+                "eval": [
+                    0.0,
+                    0.0
+                ],
+                "test": [
+                    2.416154734947124e-25,
+                    7.634897733379759e-20
+                ],
+                "diff": [
+                    -2.416154734947124e-25,
+                    -7.634897733379759e-20
+                ],
+                "testvsctrl": [
+                    0.0,
+                    0.0
+                ],
+                "randomseed": 9170872930823235336
+            }
+        ]
+    }
+][
+    {
+        "dataset": "SBU",
+        "test_output": [
+            {
+                "eval": [
+                    0.9118740558624268
+                ],
+                "test": [
+                    0.00026393498410470784
+                ],
+                "diff": [
+                    0.9116101264953613
+                ],
+                "testvsctrl": [
+                    0.778322696685791
+                ],
+                "randomseed": 12089051612030655593
+            }
+        ]
+    },
+    {
+        "dataset": "SEMEION",
+        "test_output": [
+            {
+                "eval": [
+                    0.0,
+                    0.0
+                ],
+                "test": [
+                    1.7269770846366128e-19,
+                    8.492995820821328e-25
+                ],
+                "diff": [
+                    -1.7269770846366128e-19,
+                    -8.492995820821328e-25
+                ],
+                "testvsctrl": [
+                    0.0,
+                    0.0
+                ],
+                "randomseed": 14694693835779067408
+            }
+        ]
+    }
+][
+    {
+        "dataset": "SBU",
+        "test_output": [
+            {
+                "eval": [
+                    0.0741269662976265
+                ],
+                "test": [
+                    0.9995173215866089
+                ],
+                "diff": [
+                    -0.925390362739563
+                ],
+                "testvsctrl": [
+                    0.9995444416999817
+                ],
+                "randomseed": 3190028054882660187
+            }
+        ]
+    },
+    {
+        "dataset": "SEMEION",
+        "test_output": [
+            {
+                "eval": [
+                    0.0,
+                    0.0
+                ],
+                "test": [
+                    4.7232079883276e-27,
+                    3.5451253223842865e-15
+                ],
+                "diff": [
+                    -4.7232079883276e-27,
+                    -3.5451253223842865e-15
+                ],
+                "testvsctrl": [
+                    0.0,
+                    0.0
+                ],
+                "randomseed": 12988541530204808857
+            }
+        ]
+    }
+][
+    {
+        "dataset": "SBU",
+        "test_output": [
+            {
+                "eval": [
+                    0.420668363571167
+                ],
+                "test": [
+                    0.3597300946712494
+                ],
+                "diff": [
+                    0.0609382688999176
+                ],
+                "testvsctrl": [
+                    0.999778687953949
+                ],
+                "randomseed": 1234
+            }
+        ]
+    },
+    {
+        "dataset": "SEMEION",
+        "test_output": [
+            {
+                "eval": [
+                    0.0,
+                    0.0
+                ],
+                "test": [
+                    4.449715005437464e-16,
+                    3.77223252634451e-12
+                ],
+                "diff": [
+                    -4.449715005437464e-16,
+                    -3.77223252634451e-12
+                ],
+                "testvsctrl": [
+                    0.0,
+                    0.0
+                ],
+                "randomseed": 1234
+            }
+        ]
+    }
+][
+    {
+        "dataset": "SBU",
+        "test_output": [
+            {
+                "eval": [
+                    0.03576505929231644
+                ],
+                "test": [
+                    0.654244065284729
+                ],
+                "diff": [
+                    -0.6184790134429932
+                ],
+                "testvsctrl": [
+                    0.5552060008049011
+                ],
+                "randomseed": 1234
+            }
+        ]
+    },
+    {
+        "dataset": "SEMEION",
+        "test_output": [
+            {
+                "eval": [
+                    0.0,
+                    0.0
+                ],
+                "test": [
+                    1.6235267415697697e-26,
+                    3.8030144558129884e-15
+                ],
+                "diff": [
+                    -1.6235267415697697e-26,
+                    -3.8030144558129884e-15
+                ],
+                "testvsctrl": [
+                    0.0,
+                    0.0
+                ],
+                "randomseed": 1234
+            }
+        ]
+    }
+]

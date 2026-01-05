@@ -22,6 +22,7 @@
 """
 
 import os
+import random
 import importlib
 
 # jax for custom code
@@ -38,6 +39,12 @@ import numpy as np
 import src.cech_algorithm as ca
 
 DL_WORKERS = os.cpu_count() // 2
+
+
+def seed_worker(worker_id):
+    worker_seed = torch.initial_seed() % 2**32
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
 
 
 # import class e.g. loss or opt and return it
@@ -185,10 +192,12 @@ def interpolate_model_train(model, train, step, names):
     from src.model_extractor import BATCH_SIZE
     train_s = DataLoader(train_s,
                          persistent_workers=True, pin_memory=True,
-                         batch_size=BATCH_SIZE, num_workers=DL_WORKERS)
+                         batch_size=BATCH_SIZE, num_workers=DL_WORKERS,
+                         worker_init_fn=seed_worker)
 
     test_s = DataLoader(test_s, persistent_workers=True, pin_memory=True,
-                        batch_size=BATCH_SIZE, num_workers=DL_WORKERS)
+                        batch_size=BATCH_SIZE, num_workers=DL_WORKERS,
+                        worker_init_fn=seed_worker)
 
     # training loop
     epoch(model, 5, names, train_s, test_s)
