@@ -20,10 +20,6 @@
 
     Jax module - does heavy lifting of topology analysis
 """
-import sys
-
-from random import randint
-from pathlib import Path
 
 # jax for custom code
 import jax
@@ -40,21 +36,6 @@ from matplotlib import pyplot as plt
 
 jax.config.update("jax_enable_x64", True)
 
-# for reproduciblity purposes
-GENERATOR_SEED = randint(0, sys.maxsize)
-print("REPRODUCUBLE RANDOM SEED IS:" + str(GENERATOR_SEED))
-
-sd = Path("seeds")
-sd.touch()
-with open("seeds", "a") as f:
-    f.write(str(GENERATOR_SEED) + "\n")
-
-# needs to be _global_ here otherwise generation of seed will start at 0
-# multiple times
-torch.manual_seed(GENERATOR_SEED)
-GENERATOR = generator1 = torch.Generator().manual_seed(GENERATOR_SEED)
-
-
 if torch.cuda.is_available():
     device_str = 'cuda'
 else:
@@ -63,6 +44,8 @@ else:
                     DEADLOCK!""")
 
 TORCH_DEVICE = torch.device(device_str)
+
+GENERATOR = generator1 = torch.Generator().manual_seed(torch.seed())
 
 
 def jax_to_tensor(jax_arr):

@@ -23,7 +23,6 @@
 
 import os
 import importlib
-from datetime import datetime
 
 # jax for custom code
 import jax.numpy as jnp
@@ -31,7 +30,6 @@ import torch
 
 # torch for tensor LU
 import torch.linalg as t_linalg
-from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
 
 import jax.scipy.linalg as j_linalg
@@ -73,13 +71,11 @@ def make_spline(sols):
 
 def epoch(model, epochs, names, train, test):
     # init writer loss and opt
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    writer = SummaryWriter('runs/imagenet_{}'.format(timestamp))
     loss_fn = get_class("torch.nn", names[2])()
     opt = get_class("torch.optim", names[3])(model.parameters())
     best_vloss = 1_000_000.
 
-    def train_one_epoch(epoch_num, tb_writer):
+    def train_one_epoch(epoch_num):
         running_loss = 0.
         last_loss = 0.
 
@@ -110,8 +106,6 @@ def epoch(model, epochs, names, train, test):
             if i % 1000 == 999:
                 last_loss = running_loss / 1000  # loss per batch
                 print('  batch {} loss: {}'.format(i + 1, last_loss))
-                tb_x = epoch_num * len(train) + i + 1
-                tb_writer.add_scalar('Loss/train', last_loss, tb_x)
                 running_loss = 0.
 
         if ca.TORCH_DEVICE == "cuda":
@@ -124,7 +118,7 @@ def epoch(model, epochs, names, train, test):
 
         # Make sure gradient tracking is on, and do a pass over the data
         model.train(True)
-        avg_loss = train_one_epoch(epoch_number, writer)
+        avg_loss = train_one_epoch(epoch_number)
 
         running_vloss = 0.0
         # Set the model to evaluation mode, disabling dropout and
@@ -143,13 +137,6 @@ def epoch(model, epochs, names, train, test):
 
         avg_vloss = running_vloss / (epoch_number + 1)
         print('LOSS train {} valid {}'.format(avg_loss, avg_vloss))
-
-        # Log the running loss averaged per batch
-        # for both training and validation
-        writer.add_scalars('Training vs. Validation Loss',
-                           {'Training': avg_loss, 'Validation': avg_vloss},
-                           epoch_number + 1)
-        writer.flush()
 
         # Track best performance
         if avg_vloss < best_vloss:

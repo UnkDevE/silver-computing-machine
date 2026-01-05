@@ -14,4 +14,293 @@
         "dataset": "SEMEION",
         "test_output": "failure err Given groups=1, weight of size [64, 3, 3, 3], expected input[256, 1, 225, 225] to have 3 channels, but got 1 channels instead"
     }
+][
+    {
+        "dataset": "SBU",
+        "test_output": [
+            {
+                "eval": 0.23368528485298157,
+                "test": 0.040314555168151855,
+                "diff": 0.1933707296848297,
+                "testvsctrl": 0.4606872498989105
+            }
+        ]
+    },
+    {
+        "dataset": "SEMEION",
+        "test_output": "failure err Given groups=1, weight of size [64, 3, 3, 3], expected input[256, 1, 225, 225] to have 3 channels, but got 1 channels instead"
+    }
+][
+    {
+        "dataset": "SBU",
+        "test_output": [
+            {
+                "eval": 0.19102534651756287,
+                "test": 0.019452234730124474,
+                "diff": 0.17157311737537384,
+                "testvsctrl": 0.837125301361084
+            }
+        ]
+    },
+    {
+        "dataset": "SEMEION",
+        "test_output": "failure err Given groups=1, weight of size [64, 3, 3, 3], expected input[256, 1, 225, 225] to have 3 channels, but got 1 channels instead"
+    }
+]
+[
+    {
+        "dataset": "SBU",
+        "test_output": "failure err 'SBU' object has no attribute 'size'"
+    },
+    {
+        "dataset": "SEMEION",
+        "test_output": "failure err 'SEMEION' object has no attribute 'size'"
+    }
+][
+    {
+        "dataset": "SBU",
+        "test_output": "failure err 'tuple' object has no attribute 'size'"
+    },
+    {
+        "dataset": "SEMEION",
+        "test_output": "failure err 'tuple' object has no attribute 'size'"
+    }
+][
+    {
+        "dataset": "SBU",
+        "test_output": [
+            {
+                "eval": 4.108965967475342e-08,
+                "test": 0.14000876247882843,
+                "diff": -0.14000871777534485,
+                "testvsctrl": 0.9849231243133545
+            }
+        ]
+    },
+    {
+        "dataset": "SEMEION",
+        "test_output": "failure err only length-1 arrays can be converted to Python scalars"
+    }
+][
+    {
+        "dataset": "SBU",
+        "test_output": [
+            {
+                "eval": 2.1350869516822968e-08,
+                "test": 0.0011495911749079823,
+                "diff": -0.001149569870904088,
+                "testvsctrl": 0.2725227475166321
+            }
+        ]
+    },
+    {
+        "dataset": "SEMEION",
+        "test_output": "failure err only length-1 arrays can be converted to Python scalars"
+    }
+][
+    {
+        "dataset": "SBU",
+        "test_output": [
+            {
+                "eval": [
+    {
+        "dataset": "SBU",
+        "test_output": [
+            {
+                "eval": [
+                    [
+    {
+        "dataset": "SBU",
+        "test_output": [
+            {
+                "eval": [
+                    3.806732262745527e-09
+                ],
+                "test": [
+                    0.0869104191660881
+                ],
+                "diff": -0.08691041171550751,
+                "testvsctrl": 0.9955376982688904
+            }
+        ]
+    },
+    {
+        "dataset": "SEMEION",
+        "test_output": "failure err only length-1 arrays can be converted to Python scalars"
+    }
+][
+    {
+        "dataset": "SBU",
+        "test_output": [
+            {
+                "eval": [
+                    3.4426733463988057e-07
+                ],
+                "test": [
+                    0.007763267494738102
+                ],
+                "diff": [
+                    -0.0077629233710467815
+                ],
+                "testvsctrl": 0.6721842288970947
+            }
+        ]
+    },
+    {
+        "dataset": "SEMEION",
+        "test_output": "failure err only length-1 arrays can be converted to Python scalars"
+    }
+][
+    {
+        "dataset": "SBU",
+        "test_output": [
+            {
+                "eval": [
+                    1.724736575781094e-09
+                ],
+                "test": [
+                    0.2956984043121338
+                ],
+                "diff": [
+                    -0.2956984043121338
+                ],
+                "testvsctrl": [
+                    0.9931716918945312
+                ],
+                "randomseed": 4464871659813507053
+            }
+        ]
+    },
+    {
+        "dataset": "SEMEION",
+        "test_output": [
+            {
+                "eval": [
+                    0.0,
+                    0.0
+                ],
+                "test": [
+                    5.21626039636592e-20,
+                    3.4286240066604214e-22
+                ],
+                "diff": [
+                    -5.21626039636592e-20,
+                    -3.4286240066604214e-22
+                ],
+                "testvsctrl": [
+                    0.0,
+                    0.0
+                ],
+                "randomseed": 4464871659813507053
+            }
+        ]
+    }
+][
+    {
+        "dataset": "SBU",
+        "test_output": [
+            {
+                "eval": [
+                    6.433908765757224e-07
+                ],
+                "test": [
+                    0.6852911710739136
+                ],
+                "diff": [
+                    -0.685290515422821
+                ],
+                "testvsctrl": [
+                    0.828839123249054
+                ],
+                "randomseed": 4525905671402014736
+            }
+        ]
+    },
+    {
+        "dataset": "SEMEION",
+        "test_output": [
+            {
+                "eval": [
+                    0.0,
+                    0.0
+                ],
+                "test": [
+                    1.838369372165824e-17,
+                    4.9633430368066153e-14
+                ],
+                "diff": [
+                    -1.838369372165824e-17,
+                    -4.9633430368066153e-14
+                ],
+                "testvsctrl": [
+                    0.0,
+                    0.0
+                ],
+                "randomseed": 4525905671402014736
+            }
+        ]
+    }
+][
+    {
+        "dataset": "SBU",
+        "test_output": "failure err module 'src.cech_algorithm' has no attribute 'GENERATOR'"
+    },
+    {
+        "dataset": "SEMEION",
+        "test_output": "failure err module 'src.cech_algorithm' has no attribute 'GENERATOR'"
+    }
+][
+    {
+        "dataset": "SBU",
+        "test_output": "failure err module 'src.cech_algorithm' has no attribute 'GENERATOR'"
+    },
+    {
+        "dataset": "SEMEION",
+        "test_output": "failure err module 'src.cech_algorithm' has no attribute 'GENERATOR'"
+    }
+][
+    {
+        "dataset": "SBU",
+        "test_output": [
+            {
+                "eval": [
+                    0.03261550888419151
+                ],
+                "test": [
+                    0.9999704957008362
+                ],
+                "diff": [
+                    -0.9673550128936768
+                ],
+                "testvsctrl": [
+                    0.9347085952758789
+                ],
+                "randomseed": 9654102545475552675
+            }
+        ]
+    },
+    {
+        "dataset": "SEMEION",
+        "test_output": [
+            {
+                "eval": [
+                    0.0,
+                    0.0
+                ],
+                "test": [
+                    1.063482370167125e-15,
+                    1.6723586506973464e-31
+                ],
+                "diff": [
+                    -1.063482370167125e-15,
+                    -1.6723586506973464e-31
+                ],
+                "testvsctrl": [
+                    0.0,
+                    0.0
+                ],
+                "randomseed": 6396981975020259060
+            }
+        ]
+    }
 ]

@@ -31,7 +31,8 @@ import src.model_extractor as me
 import src.training as tr
 
 from copy import copy
-import os
+# import os
+import traceback
 
 
 def bucketize(prelims):
@@ -104,6 +105,15 @@ def get_activations(model):
     return hooks
 
 
+def reset_model_weights(layer):
+    if hasattr(layer, 'reset_parameters'):
+        layer.reset_parameters()
+    else:
+        if hasattr(layer, 'children'):
+            for child in layer.children():
+                reset_model_weights(child)
+
+
 def model_create_equation(model, names, dataset, in_shape, test_rounds):
     # check optional args
     # create prerequisites
@@ -117,6 +127,15 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
                                                      generator=ca.GENERATOR)
 
         train_dataset.dataset = copy(dataset)
+        # if grayscale
+        if next(iter(train_dataset))[0].size()[0] != 3:
+            print("GRAY")
+            train_dataset.dataset.transform = v2.Compose(
+                [train_dataset.dataset.transform,
+                 v2.Grayscale(num_output_channels=3)])
+            test_dataset.dataset.transform = v2.Compose(
+                [test_dataset.dataset.transform,
+                 v2.Grayscale(num_output_channels=3)])
 
         # calculate fft + shape
         layers = []
@@ -202,21 +221,30 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
             accs = np.array(accs).T
             m1 = stats.combine_pvalues(accs[0]).pvalue
             m2 = stats.combine_pvalues(accs[1]).pvalue
-            diff = m1 - m2
+            diff = 0.
+            if m1 is list and m2 is list:
+                diff = m1[0] - m2[0]
+            elif m1 is list:
+                diff = m1[0] - m2
+            elif m2 is list:
+                diff = m1 - m2[0]
+            else:
+                diff = m1 - m2
             tvsctrl = stats.combine_pvalues(accs[2]).pvalue
-            print("INDEPENDENT EVAL VS ACT PVALUE:")
+            print("EVAL VS ACT PVALUE:")
             print(m1)
-            print("INDEPENDENT TEST VS ACT PVALUE:")
+            print("TEST VS ACT PVALUE:")
             print(m2)
             print("PVALUE DIFF:")
             print(diff)
             print("TTEST TEST VS CTRL DIFF:")
             print(tvsctrl)
 
-            tests.append({'eval': float(m1),
-                          'test': float(m2),
-                          'diff': float(diff),
-                          'testvsctrl': float(tvsctrl),
+            tests.append({'eval': m1.tolist(),
+                          'test': m2.tolist(),
+                          'diff': diff.tolist(),
+                          'testvsctrl': tvsctrl.tolist(),
+                          'randomseed': int(torch.seed())
                           })
 
         # clean up
@@ -226,19 +254,10 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
         gc.collect()
         torch.cuda.empty_cache()
 
-        import shutil
-        # remove runs directory that contains caches of models
-        # as it affects model weight preformance and changes control
-        # file is in src so go up one to dir and remove runs
-        cache_path = os.path.join(os.path.join(
-            os.path.realpath(__file__), '..'), "runs")
-        if os.path.exists(cache_path):
-            shutil.rmtree(cache_path)
-
         return tests
 
 
-def model_test_batch(root, res, rounds, names, download=True):
+def model_test_batch(root, res, rounds, names, download=True, seed=0):
     datasets = me.download_data(root, res, download=download)
     tests = []
 
@@ -253,8 +272,20 @@ def model_test_batch(root, res, rounds, names, download=True):
             test = {
                 'dataset': ds.__class__.__name__,
                 'test_output': out}
+            reset_model_weights(model)
+            """import shutil
+            from pathlib import Path
+            # remove runs directory that contains caches of models
+            # as it affects model weight preformance and changes control
+            # file is in src so go up one to dir and remove runs
+            cache_path = Path.home().resolve() / ".cache" / "torch"
+
+            if os.path.exists(cache_path):
+                shutil.rmtree(cache_path)
+            """
+
         except Exception as e:
-            print(e)
+            traceback.print_exception(e)
             test = {'dataset': ds.__class__.__name__,
                     'test_output': 'failure err {}'.format(e)}
         finally:
