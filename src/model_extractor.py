@@ -118,15 +118,19 @@ def download_data(dataset_root, res, download=True):
     for ds_name in datasets_names:
         ds = datasets.__dict__[ds_name]
         sig = inspect.signature(ds.__init__)
-        kwargs = len([param for param in sig.parameters.values()
-                     if param.kind != param.POSITIONAL_ONLY])
-        args = len(sig.parameters.values())
+        kwargs_ds = [k for k, param in sig.parameters.items()
+                     if param.kind != param.POSITIONAL_ONLY]
+        args_ds = [p for p in sig.parameters.keys() if p not in kwargs_ds]
 
-        if (args - kwargs) < 2 and sig.parameters.get("download") is not None:
+        if sig.parameters.get("download") is not None:
             try:
-                dataset = datasets.__dict__[ds_name](
-                    dataset_root,
-                    download)
+                dataset = None
+                if "download" in args_ds:
+                    dataset = datasets.__dict__[ds_name](
+                        dataset_root, download)
+                elif "download" in kwargs_ds:
+                    dataset = datasets.__dict__[ds_name](
+                        dataset_root, download=download)
 
                 dataset.transform = v2.Compose([v2.ToImage(),
                                                 v2.ToDtype(torch.float32,

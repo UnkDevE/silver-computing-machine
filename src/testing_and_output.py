@@ -31,7 +31,7 @@ import src.model_extractor as me
 import src.training as tr
 
 from copy import copy
-# import os
+import os
 import traceback
 
 
@@ -230,6 +230,7 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
                 diff = m1 - m2[0]
             else:
                 diff = m1 - m2
+
             tvsctrl = stats.combine_pvalues(accs[2]).pvalue
             print("EVAL VS ACT PVALUE:")
             print(m1)
@@ -273,16 +274,16 @@ def model_test_batch(root, res, rounds, names, download=True, seed=0):
                 'dataset': ds.__class__.__name__,
                 'test_output': out}
             reset_model_weights(model)
-            """import shutil
+
+            import shutil
             from pathlib import Path
             # remove runs directory that contains caches of models
             # as it affects model weight preformance and changes control
             # file is in src so go up one to dir and remove runs
-            cache_path = Path.home().resolve() / ".cache" / "torch"
+            cache_path = Path(__file__).parent().resolve() / "runs"
 
             if os.path.exists(cache_path):
                 shutil.rmtree(cache_path)
-            """
 
         except Exception as e:
             traceback.print_exception(e)

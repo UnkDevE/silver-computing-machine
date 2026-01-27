@@ -5,6 +5,7 @@ import torch
 from src import testing_and_output as to
 
 torch.backends.cudnn.deterministic = True
+# torch.use_deterministic_algorithms(True, warn_only=True)
 
 GENERATOR_SEED = randint(0, sys.maxsize)
 if len(sys.argv) > 6:
