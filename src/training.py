@@ -91,8 +91,14 @@ def epoch(model, epochs, names, train, test):
         # index and do some intra-epoch reporting
         for i, data in enumerate(train):
             # Every data instance is an input + label pair
-            breakpoint()
-            inputs, labels = data
+            inputs, labels = (None, None)
+            if len(data) < 2:  # remove just inputs
+                continue
+            elif len(data) != 2:  # not a pair use first and last iter
+                inputs = data[0]
+                labels = data[-1]
+            else:
+                inputs, labels = data
             inputs = inputs.to(ca.TORCH_DEVICE, non_blocking=True)
             labels = labels.to(ca.TORCH_DEVICE, non_blocking=True)
 
@@ -169,8 +175,12 @@ class ClassLabelWrapper(object):
         if ysub is not list:
             ysub = [ysub]
 
-        y = np.array([self.targets[v] for v in
-                      self.targets.keys() if v in ysub])
+        y = []
+        if type(ysub[0]) is not str:
+            y = ysub
+        else:
+            y = np.array([self.targets[v] for v in
+                          self.targets.keys() if v in ysub])
 
         one_hot = np.zeros(len(self.targets) + 1)
         if np.size(y) != 0:
@@ -182,7 +192,13 @@ class ClassLabelWrapper(object):
 
 
 def collate_fn(batch):
-    return torch.utils.data.default_collate(batch)
+    out = None
+    try:
+        out = torch.utils.data.default_collate(batch)
+        return out
+    finally:
+        return batch
+
 
 # PYTORCH CODE ONLY
 def interpolate_model_train(model, train, step, names):
@@ -199,11 +215,11 @@ def interpolate_model_train(model, train, step, names):
     train_s = DataLoader(train_s,
                          persistent_workers=True, pin_memory=True,
                          batch_size=BATCH_SIZE, num_workers=DL_WORKERS,
-                         worker_init_fn=seed_worker, collate_fn=None) # , collate_fn=collate_fn)
+                         worker_init_fn=seed_worker, collate_fn=collate_fn)
 
     test_s = DataLoader(test_s, persistent_workers=True, pin_memory=True,
                         batch_size=BATCH_SIZE, num_workers=DL_WORKERS,
-                        worker_init_fn=seed_worker, collate_fn=None) # , collate_fn=collate_fn)
+                        worker_init_fn=seed_worker, collate_fn=collate_fn)
 
     # training loop
     epoch(model, 5, names, train_s, test_s)
