@@ -91,6 +91,7 @@ def epoch(model, epochs, names, train, test):
         # index and do some intra-epoch reporting
         for i, data in enumerate(train):
             # Every data instance is an input + label pair
+            breakpoint()
             inputs, labels = data
             inputs = inputs.to(ca.TORCH_DEVICE, non_blocking=True)
             labels = labels.to(ca.TORCH_DEVICE, non_blocking=True)
@@ -180,6 +181,9 @@ class ClassLabelWrapper(object):
         return hot_y
 
 
+def collate_fn(batch):
+    return torch.utils.data.default_collate(batch)
+
 # PYTORCH CODE ONLY
 def interpolate_model_train(model, train, step, names):
     print("STEP {}".format(step))
@@ -190,14 +194,16 @@ def interpolate_model_train(model, train, step, names):
     [train_s, test_s] = random_split(train, [0.7, 0.3], generator=ca.GENERATOR)
 
     from src.model_extractor import BATCH_SIZE
+    # collate fn None raises errors so we use default collate to force
+    # collation
     train_s = DataLoader(train_s,
                          persistent_workers=True, pin_memory=True,
                          batch_size=BATCH_SIZE, num_workers=DL_WORKERS,
-                         worker_init_fn=seed_worker)
+                         worker_init_fn=seed_worker, collate_fn=None) # , collate_fn=collate_fn)
 
     test_s = DataLoader(test_s, persistent_workers=True, pin_memory=True,
                         batch_size=BATCH_SIZE, num_workers=DL_WORKERS,
-                        worker_init_fn=seed_worker)
+                        worker_init_fn=seed_worker, collate_fn=None) # , collate_fn=collate_fn)
 
     # training loop
     epoch(model, 5, names, train_s, test_s)

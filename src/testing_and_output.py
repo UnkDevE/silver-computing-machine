@@ -263,7 +263,7 @@ def model_test_batch(root, res, rounds, names, download=True, seed=0):
     tests = []
 
     for ds in datasets:
-        print("USING {} DATSET".format(ds.__class__.__name__))
+        print("USING {} DATASET".format(ds.__class__.__name__))
         model = get_model(names[0], weights=names[1])
         model.to(ca.TORCH_DEVICE)
         model.eval()

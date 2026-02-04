@@ -16,7 +16,7 @@ dependencies = [
     "pytorch-triton-rocm ; sys_platform == 'linux'",
     "scikit-image",
     "opencv-contrib-python",
-    "h5py" # downloading repos
+    "h5py", # downloading repos
     "gdown"
 ]
 
