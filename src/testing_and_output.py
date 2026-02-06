@@ -121,22 +121,20 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
     if model is not None:
         # works for IMAGENET ONLY
         dataset.target_transform = tr.ClassLabelWrapper()
+        min_channels = 4
+        [min_channels := d[0].size()[0]
+         for d in dataset if min_channels > d[0].size()[0]]
+
+        # if grayscale
+        if min_channels < 3:
+            print("GRAY")
+            dataset.transforms = v2.Grayscale(num_output_channels=3)
 
         from torch.utils.data import random_split
         [train_dataset, test_dataset] = random_split(dataset, [0.7, 0.3],
                                                      generator=ca.GENERATOR)
 
         train_dataset.dataset = copy(dataset)
-        # if grayscale
-        if next(iter(train_dataset))[0].size()[0] != 3:
-            print("GRAY")
-            train_dataset.dataset.transform = v2.Compose(
-                [train_dataset.dataset.transform,
-                 v2.Grayscale(num_output_channels=3)])
-            test_dataset.dataset.transform = v2.Compose(
-                [test_dataset.dataset.transform,
-                 v2.Grayscale(num_output_channels=3)])
-
         # calculate fft + shape
         layers = []
 
@@ -280,7 +278,7 @@ def model_test_batch(root, res, rounds, names, download=True, seed=0):
             # remove runs directory that contains caches of models
             # as it affects model weight preformance and changes control
             # file is in src so go up one to dir and remove runs
-            cache_path = Path(__file__).parent().resolve() / "runs"
+            cache_path = Path(__file__).parent.resolve() / "runs"
 
             if os.path.exists(cache_path):
                 shutil.rmtree(cache_path)

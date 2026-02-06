@@ -32,6 +32,7 @@ import torch
 # torch for tensor LU
 import torch.linalg as t_linalg
 from torch.utils.data import DataLoader
+from torchvision.transforms import v2
 
 import jax.scipy.linalg as j_linalg
 import numpy as np
@@ -91,14 +92,11 @@ def epoch(model, epochs, names, train, test):
         # index and do some intra-epoch reporting
         for i, data in enumerate(train):
             # Every data instance is an input + label pair
-            inputs, labels = (None, None)
-            if len(data) < 2:  # remove just inputs
+            if len(data) < 2:
                 continue
-            elif len(data) != 2:  # not a pair use first and last iter
-                inputs = data[0]
-                labels = data[-1]
-            else:
-                inputs, labels = data
+            print(len(data))
+
+            inputs, labels = data
             inputs = inputs.to(ca.TORCH_DEVICE, non_blocking=True)
             labels = labels.to(ca.TORCH_DEVICE, non_blocking=True)
 
@@ -192,12 +190,8 @@ class ClassLabelWrapper(object):
 
 
 def collate_fn(batch):
-    out = None
-    try:
-        out = torch.utils.data.default_collate(batch)
-        return out
-    finally:
-        return [(b[0], b[-1]) for b in batch]
+    pairs = [(b[0], b[-1]) for b in batch if len(b) > 1]
+    return [torch.stack(t) for t in list(zip(*pairs))]
 
 
 # PYTORCH CODE ONLY

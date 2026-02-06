@@ -1,0 +1,115 @@
+[
+    {
+        "dataset": "Caltech101",
+        "test_output": "failure err 'Caltech101' object has no attribute 'reduce'"
+    },
+    {
+        "dataset": "Caltech256",
+        "test_output": "failure err 'Caltech256' object has no attribute 'reduce'"
+    },
+    {
+        "dataset": "CIFAR10",
+        "test_output": "failure err 'CIFAR10' object has no attribute 'reduce'"
+    },
+    {
+        "dataset": "CIFAR100",
+        "test_output": "failure err 'CIFAR100' object has no attribute 'reduce'"
+    },
+    {
+        "dataset": "CLEVRClassification",
+        "test_output": "failure err 'CLEVRClassification' object has no attribute 'reduce'"
+    },
+    {
+        "dataset": "DTD",
+        "test_output": "failure err 'DTD' object has no attribute 'reduce'"
+    },
+    {
+        "dataset": "EuroSAT",
+        "test_output": "failure err 'EuroSAT' object has no attribute 'reduce'"
+    },
+    {
+        "dataset": "FGVCAircraft",
+        "test_output": "failure err 'FGVCAircraft' object has no attribute 'reduce'"
+    },
+    {
+        "dataset": "Flowers102",
+        "test_output": "failure err 'Flowers102' object has no attribute 'reduce'"
+    },
+    {
+        "dataset": "Food101",
+        "test_output": "failure err 'Food101' object has no attribute 'reduce'"
+    },
+    {
+        "dataset": "GTSRB",
+        "test_output": "failure err 'GTSRB' object has no attribute 'reduce'"
+    },
+    {
+        "dataset": "Imagenette",
+        "test_output": "failure err 'Imagenette' object has no attribute 'reduce'"
+    },
+    {
+        "dataset": "SBU",
+        "test_output": "failure err 'SBU' object has no attribute 'reduce'"
+    },
+    {
+        "dataset": "SEMEION",
+        "test_output": "failure err 'SEMEION' object has no attribute 'reduce'"
+    }
+][
+    {
+        "dataset": "Caltech101",
+        "test_output": "failure err 'builtin_function_or_method' object is not subscriptable"
+    },
+    {
+        "dataset": "Caltech256",
+        "test_output": "failure err 'builtin_function_or_method' object is not subscriptable"
+    },
+    {
+        "dataset": "CIFAR10",
+        "test_output": "failure err 'builtin_function_or_method' object is not subscriptable"
+    },
+    {
+        "dataset": "CIFAR100",
+        "test_output": "failure err 'builtin_function_or_method' object is not subscriptable"
+    },
+    {
+        "dataset": "CLEVRClassification",
+        "test_output": "failure err 'builtin_function_or_method' object is not subscriptable"
+    },
+    {
+        "dataset": "DTD",
+        "test_output": "failure err 'builtin_function_or_method' object is not subscriptable"
+    },
+    {
+        "dataset": "EuroSAT",
+        "test_output": "failure err 'builtin_function_or_method' object is not subscriptable"
+    },
+    {
+        "dataset": "FGVCAircraft",
+        "test_output": "failure err 'builtin_function_or_method' object is not subscriptable"
+    },
+    {
+        "dataset": "Flowers102",
+        "test_output": "failure err 'builtin_function_or_method' object is not subscriptable"
+    },
+    {
+        "dataset": "Food101",
+        "test_output": "failure err 'builtin_function_or_method' object is not subscriptable"
+    },
+    {
+        "dataset": "GTSRB",
+        "test_output": "failure err 'builtin_function_or_method' object is not subscriptable"
+    },
+    {
+        "dataset": "Imagenette",
+        "test_output": "failure err 'builtin_function_or_method' object is not subscriptable"
+    },
+    {
+        "dataset": "SBU",
+        "test_output": "failure err 'builtin_function_or_method' object is not subscriptable"
+    },
+    {
+        "dataset": "SEMEION",
+        "test_output": "failure err 'builtin_function_or_method' object is not subscriptable"
+    }
+]
