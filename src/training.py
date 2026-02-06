@@ -197,7 +197,7 @@ def collate_fn(batch):
         out = torch.utils.data.default_collate(batch)
         return out
     finally:
-        return batch
+        return [(b[0], b[-1]) for b in batch]
 
 
 # PYTORCH CODE ONLY
