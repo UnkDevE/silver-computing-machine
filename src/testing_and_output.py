@@ -125,10 +125,16 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
         [min_channels := d[0].size()[0]
          for d in dataset if min_channels > d[0].size()[0]]
 
-        # if grayscale
+        # if grayscale convert to rgb
         if min_channels < 3:
             print("GRAY")
-            dataset.transforms = v2.Grayscale(num_output_channels=3)
+            # compute transform eagerly
+            from torchvision.datasets import wrap_dataset_for_transforms_v2
+            if dataset.transform is not None:
+                dataset.transform = v2.Compose([dataset.transform,
+                                                v2.RGB])
+            else:
+                dataset.transform = v2.RGB()
 
         from torch.utils.data import random_split
         [train_dataset, test_dataset] = random_split(dataset, [0.7, 0.3],
@@ -165,9 +171,10 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
         [bspline, _, _] = tr.make_spline(sols[-1])
 
         from src.meterns import HDRMaskTransform
-        train_dataset.dataset.transforms = v2.Compose([
-            train_dataset.dataset.transforms,
-            HDRMaskTransform])
+        train_dataset.dataset.transform = v2.Compose([
+           train_dataset.dataset.transform,
+           HDRMaskTransform(bspline),
+           ])
 
         for i in range(test_rounds):
             # should we wipe the model every i in TRAIN_SIZE or leave it?

@@ -42,7 +42,6 @@ def next_odd_if_even(x):
     return x
 
 
-@torch.compile
 def product(xs):
     y = xs[0]
     for x in xs[1:]:
@@ -59,8 +58,12 @@ class HDRMaskTransform(object):
 
     # QUALITY MEASURES
     def quality(self, img):
-        Grays = Grayscale()
-        gray = Grays(img)
+        gray = img
+        print(img.size())
+        if len(img.size()) >= 3:
+            Grays = Grayscale()
+            gray = Grays(img)
+
         # convert from numpy
         img = torch.tensor(img)
         gray = torch.tensor(gray)
@@ -84,7 +87,7 @@ class HDRMaskTransform(object):
 
     def meterns(self, imgs, dims):
         Guass = GaussianBlur(kernel_size=dims, sigma=(SIGMA, 0.5))
-        qs = F.normalize(self.quality(imgs))
+        qs = [F.normalize(self.quality(img)) for img in imgs]
 
         # compute blurs and laplace pyramid
         blurs = [Guass(qs)]
@@ -111,17 +114,17 @@ class HDRMaskTransform(object):
         # WE HAVE TO USE NUMPY HERE SO THAT TORCH DOES NOT FORK JAX
         sample = sample.numpy().squeeze().T
         mask_samples = self.spline(sample)
-        mask_samples = torch.tensor(mask_samples)
+        t_mask_samples = torch.tensor(mask_samples)
 
         rep_shape = product(mask_samples.shape[:(
             len(mask_samples.shape) - len(sample.shape))])
 
-        solved_samples = sample.repeat(
-            rep_shape).reshape(mask_samples.shape)
+        solved_samples = torch.tensor(sample.repeat(
+            rep_shape).reshape(mask_samples.shape))
 
         # we want in full colour but dunno how to do that
         # check model, reshape inputs
-        mask = mask_samples.le(solved_samples)
+        mask = t_mask_samples.le(solved_samples)
         imgs = torch.where(mask, solved_samples, 0)
 
         # hdr code here
