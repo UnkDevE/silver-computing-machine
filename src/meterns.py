@@ -58,15 +58,11 @@ class HDRMaskTransform(object):
 
     # QUALITY MEASURES
     def quality(self, img):
-        gray = img
-        print(img.size())
+        gray = img.detach().clone()
         if len(img.size()) >= 3:
-            Grays = Grayscale()
+            Grays = Grayscale(3)
             gray = Grays(img)
 
-        # convert from numpy
-        img = torch.tensor(img)
-        gray = torch.tensor(gray)
         # use calculate second order deriviatives (laplacian) by autograd
         contrast = sum(list(torch.gradient(sum(list(torch.gradient(gray))))))
         saturation = torch.std(img)
@@ -112,14 +108,14 @@ class HDRMaskTransform(object):
 
     def __call__(self, sample):
         # WE HAVE TO USE NUMPY HERE SO THAT TORCH DOES NOT FORK JAX
-        sample = sample.numpy().squeeze().T
-        mask_samples = self.spline(sample)
+        sample_np = sample.numpy().squeeze().T
+        mask_samples = self.spline(sample_np)
         t_mask_samples = torch.tensor(mask_samples)
 
         rep_shape = product(mask_samples.shape[:(
-            len(mask_samples.shape) - len(sample.shape))])
+            len(mask_samples.shape) - len(sample_np.shape))])
 
-        solved_samples = torch.tensor(sample.repeat(
+        solved_samples = torch.tensor(sample_np.repeat(
             rep_shape).reshape(mask_samples.shape))
 
         # we want in full colour but dunno how to do that

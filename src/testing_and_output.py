@@ -121,18 +121,18 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
     if model is not None:
         # works for IMAGENET ONLY
         dataset.target_transform = tr.ClassLabelWrapper()
-        min_channels = 4
-        [min_channels := d[0].size()[0]
-         for d in dataset if min_channels > d[0].size()[0]]
+        max_gray_channels = 2
+        channels = len([len(d[0].size()) for d in dataset
+                        if len(d[0].size()) <= max_gray_channels])
 
         # if grayscale convert to rgb
-        if min_channels < 3:
+        if channels > 0:
             print("GRAY")
+            breakpoint()
             # compute transform eagerly
-            from torchvision.datasets import wrap_dataset_for_transforms_v2
             if dataset.transform is not None:
                 dataset.transform = v2.Compose([dataset.transform,
-                                                v2.RGB])
+                                                v2.RGB()])
             else:
                 dataset.transform = v2.RGB()
 
