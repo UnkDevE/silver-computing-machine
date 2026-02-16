@@ -60,8 +60,11 @@ class HDRMaskTransform(object):
     def quality(self, img):
         gray = img.detach().clone()
         if len(img.size()) >= 3:
-            Grays = Grayscale(3)
-            gray = Grays(img)
+            # torch tensor needs to be flipped because it is flipped somewhere
+            # this causes grayscale to raise an error that there are too many
+            # values to unpack this isn't true 
+            gray = torch.flip(gray)
+            gray = Grayscale(num_output_channels=3)(gray)
 
         # use calculate second order deriviatives (laplacian) by autograd
         contrast = sum(list(torch.gradient(sum(list(torch.gradient(gray))))))

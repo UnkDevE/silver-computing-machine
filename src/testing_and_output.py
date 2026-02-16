@@ -176,6 +176,8 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
            HDRMaskTransform(bspline),
            ])
 
+        print(train_dataset.dataset.transform)
+
         for i in range(test_rounds):
             # should we wipe the model every i in TRAIN_SIZE or leave it?
 
