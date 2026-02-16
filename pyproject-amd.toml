@@ -1,0 +1,37 @@
+[project]
+name = "clean-silver-computing-machine"
+version = "0.1.0"
+description = "AI research project using topology"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "GPL"
+dependencies = [
+    "jax",
+    "scipy",
+    "pandas",
+    "matplotlib",
+    "torch",
+    "tensorboard",
+    "torchvision",
+    "pytorch-triton-rocm", 
+    "scikit-image",
+    "opencv-contrib-python",
+    "h5py", # downloading repos
+    "gdown"
+]
+
+[tool.uv.sources]
+torch= [
+  { index = "pytorch-rocm", marker = "sys_platform == 'linux'" },
+]
+torchvision = [
+  { index = "pytorch-rocm", marker = "sys_platform == 'linux'" },
+]
+pytorch-triton-rocm = [
+  { index = "pytorch-rocm", marker = "sys_platform == 'linux'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-rocm"
+url = "https://download.pytorch.org/whl/nightly/rocm7.2"
+explicit = true
