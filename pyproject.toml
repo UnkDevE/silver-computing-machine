@@ -12,7 +12,6 @@ dependencies = [
     "matplotlib",
     "tensorboard",
     "scikit-image",
-    "opencv-contrib-python",
     "h5py", # downloading repos
     "gdown"
 ]

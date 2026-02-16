@@ -63,7 +63,9 @@ class HDRMaskTransform(object):
             # torch tensor needs to be flipped because it is flipped somewhere
             # this causes grayscale to raise an error that there are too many
             # values to unpack this isn't true 
-            gray = torch.flip(gray)
+            ar_size = [siter for siter in range(len(gray.size()))]
+            ar_size.reverse()
+            gray = gray.flip(ar_size)
             gray = Grayscale(num_output_channels=3)(gray)
 
         # use calculate second order deriviatives (laplacian) by autograd
