@@ -60,12 +60,6 @@ class HDRMaskTransform(object):
     def quality(self, img):
         gray = img.detach().clone()
         if len(img.size()) >= 3:
-            # torch tensor needs to be flipped because it is flipped somewhere
-            # this causes grayscale to raise an error that there are too many
-            # values to unpack this isn't true 
-            ar_size = [siter for siter in range(len(gray.size()))]
-            ar_size.reverse()
-            gray = gray.flip(ar_size)
             gray = Grayscale(num_output_channels=3)(gray)
 
         # use calculate second order deriviatives (laplacian) by autograd
@@ -73,6 +67,7 @@ class HDRMaskTransform(object):
         saturation = torch.std(img)
         # exposure algorithm is how close exp is to 0.5 in Guass curve
         exposure = torch.sqrt((torch.log(img)) * 2 * (SIGMA ** 2)) + 0.5
+
         return contrast * saturation * exposure
 
     def laplace_pyramid(self, imgs, dims, Guass):
@@ -87,6 +82,13 @@ class HDRMaskTransform(object):
         return laplaces
 
     def meterns(self, imgs, dims):
+        # torch tensor needs to be flipped because it is flipped somewhere
+        # this causes transforms to raise an error that there are too many
+        # values to unpack this isn't true
+        ar_size = list(imgs.size()[1:])
+        ar_size.reverse()
+        imgs = imgs.reshape([imgs.size()[0], *ar_size])
+
         Guass = GaussianBlur(kernel_size=dims, sigma=(SIGMA, 0.5))
         qs = [F.normalize(self.quality(img)) for img in imgs]
 
@@ -98,7 +100,7 @@ class HDRMaskTransform(object):
         laplaces = self.laplace_pyramid(imgs, dims, Guass)
 
         # create partials
-        partials = [sum(laplace * blur) for laplace,
+        partials = [laplace * blur for laplace,
                     blur in zip(laplaces, blurs)]
         partials.reverse()
 

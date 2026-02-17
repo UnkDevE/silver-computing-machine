@@ -3,7 +3,7 @@ name = "clean-silver-computing-machine"
 version = "0.1.0"
 description = "AI research project using topology"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 license = "GPL"
 dependencies = [
     "jax",
@@ -73,8 +73,13 @@ pytorch-triton-xpu = [
   { index = "pytorch-xpu",  marker = "sys_platform == 'win32' or sys_platform == 'linux'" , extra="intel"},
 ]
 [[tool.uv.index]]
+name = "pytorch-nightly"
+url = "https://download.pytorch.org/whl/nightly/torch/"
+explicit = true
+
+[[tool.uv.index]]
 name = "pytorch-rocm"
-url = "https://download.pytorch.org/whl/nightly/rocm7.1"
+url = "https://download.pytorch.org/whl/nightly/rocm7.2"
 explicit = true 
 
 [[tool.uv.index]]
