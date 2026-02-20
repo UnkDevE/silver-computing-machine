@@ -39,7 +39,7 @@ import numpy as np
 
 import src.cech_algorithm as ca
 
-DL_WORKERS = os.cpu_count() // 4
+DL_WORKERS = os.cpu_count() // 2
 
 
 def seed_worker(worker_id):
