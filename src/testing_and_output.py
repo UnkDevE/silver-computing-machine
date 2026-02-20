@@ -121,14 +121,13 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
     if model is not None:
         # works for IMAGENET ONLY
         dataset.target_transform = tr.ClassLabelWrapper()
-        max_gray_channels = 2
+        min_rgb_channels = 3
         channels = len([len(d[0].size()) for d in dataset
-                        if len(d[0].size()) <= max_gray_channels])
+                        if len(d[0].size()) <= min_rgb_channels])
 
         # if grayscale convert to rgb
         if channels > 0:
             print("GRAY")
-            breakpoint()
             # compute transform eagerly
             if dataset.transform is not None:
                 dataset.transform = v2.Compose([dataset.transform,
@@ -175,8 +174,6 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
            train_dataset.dataset.transform,
            HDRMaskTransform(bspline),
            ])
-
-        print(train_dataset.dataset.transform)
 
         for i in range(test_rounds):
             # should we wipe the model every i in TRAIN_SIZE or leave it?

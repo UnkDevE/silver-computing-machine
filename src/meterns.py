@@ -96,12 +96,13 @@ class HDRMaskTransform(object):
         blurs = [Guass(qs)]
         for _ in range(dims - 1):
             blurs.append(Guass(blurs[-1]))
+        blurs = [x for xs in blurs for x in xs]
 
         laplaces = self.laplace_pyramid(imgs, dims, Guass)
 
         # create partials
-        partials = [laplace * blur for laplace,
-                    blur in zip(laplaces, blurs)]
+        partials = [laplace * blur for (laplace,
+                    blur) in list(zip(laplaces, blurs))]
         partials.reverse()
 
         image = None
