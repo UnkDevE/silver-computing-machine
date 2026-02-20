@@ -13,7 +13,8 @@ dependencies = [
     "tensorboard",
     "scikit-image",
     "h5py", # downloading repos
-    "gdown"
+    "gdown",
+    "scalene>=2.1.4",
 ]
 
 [project.optional-dependencies]
