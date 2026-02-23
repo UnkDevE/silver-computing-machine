@@ -25,16 +25,12 @@ import os
 import random
 import importlib
 
-# jax for custom code
-import jax.numpy as jnp
 import torch
 
 # torch for tensor LU
-import torch.linalg as t_linalg
 from torch.utils.data import DataLoader
 from torchvision.transforms import v2
 
-import jax.scipy.linalg as j_linalg
 import numpy as np
 
 import src.cech_algorithm as ca
@@ -52,29 +48,6 @@ def seed_worker(worker_id):
 def get_class(module, classname):
     return getattr(importlib.import_module(module), classname)
 
-
-def make_spline(sols):
-    # get shapes
-    interpol_shape = sols[-1].shape
-    # sensible names
-    ins = jnp.array(sols[0])
-    # out = jnp.array(sols[1])
-    from scipy.interpolate import make_splprep
-    # out is already a diagonalized matrix of 1s
-    # so therefore the standard basis becomes 0
-    _, _, std_basis = j_linalg.svd(ins)
-    # solve for the new std_basis
-    new_basis = j_linalg.inv(std_basis)
-    # create LU Decomposition towards new_basis
-    jaxt = ca.jax_to_tensor(jnp.outer(new_basis, ins))
-
-    lu_decomp = t_linalg.lu_factor_ex(jaxt)
-    # interpolate
-    lu_decomp = [decomp.detach().numpy() for decomp in lu_decomp]
-    # spline shaping err
-    [spline, u] = make_splprep(lu_decomp[0].T, k=sum(interpol_shape) + 1)
-
-    return [spline, u, lu_decomp]
 
 
 def epoch(model, epochs, names, train, test):
@@ -94,7 +67,6 @@ def epoch(model, epochs, names, train, test):
             # Every data instance is an input + label pair
             if len(data) < 2:
                 continue
-            print(len(data))
 
             inputs, labels = data
             inputs = inputs.to(ca.TORCH_DEVICE, non_blocking=True)
@@ -207,11 +179,11 @@ def interpolate_model_train(model, train, step, names):
     # collate fn None raises errors so we use default collate to force
     # collation
     train_s = DataLoader(train_s,
-                         persistent_workers=True, pin_memory=True,
+                         pin_memory=True, persistent_workers=True,
                          batch_size=BATCH_SIZE, num_workers=DL_WORKERS,
                          worker_init_fn=seed_worker, collate_fn=collate_fn)
 
-    test_s = DataLoader(test_s, persistent_workers=True, pin_memory=True,
+    test_s = DataLoader(test_s, pin_memory=True, persistent_workers=True,
                         batch_size=BATCH_SIZE, num_workers=DL_WORKERS,
                         worker_init_fn=seed_worker, collate_fn=collate_fn)
 

@@ -24,20 +24,27 @@
 # jax for custom code
 import jax
 import jax.numpy as jnp
+
 import torch
 
 # torch for tensor LU
 import torch.linalg as t_linalg
 import jax.scipy.linalg as j_linalg
 from jax.numpy.fft import irfftn
+from dlpack import asdlpack
 import numpy as np
 
 from matplotlib import pyplot as plt
+
+# jax must be CPU for torch to work this still gives benefits however because
+# of XLA speedup
 
 jax.config.update("jax_enable_x64", True)
 
 if torch.cuda.is_available():
     device_str = 'cuda'
+elif jax.default_backend() == 'cpu':
+    pass
 else:
     raise Exception("""NO GPU ENABLED JAX AND PYTORCH WILL
                     COLLIDE CAUSING OS FORK THIS WILL CAUSE THE PROGRAM TO
@@ -49,8 +56,7 @@ GENERATOR = generator1 = torch.Generator().manual_seed(torch.initial_seed())
 
 
 def jax_to_tensor(jax_arr):
-    return torch.from_numpy(np.asarray(
-        jax_arr.astype(jnp.float32)).copy())
+    return torch.from_dlpack(asdlpack(jax_arr)).to(torch.float32)
 
 
 def product(x):

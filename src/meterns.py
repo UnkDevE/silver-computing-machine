@@ -26,10 +26,39 @@ import torch.nn.functional as F
 from torchvision.transforms.v2 import Grayscale, GaussianBlur
 
 import numpy as np
+import jax.numpy as jnp
+import jax.scipy.linalg as j_linalg
+import torch.linalg as t_linalg
+
+import src.cech_algorithm as ca
 
 # defined from merge meterns paper
 # https://onlinelibrary.wiley.com/doi/abs/10.1111/j.1467-8659.2008.01171.x
 SIGMA = 0.2
+
+
+def make_spline(sols):
+    # get shapes
+    interpol_shape = sols[-1].shape
+    # sensible names
+    ins = jnp.array(sols[0])
+    # out = jnp.array(sols[1])
+    from scipy.interpolate import make_splprep
+    # out is already a diagonalized matrix of 1s
+    # so therefore the standard basis becomes 0
+    _, _, std_basis = j_linalg.svd(ins)
+    # solve for the new std_basis
+    new_basis = j_linalg.inv(std_basis)
+    # create LU Decomposition towards new_basis
+    jaxt = ca.jax_to_tensor(jnp.outer(new_basis, ins))
+
+    lu_decomp = t_linalg.lu_factor_ex(jaxt)
+    # interpolate
+    lu_decomp = [decomp.detach().numpy() for decomp in lu_decomp]
+    # spline shaping err
+    [spline, u] = make_splprep(lu_decomp[0].T, k=sum(interpol_shape) + 1)
+
+    return [spline, u, lu_decomp]
 
 
 def round_up_to_odd(f):
@@ -42,11 +71,24 @@ def next_odd_if_even(x):
     return x
 
 
+@torch.compile
 def product(xs):
     y = xs[0]
     for x in xs[1:]:
         y *= x
     return y
+
+
+class HDRDummyTransform(object):
+    def __init__(self, spline):
+        self.spline = spline
+
+    def __call__(self, sample):
+        # WE HAVE TO USE NUMPY HERE SO THAT TORCH DOES NOT FORK JAX
+        sample_np = sample.numpy().squeeze().T
+        mask_samples = self.spline(sample_np)
+        t_mask_samples = torch.tensor(mask_samples)
+        return t_mask_samples
 
 
 class HDRMaskTransform(object):
@@ -58,7 +100,7 @@ class HDRMaskTransform(object):
 
     # QUALITY MEASURES
     def quality(self, img):
-        gray = img.detach().clone()
+        gray = img
         if len(img.size()) >= 3:
             gray = Grayscale(num_output_channels=3)(gray)
 
@@ -130,9 +172,6 @@ class HDRMaskTransform(object):
         # check model, reshape inputs
         mask = t_mask_samples.le(solved_samples)
         imgs = torch.where(mask, solved_samples, 0)
-
-        # hdr code here
-        # no need for opencv as meterns is quite simple
 
         # kernel has to be odd for guass to work
         hdr = self.meterns(imgs, next_odd_if_even(len(imgs.shape)))
