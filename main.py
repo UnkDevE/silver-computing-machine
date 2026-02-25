@@ -1,15 +1,14 @@
 import sys
 from random import randint
 import torch
-
-from src import testing_and_output as to
-
+import multiprocessing
 torch.backends.cudnn.deterministic = True
 # torch.use_deterministic_algorithms(True, warn_only=True)
-torch.multiprocessing.set_start_method('spawn')
 
 GENERATOR_SEED = randint(0, sys.maxsize)
 if __name__ == "__main__":
+    multiprocessing.set_start_method('spawn')
+    from src import testing_and_output as to
     if len(sys.argv) > 7:
         # for reproduciblity purposes
         if sys.argv[8] != 0:
