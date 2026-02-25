@@ -29,7 +29,7 @@ import numpy as np
 
 # something sane here
 # 512 just over 24 GB of VRAM
-BATCH_SIZE = 512 
+BATCH_SIZE = 1024 
 
 
 # looks up each activation from csv and then defines a function to it

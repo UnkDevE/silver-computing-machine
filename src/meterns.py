@@ -23,7 +23,7 @@
 import torch
 import torch.nn.functional as F
 
-from torchvision.transforms.v2 import Grayscale, GaussianBlur
+from torchvision.transforms.v2 import Grayscale, GaussianBlur, Transform
 
 import numpy as np
 import jax.numpy as jnp
@@ -79,7 +79,7 @@ def product(xs):
     return y
 
 
-class HDRDummyTransform(object):
+class HDRDummyTransform(Transform):
     def __init__(self, spline):
         self.spline = spline
 
@@ -91,7 +91,7 @@ class HDRDummyTransform(object):
         return t_mask_samples
 
 
-class HDRMaskTransform(object):
+class HDRMaskTransform(Transform):
     """Hdr resample the splined solved sample
 
     Args:
@@ -155,8 +155,10 @@ class HDRMaskTransform(object):
 
     def __init__(self, spline):
         self.spline = spline
+        super().__init__()
 
-    def __call__(self, sample):
+    # no params needed
+    def transform(self, sample, _):
         # WE HAVE TO USE NUMPY HERE SO THAT TORCH DOES NOT FORK JAX
         sample_np = sample.numpy().squeeze().T
         mask_samples = self.spline(sample_np)

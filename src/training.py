@@ -178,6 +178,8 @@ def interpolate_model_train(model, train, step, names):
     from src.model_extractor import BATCH_SIZE
     # collate fn None raises errors so we use default collate to force
     # collation
+    train_s.to(ca.TORCH_DEVICE)
+    test_s.to(ca.TORCH_DEVICE)
     train_s = DataLoader(train_s,
                          pin_memory=True, persistent_workers=True,
                          batch_size=BATCH_SIZE, num_workers=DL_WORKERS,
