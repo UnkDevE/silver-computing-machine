@@ -26,39 +26,10 @@ import torch.nn.functional as F
 from torchvision.transforms.v2 import Grayscale, GaussianBlur, Transform
 
 import numpy as np
-import jax.numpy as jnp
-import jax.scipy.linalg as j_linalg
-import torch.linalg as t_linalg
-
-import src.cech_algorithm as ca
 
 # defined from merge meterns paper
 # https://onlinelibrary.wiley.com/doi/abs/10.1111/j.1467-8659.2008.01171.x
 SIGMA = 0.2
-
-
-def make_spline(sols):
-    # get shapes
-    interpol_shape = sols[-1].shape
-    # sensible names
-    ins = jnp.array(sols[0])
-    # out = jnp.array(sols[1])
-    from scipy.interpolate import make_splprep
-    # out is already a diagonalized matrix of 1s
-    # so therefore the standard basis becomes 0
-    _, _, std_basis = j_linalg.svd(ins)
-    # solve for the new std_basis
-    new_basis = j_linalg.inv(std_basis)
-    # create LU Decomposition towards new_basis
-    jaxt = ca.jax_to_tensor(jnp.outer(new_basis, ins))
-
-    lu_decomp = t_linalg.lu_factor_ex(jaxt)
-    # interpolate
-    lu_decomp = [decomp.detach().numpy() for decomp in lu_decomp]
-    # spline shaping err
-    [spline, u] = make_splprep(lu_decomp[0].T, k=sum(interpol_shape) + 1)
-
-    return [spline, u, lu_decomp]
 
 
 def round_up_to_odd(f):
@@ -160,15 +131,14 @@ class HDRMaskTransform(Transform):
     # no params needed
     def transform(self, sample, _):
         # WE HAVE TO USE NUMPY HERE SO THAT TORCH DOES NOT FORK JAX
-        sample_np = sample.numpy().squeeze().T
-        mask_samples = self.spline(sample_np)
+        mask_samples = self.spline(sample)
         t_mask_samples = torch.tensor(mask_samples)
 
         rep_shape = product(mask_samples.shape[:(
-            len(mask_samples.shape) - len(sample_np.shape))])
+            len(mask_samples.shape) - len(sample.size()))])
 
-        solved_samples = torch.tensor(sample_np.repeat(
-            rep_shape).reshape(mask_samples.shape))
+        solved_samples = torch.repeat_interleave(sample, rep_shape).reshape(
+                mask_samples.shape)
 
         # we want in full colour but dunno how to do that
         # check model, reshape inputs

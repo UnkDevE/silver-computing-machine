@@ -29,9 +29,13 @@ import torch
 
 # torch for tensor LU
 from torch.utils.data import DataLoader
-from torchvision.transforms import v2
+import torch.linalg as t_linalg
+
+import jax.scipy.linalg as j_linalg
+import jax.numpy as jnp
 
 import numpy as np
+import torchcurves as tc
 
 import src.cech_algorithm as ca
 
@@ -47,7 +51,6 @@ def seed_worker(worker_id):
 # import class e.g. loss or opt and return it
 def get_class(module, classname):
     return getattr(importlib.import_module(module), classname)
-
 
 
 def epoch(model, epochs, names, train, test):
@@ -188,3 +191,49 @@ def interpolate_model_train(model, train, step, names):
     epoch(model, 5, names, train_s, test_s)
 
     return model
+
+
+@torch.compile
+def product(xs):
+    y = xs[0]
+    for x in xs[1:]:
+        y *= x
+    return y
+
+
+def make_spline(sols, names, train_s, test_s):
+    ins = jnp.array(sols[0])
+    # out = jnp.array(sols[1])
+    # out is already a diagonalized matrix of 1s
+    # so therefore the standard basis becomes 0
+    _, _, std_basis = j_linalg.svd(ins)
+    # solve for the new std_basis
+    new_basis = j_linalg.inv(std_basis)
+    # create LU Decomposition towards new_basis
+    jaxt = ca.jax_to_tensor(jnp.outer(new_basis, ins))
+    lu_decomp = t_linalg.lu_factor_ex(jaxt)
+
+    # get shapes
+    input_dim = train_s[0][0].shape
+    print(input_dim)
+    intermediate_dim = lu_decomp[0].T.shape
+    print(intermediate_dim)
+    knots = product(intermediate_dim) + 1
+    breakpoint()
+
+    # interpolate
+    kan = torch.nn.Sequential(
+        # layer 1
+        tc.BSplineCurve(len(intermediate_dim),
+                        dim=len(input_dim), knots_config=knots,
+                        normalize_fn='rational'),
+        # layer 2
+        tc.BSplineCurve(len(input_dim),
+                        dim=len(input_dim)+1, degree=len(input_dim)+1,
+                        knots_config=knots, normalize_fn='rational'),
+        # layer 3
+        tc.BSplineCurve(len(input_dim),
+                        dim=len(input_dim), knots_config=knots,
+                        normalize_fn='rational'))
+
+    return interpolate_model_train(kan, train_s, 0, names)

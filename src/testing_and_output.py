@@ -167,14 +167,13 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
 
         control = tester(model, shapes, sheaf, outward, sort_avg)
 
-        from src.meterns import make_spline
-        [bspline, _, _] = make_spline(sols[-1])
-
+        from src.training import make_spline
+        bspline = make_spline(sols[-1], names, train_dataset, test_dataset)
         from src.meterns import HDRMaskTransform
-        train_dataset.dataset.transform = v2.Compose([
-           train_dataset.dataset.transform,
-           HDRMaskTransform(bspline),
-           ])
+        train_dataset.transforms = v2.Compose([
+                train_dataset.dataset.transforms,
+                HDRMaskTransform(bspline)
+                ])
 
         for i in range(test_rounds):
             # should we wipe the model every i in TRAIN_SIZE or leave it?
