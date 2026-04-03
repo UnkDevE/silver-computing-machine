@@ -35,7 +35,6 @@ import jax.scipy.linalg as j_linalg
 import jax.numpy as jnp
 
 import numpy as np
-import torchcurves as tc
 
 import src.cech_algorithm as ca
 
@@ -201,9 +200,13 @@ def product(xs):
     return y
 
 
-def make_spline(sols, names, train_s, test_s):
+def make_spline(sols):
+    # get shapes
+    interpol_shape = sols[-1].shape
+    # sensible names
     ins = jnp.array(sols[0])
     # out = jnp.array(sols[1])
+    from scipy.interpolate import make_splprep
     # out is already a diagonalized matrix of 1s
     # so therefore the standard basis becomes 0
     _, _, std_basis = j_linalg.svd(ins)
@@ -211,29 +214,11 @@ def make_spline(sols, names, train_s, test_s):
     new_basis = j_linalg.inv(std_basis)
     # create LU Decomposition towards new_basis
     jaxt = ca.jax_to_tensor(jnp.outer(new_basis, ins))
+
     lu_decomp = t_linalg.lu_factor_ex(jaxt)
-
-    # get shapes
-    input_dim = train_s[0][0].shape
-    print(input_dim)
-    intermediate_dim = lu_decomp[0].T.shape
-    print(intermediate_dim)
-    knots = product(intermediate_dim) + 1
-    breakpoint()
-
     # interpolate
-    kan = torch.nn.Sequential(
-        # layer 1
-        tc.BSplineCurve(len(intermediate_dim),
-                        dim=len(input_dim), knots_config=knots,
-                        normalize_fn='rational'),
-        # layer 2
-        tc.BSplineCurve(len(input_dim),
-                        dim=len(input_dim)+1, degree=len(input_dim)+1,
-                        knots_config=knots, normalize_fn='rational'),
-        # layer 3
-        tc.BSplineCurve(len(input_dim),
-                        dim=len(input_dim), knots_config=knots,
-                        normalize_fn='rational'))
+    lu_decomp = [decomp.detach().numpy() for decomp in lu_decomp]
+    # spline shaping err
+    [spline, u] = make_splprep(lu_decomp[0].T, k=sum(interpol_shape) + 1)
 
-    return interpolate_model_train(kan, train_s, 0, names)
+    return spline

@@ -168,7 +168,7 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
         control = tester(model, shapes, sheaf, outward, sort_avg)
 
         from src.training import make_spline
-        bspline = make_spline(sols[-1], names, train_dataset, test_dataset)
+        bspline = make_spline(sols[-1])
         from src.meterns import HDRMaskTransform
         train_dataset.transforms = v2.Compose([
                 train_dataset.dataset.transforms,

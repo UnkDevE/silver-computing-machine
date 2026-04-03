@@ -15,7 +15,6 @@ dependencies = [
     "scikit-image",
     "h5py", # downloading repos
     "gdown",
-    "torchcurves",
     "scalene>=2.1.4",
 ]
 
