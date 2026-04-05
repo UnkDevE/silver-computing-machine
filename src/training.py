@@ -181,11 +181,11 @@ def interpolate_model_train(model, train, step, names):
     train_s = DataLoader(train_s,
                          pin_memory=True, persistent_workers=False,
                          batch_size=BATCH_SIZE, num_workers=DL_WORKERS,
-                         worker_init_fn=seed_worker, collate_fn=collate_fn)
+                         worker_init_fn=seed_worker) # , collate_fn=collate_fn)
 
     test_s = DataLoader(test_s, pin_memory=True, persistent_workers=False,
                         batch_size=BATCH_SIZE, num_workers=DL_WORKERS,
-                        worker_init_fn=seed_worker, collate_fn=collate_fn)
+                        worker_init_fn=seed_worker) # , collate_fn=collate_fn)
 
     # training loop
     epoch(model, 5, names, train_s, test_s)
