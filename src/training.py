@@ -37,8 +37,10 @@ import jax.numpy as jnp
 import numpy as np
 
 import src.cech_algorithm as ca
+import torch.nn.functional as F
 
-DL_WORKERS = os.cpu_count() // 2
+from src.model_extractor import BATCH_SIZE
+DL_WORKERS = 0
 
 
 def seed_worker(worker_id):
@@ -89,8 +91,8 @@ def epoch(model, epochs, names, train, test):
 
             # Gather data and report
             running_loss += loss.item()
-            if i % 1000 == 999:
-                last_loss = running_loss / 1000  # loss per batch
+            if i % BATCH_SIZE == (BATCH_SIZE - 1):
+                last_loss = running_loss / BATCH_SIZE # loss per batch
                 print('  batch {} loss: {}'.format(i + 1, last_loss))
                 running_loss = 0.
 
@@ -174,15 +176,14 @@ def interpolate_model_train(model, train, step, names):
     # random split for training
     [train_s, test_s] = random_split(train, [0.7, 0.3], generator=ca.GENERATOR)
 
-    from src.model_extractor import BATCH_SIZE
     # collate fn None raises errors so we use default collate to force
     # collation
     train_s = DataLoader(train_s,
-                         pin_memory=True, persistent_workers=True,
+                         pin_memory=True, persistent_workers=False,
                          batch_size=BATCH_SIZE, num_workers=DL_WORKERS,
                          worker_init_fn=seed_worker, collate_fn=collate_fn)
 
-    test_s = DataLoader(test_s, pin_memory=True, persistent_workers=True,
+    test_s = DataLoader(test_s, pin_memory=True, persistent_workers=False,
                         batch_size=BATCH_SIZE, num_workers=DL_WORKERS,
                         worker_init_fn=seed_worker, collate_fn=collate_fn)
 
@@ -198,6 +199,22 @@ def product(xs):
     for x in xs[1:]:
         y *= x
     return y
+
+
+# have spline evaluation drop in
+class FastSplineEvaluator:
+    # convert lot to torch tensor
+    def __init__(self, tck, out_size):
+        self.tck = [torch.Tensor(x) for x in tck]
+        self.coeffs = self.tck[1]
+        self.knots = self.tck[0]
+        self.degree = self.tck[0]
+        self.target_size = torch.Tensor(out_size)
+
+    @torch.compile()
+    def __call__(self, points):
+        uout = self.knots @ self.coeffs @ points
+        return F.interpolate(uout, self.target_size)
 
 
 def make_spline(sols):
@@ -221,4 +238,5 @@ def make_spline(sols):
     # spline shaping err
     [spline, u] = make_splprep(lu_decomp[0].T, k=sum(interpol_shape) + 1)
 
-    return spline
+    # don't use ins here as is jax array, please use numpy
+    return FastSplineEvaluator(spline.tck, sols[0])
