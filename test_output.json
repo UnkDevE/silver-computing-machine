@@ -1,115 +1,170 @@
 [
     {
         "dataset": "Caltech101",
-        "test_output": "failure err 'Caltech101' object has no attribute 'reduce'"
+        "test_output": [
+            {
+                "eval": 0.00637806998565793,
+                "test": 0.007609538268297911,
+                "diff": -0.0012314674677327275,
+                "testvsctrl": 0.00020863590179942548,
+                "randomseed": 1234
+            }
+        ]
     },
     {
         "dataset": "Caltech256",
-        "test_output": "failure err 'Caltech256' object has no attribute 'reduce'"
+        "test_output": [
+            {
+                "eval": 2.018418418514578e-11,
+                "test": 7.799707546496393e-09,
+                "diff": -7.779522803730288e-09,
+                "testvsctrl": 3.2291903526160404e-12,
+                "randomseed": 1234
+            }
+        ]
     },
     {
         "dataset": "CIFAR10",
-        "test_output": "failure err 'CIFAR10' object has no attribute 'reduce'"
+        "test_output": [
+            {
+                "eval": 1.93455502994766e-06,
+                "test": 2.282082256499507e-08,
+                "diff": 1.9117344436381245e-06,
+                "testvsctrl": 1.1833457142606375e-19,
+                "randomseed": 1234
+            }
+        ]
     },
     {
         "dataset": "CIFAR100",
-        "test_output": "failure err 'CIFAR100' object has no attribute 'reduce'"
+        "test_output": [
+            {
+                "eval": 3.6269229499934994e-17,
+                "test": 1.7472147972242343e-35,
+                "diff": 3.6269229499934994e-17,
+                "testvsctrl": 2.211143733245858e-19,
+                "randomseed": 1234
+            }
+        ]
     },
     {
         "dataset": "CLEVRClassification",
-        "test_output": "failure err 'CLEVRClassification' object has no attribute 'reduce'"
+        "test_output": [
+            {
+                "eval": 1.7786186821463792e-22,
+                "test": 1.2169422202949756e-21,
+                "diff": -1.0390803142150142e-21,
+                "testvsctrl": 2.133412496718806e-21,
+                "randomseed": 1234
+            }
+        ]
     },
     {
         "dataset": "DTD",
-        "test_output": "failure err 'DTD' object has no attribute 'reduce'"
+        "test_output": [
+            {
+                "eval": 0.0,
+                "test": 0.0,
+                "diff": 0.0,
+                "testvsctrl": 0.0,
+                "randomseed": 1234
+            }
+        ]
     },
     {
         "dataset": "EuroSAT",
-        "test_output": "failure err 'EuroSAT' object has no attribute 'reduce'"
+        "test_output": [
+            {
+                "eval": 0.010547315701842308,
+                "test": 3.759468431008273e-12,
+                "diff": 0.010547315701842308,
+                "testvsctrl": 2.205611564981206e-28,
+                "randomseed": 1234
+            }
+        ]
     },
     {
         "dataset": "FGVCAircraft",
-        "test_output": "failure err 'FGVCAircraft' object has no attribute 'reduce'"
+        "test_output": [
+            {
+                "eval": 2.0458812741708243e-06,
+                "test": 2.9362756777118193e-06,
+                "diff": -8.903941193239007e-07,
+                "testvsctrl": 0.0,
+                "randomseed": 1234
+            }
+        ]
     },
     {
         "dataset": "Flowers102",
-        "test_output": "failure err 'Flowers102' object has no attribute 'reduce'"
+        "test_output": [
+            {
+                "eval": 0.0,
+                "test": 0.0,
+                "diff": 0.0,
+                "testvsctrl": 0.0,
+                "randomseed": 1234
+            }
+        ]
     },
     {
         "dataset": "Food101",
-        "test_output": "failure err 'Food101' object has no attribute 'reduce'"
+        "test_output": [
+            {
+                "eval": 0.00801012385636568,
+                "test": 3.2835193330142496e-36,
+                "diff": 0.00801012385636568,
+                "testvsctrl": 0.057450294494628906,
+                "randomseed": 1234
+            }
+        ]
     },
     {
         "dataset": "GTSRB",
-        "test_output": "failure err 'GTSRB' object has no attribute 'reduce'"
+        "test_output": [
+            {
+                "eval": 8.881076924490295e-17,
+                "test": 2.217199067561022e-17,
+                "diff": 6.663878187801518e-17,
+                "testvsctrl": 4.983435529366399e-22,
+                "randomseed": 1234
+            }
+        ]
     },
     {
         "dataset": "Imagenette",
-        "test_output": "failure err 'Imagenette' object has no attribute 'reduce'"
+        "test_output": [
+            {
+                "eval": 1.1357759603924933e-06,
+                "test": 8.633758859128472e-23,
+                "diff": 1.1357759603924933e-06,
+                "testvsctrl": 7.072597282137272e-12,
+                "randomseed": 1234
+            }
+        ]
     },
     {
         "dataset": "SBU",
-        "test_output": "failure err 'SBU' object has no attribute 'reduce'"
+        "test_output": [
+            {
+                "eval": 0.07619791477918625,
+                "test": 0.9167402982711792,
+                "diff": -0.8405423760414124,
+                "testvsctrl": 0.9674922823905945,
+                "randomseed": 1234
+            }
+        ]
     },
     {
         "dataset": "SEMEION",
-        "test_output": "failure err 'SEMEION' object has no attribute 'reduce'"
-    }
-][
-    {
-        "dataset": "Caltech101",
-        "test_output": "failure err 'builtin_function_or_method' object is not subscriptable"
-    },
-    {
-        "dataset": "Caltech256",
-        "test_output": "failure err 'builtin_function_or_method' object is not subscriptable"
-    },
-    {
-        "dataset": "CIFAR10",
-        "test_output": "failure err 'builtin_function_or_method' object is not subscriptable"
-    },
-    {
-        "dataset": "CIFAR100",
-        "test_output": "failure err 'builtin_function_or_method' object is not subscriptable"
-    },
-    {
-        "dataset": "CLEVRClassification",
-        "test_output": "failure err 'builtin_function_or_method' object is not subscriptable"
-    },
-    {
-        "dataset": "DTD",
-        "test_output": "failure err 'builtin_function_or_method' object is not subscriptable"
-    },
-    {
-        "dataset": "EuroSAT",
-        "test_output": "failure err 'builtin_function_or_method' object is not subscriptable"
-    },
-    {
-        "dataset": "FGVCAircraft",
-        "test_output": "failure err 'builtin_function_or_method' object is not subscriptable"
-    },
-    {
-        "dataset": "Flowers102",
-        "test_output": "failure err 'builtin_function_or_method' object is not subscriptable"
-    },
-    {
-        "dataset": "Food101",
-        "test_output": "failure err 'builtin_function_or_method' object is not subscriptable"
-    },
-    {
-        "dataset": "GTSRB",
-        "test_output": "failure err 'builtin_function_or_method' object is not subscriptable"
-    },
-    {
-        "dataset": "Imagenette",
-        "test_output": "failure err 'builtin_function_or_method' object is not subscriptable"
-    },
-    {
-        "dataset": "SBU",
-        "test_output": "failure err 'builtin_function_or_method' object is not subscriptable"
-    },
-    {
-        "dataset": "SEMEION",
-        "test_output": "failure err 'builtin_function_or_method' object is not subscriptable"
+        "test_output": [
+            {
+                "eval": 0.0,
+                "test": 2.2467360087134647e-25,
+                "diff": -2.2467360087134647e-25,
+                "testvsctrl": 0.0,
+                "randomseed": 1234
+            }
+        ]
     }
 ]

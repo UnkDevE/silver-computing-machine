@@ -293,8 +293,9 @@ def model_test_batch(root, res, rounds, names, download=True, seed=0):
 
         except Exception as e:
             traceback.print_exception(e)
-            test = {'dataset': ds.__class__.__name__,
-                    'test_output': 'failure err {}'.format(e)}
+            if test is None:
+                test = {'dataset': ds.__class__.__name__,
+                        'test_output': 'failure err {}'.format(e)}
         finally:
             tests.append(test)
 
