@@ -21,7 +21,6 @@
     pytorch module - trains models
 """
 
-import os
 import random
 import importlib
 
@@ -40,7 +39,7 @@ import src.cech_algorithm as ca
 import torch.nn.functional as F
 
 from src.model_extractor import BATCH_SIZE
-DL_WORKERS = 0
+DL_WORKERS = 1
 
 
 def seed_worker(worker_id):
@@ -73,8 +72,8 @@ def epoch(model, epochs, names, train, test):
                 continue
 
             inputs, labels = data
-            inputs = inputs.to(ca.TORCH_DEVICE, non_blocking=True)
-            labels = labels.to(ca.TORCH_DEVICE, non_blocking=True)
+            inputs = inputs.to(ca.TORCH_DEVICE)  # , non_blocking=True)
+            labels = labels.to(ca.TORCH_DEVICE)  # , non_blocking=True)
 
             # Zero your gradients for every batch!
             opt.zero_grad()
@@ -92,7 +91,7 @@ def epoch(model, epochs, names, train, test):
             # Gather data and report
             running_loss += loss.item()
             if i % BATCH_SIZE == (BATCH_SIZE - 1):
-                last_loss = running_loss / BATCH_SIZE # loss per batch
+                last_loss = running_loss / BATCH_SIZE  # loss per batch
                 print('  batch {} loss: {}'.format(i + 1, last_loss))
                 running_loss = 0.
 
@@ -114,8 +113,8 @@ def epoch(model, epochs, names, train, test):
         with torch.no_grad():
             for i, vdata in enumerate(test):
                 vinputs, vlabels = vdata
-                vinputs = vinputs.to(ca.TORCH_DEVICE, non_blocking=True)
-                vlabels = vlabels.to(ca.TORCH_DEVICE, non_blocking=True)
+                vinputs = vinputs.to(ca.TORCH_DEVICE)  # , non_blocking=True)
+                vlabels = vlabels.to(ca.TORCH_DEVICE)  # , non_blocking=True)
                 voutputs = model(vinputs)
                 vloss = loss_fn(voutputs, vlabels)
                 running_vloss += vloss
@@ -179,11 +178,11 @@ def interpolate_model_train(model, train, step, names):
     # collate fn None raises errors so we use default collate to force
     # collation
     train_s = DataLoader(train_s,
-                         pin_memory=True, persistent_workers=False,
+                         pin_memory=True, persistent_workers=True,
                          batch_size=BATCH_SIZE, num_workers=DL_WORKERS,
                          worker_init_fn=seed_worker) # , collate_fn=collate_fn)
 
-    test_s = DataLoader(test_s, pin_memory=True, persistent_workers=False,
+    test_s = DataLoader(test_s, pin_memory=True, persistent_workers=True,
                         batch_size=BATCH_SIZE, num_workers=DL_WORKERS,
                         worker_init_fn=seed_worker) # , collate_fn=collate_fn)
 
