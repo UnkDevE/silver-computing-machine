@@ -244,7 +244,7 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
             print(diff)
             print("TTEST TEST VS CTRL DIFF:")
             print(tvsctrl)
-            [m1, m2, diff, tvsctrl] = [np.mean(x) for
+            [m1, m2, diff, tvsctrl] = [np.ptp(x) for
                                        x in [m1, m2, diff, tvsctrl]]
 
             tests.append({'eval': m1.tolist(),
