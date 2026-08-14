@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "AI research project using topology"
 readme = "README.md"
 requires-python = ">=3.14"
-license = "GPL"
+license = {"license" = "GPL3"}
 dependencies = [
     "pydlpack",
     "jax",
@@ -17,6 +17,7 @@ dependencies = [
     "gdown",
     "scalene>=2.1.4",
 ]
+
 
 [project.optional-dependencies]
 cpu=[
@@ -40,6 +41,7 @@ intel=[
 ]
 
 [tool.uv]
+exclude-newer = "2 weeks"
 required-environments = ["sys_platform == 'linux' and platform_machine == 'x86_64'"]
 environments = ["sys_platform == 'linux' and platform_machine == 'x86_64'"]
 conflicts = [
