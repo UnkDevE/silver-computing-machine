@@ -33,7 +33,7 @@ import src.training as tr
 from copy import copy
 import os
 import traceback
-
+import json
 
 def bucketize(prelims):
     arr = []
@@ -236,6 +236,7 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
                 diff = m1 - m2
 
             tvsctrl = stats.combine_pvalues(accs[2]).pvalue
+
             print("EVAL VS ACT PVALUE:")
             print(m1)
             print("TEST VS ACT PVALUE:")
@@ -244,8 +245,10 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
             print(diff)
             print("TTEST TEST VS CTRL DIFF:")
             print(tvsctrl)
-            [m1, m2, diff, tvsctrl] = [np.ptp(x) for
-                                       x in [m1, m2, diff, tvsctrl]]
+
+            if len(m1) > 1:
+                [m1, m2, diff, tvsctrl] = [np.ptp(x) for
+                                           x in [m1, m2, diff, tvsctrl]]
 
             tests.append({'eval': m1.tolist(),
                           'test': m2.tolist(),
@@ -268,16 +271,19 @@ def model_test_batch(root, res, rounds, names, download=True, seed=0):
     datasets = me.download_data(root, res, download=download)
     tests = []
 
-    for ds in datasets:
-        print("USING {} DATASET".format(ds.__class__.__name__))
-        model = get_model(names[0], weights=names[1])
-        model.to(ca.TORCH_DEVICE)
-        model.eval()
-        test = None
+    for i, ds in enumerate(datasets):
+        print("DATASET {} of {} KEYINTERRUPT TO SKIP".format(i, len(datasets)))
         try:
+            print("USING {} DATASET, LEN {}".format(ds.__class__.__name__,
+                                                    len(ds)))
+            model = get_model(names[0], weights=names[1])
+            model.to(ca.TORCH_DEVICE)
+            model.eval()
+            test = None
             out = model_create_equation(model, names, ds, res, rounds)
             test = {
                 'dataset': ds.__class__.__name__,
+                'ds_len': len(ds),
                 'test_output': out}
             reset_model_weights(model)
 
@@ -291,17 +297,15 @@ def model_test_batch(root, res, rounds, names, download=True, seed=0):
             if os.path.exists(cache_path):
                 shutil.rmtree(cache_path)
 
-        except Exception as e:
-            traceback.print_exception(e)
-            if test is None:
-                test = {'dataset': ds.__class__.__name__,
-                        'test_output': 'failure err {}'.format(e)}
-        finally:
             tests.append(test)
+            # just in case
+            # model = None
 
-        # just in case
-        model = None
+        # handle checkpointing process times
+        except KeyboardInterrupt:
+            continue
+        finally:
+            with open("test_output.json", "a+") as f:
+                if tests != []:
+                    json.dump(tests, f, indent=4)
 
-    import json
-    with open("test_output.json", "a+") as f:
-        json.dump(tests, f, indent=4)
