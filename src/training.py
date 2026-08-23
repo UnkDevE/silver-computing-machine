@@ -161,6 +161,35 @@ class ClassLabelWrapper(object):
         return hot_y
 
 
+class ImagenetLabelWrapper(ClassLabelWrapper):
+    def __init__(self):
+        super()
+        from oct2py import octave
+        octave.addpath("./datasets/manual/ILSVRC/devkit/data")
+        self.meta = octave.load("meta_det.mat")['synsets']
+        # get name from metadata
+        self.meta_keys = {k: kva[2] for k, kva in enumerate(self.meta)}
+        # reverse dictionaries for future use
+        self.meta_keys = {v: i for i, v in self.meta_keys.items()}
+        self.targets_r = {v: i for i, v in self.targets.items()}
+
+    def get_metadata(self, ysub):
+        return np.array([self.meta[k]
+                         for k in self.meta_keys.keys() if k in ysub])
+
+    def __call__(self, ysub):
+        hot_y = super.__call__(self, ysub)
+        meta_y = None
+        if type(ysub[0]) is str:
+            meta_y = self.get_metadata(ysub)
+        else:
+            # back call
+            if np.size(ysub) != 0:
+                meta_y = self.get_metadata(self.targets_r[ysub[0]])
+
+        return hot_y, meta_y
+
+
 def collate_fn(batch):
     pairs = [(b[0], b[-1]) for b in batch if len(b) > 1]
     return [torch.stack(t) for t in list(zip(*pairs))]
@@ -180,11 +209,11 @@ def interpolate_model_train(model, train, step, names):
     train_s = DataLoader(train_s,
                          pin_memory=True, persistent_workers=True,
                          batch_size=BATCH_SIZE, num_workers=DL_WORKERS,
-                         worker_init_fn=seed_worker) # , collate_fn=collate_fn)
+                         worker_init_fn=seed_worker)  # , collate_fn=collate_fn)
 
     test_s = DataLoader(test_s, pin_memory=True, persistent_workers=True,
                         batch_size=BATCH_SIZE, num_workers=DL_WORKERS,
-                        worker_init_fn=seed_worker) # , collate_fn=collate_fn)
+                        worker_init_fn=seed_worker)  # , collate_fn=collate_fn)
 
     # training loop
     epoch(model, 5, names, train_s, test_s)

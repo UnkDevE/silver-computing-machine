@@ -311,6 +311,7 @@ def model_test_batch(root, res, rounds, names, download=True, seed=0):
             continue
 
     with open("test_output.json", "a+") as f:
+        json.dump({'ran_with_parameters': names}, f, indent=4)
         if tests != []:
             json.dump(tests, f, indent=4)
 
