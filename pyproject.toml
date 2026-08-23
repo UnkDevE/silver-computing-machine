@@ -15,7 +15,8 @@ dependencies = [
     "scikit-image",
     "h5py", # downloading repos
     "gdown",
-    "scalene>=2.1.4",
+    "scalene",
+    "oct2py"
 ]
 
 
@@ -28,7 +29,7 @@ amd=[
   "torch",
   "torchvision",
   "triton-rocm",
-  "pytorch-triton-rocm"  
+  "pytorch-triton-rocm"
 ]
 nvidia=[
     "torch",
@@ -100,5 +101,3 @@ explicit = true
 name = "pytorch-xpu"
 url = "https://download.pytorch.org/whl/xpu"
 explicit = true
-
-

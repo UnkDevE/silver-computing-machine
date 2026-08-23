@@ -32,8 +32,8 @@ import src.training as tr
 
 from copy import copy
 import os
-import traceback
 import json
+
 
 def bucketize(prelims):
     arr = []
@@ -114,19 +114,20 @@ def reset_model_weights(layer):
                 reset_model_weights(child)
 
 
-def model_create_equation(model, names, dataset, in_shape, test_rounds):
+def model_create_equation(model, names, dataset, in_shape, test_rounds,
+                          imagenet_ds=False):
     # check optional args
     # create prerequisites
     tests = []
     if model is not None:
-        # works for IMAGENET ONLY
+        # works for IMAGENET MODEL ONLY
         dataset.target_transform = tr.ClassLabelWrapper()
         min_rgb_channels = 3
         channels = len([len(d[0].size()) for d in dataset
                         if len(d[0].size()) <= min_rgb_channels])
 
         # if grayscale convert to rgb
-        if channels > 0:
+        if channels < min_rgb_channels:
             print("GRAY")
             # compute transform eagerly
             if dataset.transform is not None:
@@ -207,55 +208,59 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds):
             model.eval()
             test_model.eval()
 
-            print("TESTING...")
-            accs = []
-            for [data, actual] in test_loader:
-                data = data.float().to(ca.TORCH_DEVICE, non_blocking=True)
-                actual = actual.float().cpu().numpy()
+            if not imagenet_ds:
+                print("TESTING...")
+                accs = []
+                for [data, actual] in test_loader:
+                    data = data.float().to(ca.TORCH_DEVICE, non_blocking=True)
+                    actual = actual.float().cpu().numpy()
 
-                ctrl = model(data).cpu().detach().numpy()
-                test = test_model(data).cpu().detach().numpy()
+                    ctrl = model(data).cpu().detach().numpy()
+                    test = test_model(data).cpu().detach().numpy()
 
-                # find mean over batch
-                ctrl_t = stats.ttest_ind(ctrl, actual)
-                test_t = stats.ttest_ind(test, actual)
-                diff = stats.ttest_ind(test, ctrl)
-                accs.append([ctrl_t.pvalue, test_t.pvalue, diff.pvalue])
+                    # find mean over batch
+                    ctrl_t = stats.ttest_ind(ctrl, actual)
+                    test_t = stats.ttest_ind(test, actual)
+                    diff = stats.ttest_ind(test, ctrl)
+                    accs.append([ctrl_t.pvalue, test_t.pvalue, diff.pvalue])
 
-            accs = np.array(accs).T
-            m1 = stats.combine_pvalues(accs[0]).pvalue
-            m2 = stats.combine_pvalues(accs[1]).pvalue
-            diff = 0.
-            if m1 is list and m2 is list:
-                diff = m1[0] - m2[0]
-            elif m1 is list:
-                diff = m1[0] - m2
-            elif m2 is list:
-                diff = m1 - m2[0]
-            else:
-                diff = m1 - m2
+                accs = np.array(accs).T
+                m1 = stats.combine_pvalues(accs[0]).pvalue
+                m2 = stats.combine_pvalues(accs[1]).pvalue
+                diff = 0.
+                if m1 is list and m2 is list:
+                    diff = m1[0] - m2[0]
+                elif m1 is list:
+                    diff = m1[0] - m2
+                elif m2 is list:
+                    diff = m1 - m2[0]
+                else:
+                    diff = m1 - m2
 
-            tvsctrl = stats.combine_pvalues(accs[2]).pvalue
+                tvsctrl = stats.combine_pvalues(accs[2]).pvalue
 
-            print("EVAL VS ACT PVALUE:")
-            print(m1)
-            print("TEST VS ACT PVALUE:")
-            print(m2)
-            print("PVALUE DIFF:")
-            print(diff)
-            print("TTEST TEST VS CTRL DIFF:")
-            print(tvsctrl)
+                print("EVAL VS ACT PVALUE:")
+                print(m1)
+                print("TEST VS ACT PVALUE:")
+                print(m2)
+                print("PVALUE DIFF:")
+                print(diff)
+                print("TTEST TEST VS CTRL DIFF:")
+                print(tvsctrl)
 
-            if len(m1) > 1:
-                [m1, m2, diff, tvsctrl] = [np.ptp(x) for
-                                           x in [m1, m2, diff, tvsctrl]]
+                [m1, m2, diff, tvsctrl] = [np.ptp(x) if len(x) > 1
+                                           else x for
+                                           x in [m1, m2, diff, tvsctrl]
+                                           ]
 
-            tests.append({'eval': m1.tolist(),
-                          'test': m2.tolist(),
-                          'diff': diff.tolist(),
-                          'testvsctrl': tvsctrl.tolist(),
-                          'randomseed': int(torch.initial_seed())
-                          })
+                tests.append({'eval': m1.tolist(),
+                              'test': m2.tolist(),
+                              'diff': diff.tolist(),
+                              'testvsctrl': tvsctrl.tolist(),
+                              'randomseed': int(torch.initial_seed())
+                              })
+        else:
+
 
         # clean up
         model.to('cpu')
@@ -304,8 +309,11 @@ def model_test_batch(root, res, rounds, names, download=True, seed=0):
         # handle checkpointing process times
         except KeyboardInterrupt:
             continue
-        finally:
-            with open("test_output.json", "a+") as f:
-                if tests != []:
-                    json.dump(tests, f, indent=4)
 
+    with open("test_output.json", "a+") as f:
+        if tests != []:
+            json.dump(tests, f, indent=4)
+
+
+def imagenet_test_batch(root, res, rounds, names, seed=0):
+    

@@ -13,3 +13,4 @@ This is then tested with the original models as a control,
 and compared using a T-test.
 
 Test results may be found in test_output.json.
+requires octave to be installed as binary to PATH i.e. from pacman

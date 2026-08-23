@@ -4,7 +4,8 @@ ulimit -n 2048
 source ./.venv/bin/activate
 echo "do you want to download models? Y/N"
 read download
-if [download != "Y"] then
+if [ $download == "Y" ] 
+then
     let dl=1
 else 
     let dl=0
