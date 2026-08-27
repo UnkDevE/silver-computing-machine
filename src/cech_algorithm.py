@@ -146,11 +146,18 @@ def pad_coeff_output(coeff):
 """
 
 
+class Singular_Chec_Met(Exception):
+    pass
+
+
 # start finding chec cohomology from sheafs
 # simplex / cocycle in this case is the direct sum
 # compute kernels, images and chec cohomologies
 # gets the kth layers kth Chomology class
 def chec_chomology(layer):
+    if not hasattr(layer, '__len__'):
+        raise Singular_Chec_Met
+
     diff = chec_diff(layer, 0)
     cocycle = chec_diff(layer, 1)
     rrefco, _, _, = t_linalg.lu_factor_ex(jax_to_tensor(cocycle))
@@ -240,12 +247,20 @@ def quot_space(subset, space):
         shapes = [list(s.shape), list(zs.shape)]
         [s.sort() for s in shapes]
 
-        if shapes[0] == shapes[1]:
-            new_diag = s @ zs
+        if shapes[0][0] == shapes[1][0]:
+            if shapes[0][1] != shapes[1][1]:
+                new_diag = zs @ s.T
+            else:
+                new_diag = s.T @ zs
         else:
             new_diag = (s.T @ zs).T
 
-        if set(shapes[0]) != set(shapes[1]) or ZSr.shape == SL.shape:
+        # use bitwise xor here as if shapes equal to, and shape equal to
+        # the first clause results in err
+        if (set(shapes[0]) == set(shapes[1])):
+            inputbasis = maybematmul(ZSr, SL) @ new_diag
+            orthsout = zSl @ diag @ new_diag @ SR
+        elif (set(shapes[0]) != set(shapes[1])) and (ZSr.shape == SL.shape):
             inputbasis = maybematmul(ZSr, SL) @ diag
             orthsout = zSl @ diag @ new_diag @ SR
         else:
@@ -267,6 +282,7 @@ def cohomologies(layers):
 
     # layer is normally nonsquare so we vectorize
     for funclayer in layers:
+        # throws Singular_Chec_Met if cannot continue dim reduction
         kerims.append(chec_chomology(funclayer))
         if len(kerims) >= 2:
             cohol.append(quot_space(kerims[-1][0], kerims[-2][1]))
@@ -316,7 +332,13 @@ def graph_model(model, shapes, layers):
 
     # fft calculation goes through here
     # zeroth index of layer is weights
-    solved_system = [cohomologies(layer[0]) for layer in layers]
+    solved_system = []
+    for layer in layers:
+        try:
+            solved_system.append(cohomologies(layer[0]))
+        except Singular_Chec_Met:
+            break
+
     # lets add the input vector
     # create solutions to output
     sols = create_sols_from_system(solved_system)
@@ -336,7 +358,10 @@ def graph_model(model, shapes, layers):
                 sheaf = jnp.swapaxes(sheaf, len(sheaf.shape) - 1,
                                      len(sheaf.shape) // 2)
                 # inner product
-                solution = jnp.inner(sheaf, solution.T)
+                if set(sheaf.shape) == set(solution.shape):
+                    jnp.inner(sheaf, solution)
+                else:
+                    solution = jnp.inner(sheaf, solution.T)
             else:
                 solution = solution @ sheaf
 
