@@ -12,4 +12,12 @@ else
 fi
 echo "reproducable seed (set to 0 if new test)"
 read seed
-JAX_PLATFORM_NAME='cpu' PYTHON_GIL=0 HIP_VISIBLE_DEVICES=0 python main.py 225 1 resnet50 IMAGENET1K_V1 CrossEntropyLoss Adam $dl $seed 
+echo "train on imagenet dataset (Y only if you know what you're doing)"
+read imagenet
+if [$imagenet == "Y"]
+then 
+    let im=1 
+else 
+    let im=0
+fi
+JAX_PLATFORM_NAME='cpu' PYTHON_GIL=0 HIP_VISIBLE_DEVICES=0 python main.py 225 1 vgg16 IMAGENET1K_V1 CrossEntropyLoss Adam $dl $seed $im 

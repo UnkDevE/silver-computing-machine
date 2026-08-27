@@ -127,7 +127,7 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
                         if len(d[0].size()) <= min_rgb_channels])
 
         # if grayscale convert to rgb
-        if channels < min_rgb_channels:
+        if channels > 0:
             print("GRAY")
             # compute transform eagerly
             if dataset.transform is not None:
@@ -259,15 +259,12 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
                               'testvsctrl': tvsctrl.tolist(),
                               'randomseed': int(torch.initial_seed())
                               })
-        else:
-
-
-        # clean up
-        model.to('cpu')
-        del model
-        import gc
-        gc.collect()
-        torch.cuda.empty_cache()
+            # clean up
+            model.to('cpu')
+            del model
+            import gc
+            gc.collect()
+            torch.cuda.empty_cache()
 
         return tests
 
@@ -317,4 +314,27 @@ def model_test_batch(root, res, rounds, names, download=True, seed=0):
 
 
 def imagenet_test_batch(root, res, rounds, names, seed=0):
-    
+    from torchvision import datasets
+    from pathlib import Path
+    tests = []
+    print("USING IMAGENET")
+
+    imagenet_train_ds = datasets.ImageNet(Path(root) + "manual", split='train')
+
+    model = get_model(names[0], weights=names[1])
+    model.to(ca.TORCH_DEVICE)
+    model.eval()
+
+    out = model_create_equation(model, names, imagenet_train_ds, res, rounds)
+
+    test = {
+        'dataset': imagenet_train_ds.__class__.__name__,
+        'ds_len': len(imagenet_train_ds),
+        'test_output': out
+    }
+    tests.append(test)
+
+    with open("imagenet_test_output.json", "a+") as f:
+        json.dump({'ran_with_parameters': names}, f, indent=4)
+        if tests != []:
+            json.dump(tests, f, indent=4)

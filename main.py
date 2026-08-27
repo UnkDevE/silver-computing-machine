@@ -9,7 +9,7 @@ GENERATOR_SEED = randint(0, sys.maxsize)
 if __name__ == "__main__":
     multiprocessing.set_start_method('spawn')
     from src import testing_and_output as to
-    if len(sys.argv) > 7:
+    if len(sys.argv) > 8:
         # for reproduciblity purposes
         if int(sys.argv[8]) != 0:
             GENERATOR_SEED = int(sys.argv[8])
@@ -23,9 +23,20 @@ if __name__ == "__main__":
         print("REPRODUCEABLE RANDOM SEED IS: {}".
               format(str(torch.initial_seed())))
 
-        to.model_test_batch("./datasets", int(sys.argv[1]), int(sys.argv[2]),
-                            sys.argv[3:7], download=bool(int(sys.argv[7])),
-                            seed=GENERATOR_SEED)
+        if not bool(int(sys.argv[9])):
+            to.model_test_batch("./datasets", int(sys.argv[1]),
+                                int(sys.argv[2]),
+                                sys.argv[3:7], download=bool(int(sys.argv[7])),
+                                seed=GENERATOR_SEED)
+        else:
+            print("""imagenet is manual download only,
+                  please have it downloaded and extracted
+                  in datasets/manual""")
+
+            to.model_test_batch("./datasets", int(sys.argv[1]),
+                                int(sys.argv[2]),
+                                sys.argv[3:7], download=False,
+                                seed=GENERATOR_SEED)
     else:
         print("""args - (1) resolution set resolution for image downscaling,
                     will  be in square format i.e. 225 means a 225x225 image
@@ -37,4 +48,5 @@ if __name__ == "__main__":
                     (7) - download models
                     (8) - seed for reproducibility purposes
                         set to zero for new seed
+                    (9) - train on imagenet data (will take long time)
                 """)
