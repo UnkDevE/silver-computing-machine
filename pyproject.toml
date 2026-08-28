@@ -16,7 +16,8 @@ dependencies = [
     "h5py", # downloading repos
     "gdown",
     "scalene",
-    "oct2py"
+    "oct2py",
+    "ffmpeg-python"
 ]
 
 
@@ -24,21 +25,25 @@ dependencies = [
 cpu=[
   "torch",
   "torchvision",
+  "torch-interpol",
 ]
 amd=[
   "torch",
   "torchvision",
   "triton-rocm",
-  "pytorch-triton-rocm"
+  "pytorch-triton-rocm",
+  "torch-interpol"
 ]
 nvidia=[
     "torch",
     "torchvision",
+    "torch-interpol",
 ]
 intel=[
     "torch",
     "torchvision",
-    "pytorch-triton-xpu"
+    "pytorch-triton-xpu",
+    "torch-interpol"
 ]
 
 [tool.uv]

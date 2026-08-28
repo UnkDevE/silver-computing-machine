@@ -41,6 +41,7 @@ import torch.nn.functional as F
 from src.model_extractor import BATCH_SIZE
 DL_WORKERS = 1
 
+torch.compiler.set_stance("force_eager")
 
 def seed_worker(worker_id):
     worker_seed = torch.initial_seed() % 2**32
@@ -267,4 +268,4 @@ def make_spline(sols):
     [spline, u] = make_splprep(lu_decomp[0].T, k=sum(interpol_shape) + 1)
 
     # don't use ins here as is jax array, please use numpy
-    return FastSplineEvaluator(spline.tck, sols[0])
+    return spline

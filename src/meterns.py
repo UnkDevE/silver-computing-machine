@@ -31,6 +31,8 @@ import numpy as np
 # https://onlinelibrary.wiley.com/doi/abs/10.1111/j.1467-8659.2008.01171.x
 SIGMA = 0.2
 
+DS_COUNT = 0
+
 
 def round_up_to_odd(f):
     return np.ceil(f) // 2 * 2 + 1
@@ -62,6 +64,26 @@ class HDRDummyTransform(Transform):
         return t_mask_samples
 
 
+def _tovid(imgs, name, w, h):
+    import ffmpeg
+    vid_p = (
+        ffmpeg
+        .input('pipe:', format='rawvideo', pix_fmt='rgb24', s='{}x{}'.
+               format(w, h))
+        .output(name+".mp4", pix_fmt='rgb24')
+        .overwrite_output()
+        .run_async(pipe_stdin=True)
+    )
+
+    for im in imgs:
+        img = im.numpy()
+        img = img.astype(np.uint8)
+        vid_p.stdin.write(img.tobytes())
+
+    vid_p.stdin.close()
+    vid_p.wait()
+
+
 class HDRMaskTransform(Transform):
     """Hdr resample the splined solved sample
 
@@ -71,8 +93,9 @@ class HDRMaskTransform(Transform):
 
     # QUALITY MEASURES
     def quality(self, img):
-        gray = img
+        gray = img.flip([i for i in range(0, len(img.size()))])
         if len(img.size()) >= 3:
+            print(gray.shape)
             gray = Grayscale(num_output_channels=3)(gray)
 
         # use calculate second order deriviatives (laplacian) by autograd
@@ -124,12 +147,14 @@ class HDRMaskTransform(Transform):
 
         return image
 
-    def __init__(self, spline):
+    def __init__(self, spline, save_vid=False, names=[]):
         self.spline = spline
+        self.save_vid = save_vid
+        self.names = names
         super().__init__()
 
     # no params needed
-    def transform(self, sample, _):
+    def __call__(self, sample):
         # WE HAVE TO USE NUMPY HERE SO THAT TORCH DOES NOT FORK JAX
         mask_samples = self.spline(sample)
         t_mask_samples = torch.tensor(mask_samples)
@@ -144,6 +169,11 @@ class HDRMaskTransform(Transform):
         # check model, reshape inputs
         mask = t_mask_samples.le(solved_samples)
         imgs = torch.where(mask, solved_samples, 0)
+
+        if self.save_vid:
+            _tovid(imgs, "{}_{}".format("".join(self.names),
+                                           DS_COUNT),
+                   imgs[0].shape[1], imgs[0].shape[2])
 
         # kernel has to be odd for guass to work
         hdr = self.meterns(imgs, next_odd_if_even(len(imgs.shape)))

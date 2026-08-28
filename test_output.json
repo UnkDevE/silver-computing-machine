@@ -382,3 +382,74 @@
         ]
     }
 ]
+{
+    "ran_with_parameters": [
+        "resnet50",
+        "IMAGENET1K_V1",
+        "CrossEntropyLoss",
+        "Adam"
+    ]
+}{
+    "ran_with_parameters": [
+        "resnet50",
+        "IMAGENET1K_V1",
+        "CrossEntropyLoss",
+        "Adam"
+    ]
+}{
+    "ran_with_parameters": [
+        "resnet50",
+        "IMAGENET1K_V1",
+        "CrossEntropyLoss",
+        "Adam"
+    ]
+}{
+    "ran_with_parameters": [
+        "resnet50",
+        "IMAGENET1K_V1",
+        "CrossEntropyLoss",
+        "Adam"
+    ]
+}[
+    {
+        "dataset": "Caltech101",
+        "ds_len": 8677,
+        "test_output": [
+            {
+                "eval": 4.129388188260671e-18,
+                "test": 4.144789400584159e-08,
+                "diff": 4.144789400584159e-08,
+                "testvsctrl": 0.00010796375863719732,
+                "randomseed": 6396368698720866871
+            }
+        ]
+    }
+]{
+    "ran_with_parameters": [
+        "resnet50",
+        "IMAGENET1K_V1",
+        "CrossEntropyLoss",
+        "Adam"
+    ]
+}{
+    "ran_with_parameters": [
+        "resnet50",
+        "IMAGENET1K_V1",
+        "CrossEntropyLoss",
+        "Adam"
+    ]
+}[
+    {
+        "dataset": "Caltech101",
+        "ds_len": 8677,
+        "test_output": [
+            {
+                "eval": 3.61000379774434e-17,
+                "test": 1.9109243112325203e-06,
+                "diff": 1.9109243112325203e-06,
+                "testvsctrl": 7.795163126100846e-11,
+                "randomseed": 5698866973572198346
+            }
+        ]
+    }
+]

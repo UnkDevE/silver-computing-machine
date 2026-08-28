@@ -21,8 +21,6 @@
    Torch dataset wrangler
 """
 
-import torch
-from torchvision.transforms import v2
 from torchvision import datasets
 
 import numpy as np
@@ -124,19 +122,14 @@ def download_data(dataset_root, res, download=True):
 
         if sig.parameters.get("download") is not None:
             try:
-                dataset = None
                 if "download" in args_ds:
-                    dataset = datasets.__dict__[ds_name](
+                    datasets.__dict__[ds_name](
                         dataset_root, download)
                 elif "download" in kwargs_ds:
-                    dataset = datasets.__dict__[ds_name](
+                    datasets.__dict__[ds_name](
                         dataset_root, download=download)
 
-                dataset.transform = v2.Compose([v2.ToImage(),
-                                                v2.ToDtype(torch.float32,
-                                                           scale=True),
-                                                v2.Resize([res, res])])
-                ds_list.append(dataset)
+                ds_list.append(datasets.__dict__[ds_name])
             except Exception as e:
                 print("dataset download did not work not appending...")
                 print("err: " + str(e))

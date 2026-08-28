@@ -115,32 +115,21 @@ def reset_model_weights(layer):
 
 
 def model_create_equation(model, names, dataset, in_shape, test_rounds,
-                          imagenet_ds=False):
+                          root='./datasets'):
     # check optional args
     # create prerequisites
+    base_transform = v2.Compose([v2.ToImage(),
+                                v2.ToDtype(torch.float32,
+                                           scale=True),
+                                v2.Resize([in_shape, in_shape]),
+                                v2.RGB()])
+
+    dataset_train = dataset(root)
     tests = []
     if model is not None:
         # works for IMAGENET MODEL ONLY
-        dataset.target_transform = tr.ClassLabelWrapper()
-        min_rgb_channels = 3
-        channels = len([len(d[0].size()) for d in dataset
-                        if len(d[0].size()) <= min_rgb_channels])
+        dataset_train.target_transform = tr.ClassLabelWrapper()
 
-        # if grayscale convert to rgb
-        if channels > 0:
-            print("GRAY")
-            # compute transform eagerly
-            if dataset.transform is not None:
-                dataset.transform = v2.Compose([dataset.transform,
-                                                v2.RGB()])
-            else:
-                dataset.transform = v2.RGB()
-
-        from torch.utils.data import random_split
-        [train_dataset, test_dataset] = random_split(dataset, [0.7, 0.3],
-                                                     generator=ca.GENERATOR)
-
-        train_dataset.dataset = copy(dataset)
         # calculate fft + shape
         layers = []
 
@@ -171,10 +160,14 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
         from src.training import make_spline
         bspline = make_spline(sols[-1])
         from src.meterns import HDRMaskTransform
-        train_dataset.transforms = v2.Compose([
-                train_dataset.dataset.transforms,
-                HDRMaskTransform(bspline)
+        new_transforms = v2.Compose([
+                base_transform,
+                HDRMaskTransform(bspline, save_vid=True, names=names)
                 ])
+
+        dataset_exp = dataset('datasets/',
+                              transform=new_transforms,
+                              target_transform=tr.ClassLabelWrapper)
 
         for i in range(test_rounds):
             # should we wipe the model every i in TRAIN_SIZE or leave it?
@@ -191,7 +184,7 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
 
             test_model = tr.interpolate_model_train(
                 test_model,
-                train_dataset, i,
+                dataset_exp, i,
                 names)
 
             # and testing
@@ -202,7 +195,7 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
 
             # onehots labels
             from torch.utils.data import DataLoader
-            test_loader = DataLoader(test_dataset, batch_size=me.BATCH_SIZE)
+            test_loader = DataLoader(dataset_train, batch_size=me.BATCH_SIZE)
 
             # safety code so no training happens
             model.eval()
@@ -277,12 +270,13 @@ def model_test_batch(root, res, rounds, names, download=True, seed=0):
         print("DATASET {} of {} KEYINTERRUPT TO SKIP".format(i, len(datasets)))
         try:
             print("USING {} DATASET, LEN {}".format(ds.__class__.__name__,
-                                                    len(ds)))
+                                                    len(ds(root))))
             model = get_model(names[0], weights=names[1])
             model.to(ca.TORCH_DEVICE)
             model.eval()
             test = None
-            out = model_create_equation(model, names, ds, res, rounds)
+            out = model_create_equation(model, names, ds, res, rounds,
+                                        root=root)
             test = {
                 'dataset': ds.__class__.__name__,
                 'ds_len': len(ds),
