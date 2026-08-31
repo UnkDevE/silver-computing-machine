@@ -172,7 +172,7 @@ class HDRMaskTransform(Transform):
 
         if self.save_vid:
             _tovid(imgs, "{}_{}".format("".join(self.names),
-                                           DS_COUNT),
+                                        DS_COUNT),
                    imgs[0].shape[1], imgs[0].shape[2])
 
         # kernel has to be odd for guass to work

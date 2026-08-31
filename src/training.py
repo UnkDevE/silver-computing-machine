@@ -29,6 +29,7 @@ import torch
 # torch for tensor LU
 from torch.utils.data import DataLoader
 import torch.linalg as t_linalg
+import scipy.linalg as linalg
 
 import jax.scipy.linalg as j_linalg
 import jax.numpy as jnp
@@ -231,19 +232,35 @@ def product(xs):
 
 
 # have spline evaluation drop in
-class FastSplineEvaluator:
+class GPUSplineEvaluator:
     # convert lot to torch tensor
-    def __init__(self, tck, out_size):
+    def __init__(self, spline, out_shape):
+        tck = spline.tck
+        self.spline = spline
         self.tck = [torch.Tensor(x) for x in tck]
         self.coeffs = self.tck[1]
         self.knots = self.tck[0]
-        self.degree = self.tck[0]
-        self.target_size = torch.Tensor(out_size)
+        self.degree = self.tck[2]
+        self.target_size = torch.Tensor(out_shape)
 
     @torch.compile()
-    def __call__(self, points):
-        uout = self.knots @ self.coeffs @ points
-        return F.interpolate(uout, self.target_size)
+    def pointmatrix(self, x):
+        buckets = torch.bucketize(x, self.knots, right=True)
+        # needs to start as 1 for monoid
+        idx = np.arange(sum(x.shape), start=1) * buckets.flatten()
+        idx = idx - 1  # broadcasting should take away 1 from all elements
+        flat_coeffs = self.coeffs.flatten()
+        merge_points = flat_coeffs[idx]
+        return np.reshape(merge_points, x.shape)
+
+    @torch.compile()
+    def __call__(self, x):
+        ts = [x.pow(n) for n in range(0, self.degree)]
+        tms = [(1-x).pow(n) for n in range(0, self.degree)]
+        Pt = (ts * tms) * self.pointmatrix(x)
+        bcoeffs = linalg.pascal_tri(self.degree, kind="upper")[0]
+        parital_bspline = bcoeffs * Pt
+        return torch.sum(parital_bspline)
 
 
 def make_spline(sols):
@@ -268,4 +285,4 @@ def make_spline(sols):
     [spline, u] = make_splprep(lu_decomp[0].T, k=sum(interpol_shape) + 1)
 
     # don't use ins here as is jax array, please use numpy
-    return spline
+    return GPUSplineEvaluator(spline, interpol_shape)
