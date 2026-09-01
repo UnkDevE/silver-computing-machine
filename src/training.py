@@ -194,7 +194,6 @@ class ImagenetLabelWrapper(ClassLabelWrapper):
 
 
 def collate_fn(batch):
-    print(batch)
     return default_collate(batch)
 
 

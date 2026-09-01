@@ -162,7 +162,7 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
         from src.meterns import HDRMaskTransform
         new_transforms = v2.Compose([
                 *base_transform,
-                HDRMaskTransform(bspline, save_vid=True, names=names)
+                HDRMaskTransform(bspline, save_vid=False, names=names)
                 ])
 
         dataset_exp = dataset('datasets/',
@@ -189,9 +189,9 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
 
             # and testing
             test = tester(test_model, shapes, sheaf, outward, sort_avg)
-            plot_test(control, test, shapes[-1],
-                      "{name}-out-epoch-{i}.png".format(name="".join(names),
-                                                        i=i))
+            # plot_test(control, test, shapes[-1],
+            #           "{name}-out-epoch-{i}.png".format(name="".join(names),
+            #                                            i=i))
 
             # onehots labels
             from torch.utils.data import DataLoader
