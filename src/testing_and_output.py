@@ -124,7 +124,7 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
                                 v2.Resize([in_shape, in_shape]),
                                 v2.RGB()]
 
-    dataset_train = dataset(root)
+    dataset_train = dataset(root, transform=base_transform)
     tests = []
     if model is not None:
         # works for IMAGENET MODEL ONLY
