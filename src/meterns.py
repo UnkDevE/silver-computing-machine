@@ -22,7 +22,6 @@
 """
 import torch
 import torch.nn.functional as F
-
 from torchvision.transforms.v2 import Grayscale, GaussianBlur, Transform
 
 import numpy as np
@@ -72,7 +71,7 @@ def _tovid(imgs, name, w, h):
                format(w, h))
         .output(name+".mp4", pix_fmt='rgb24')
         .overwrite_output()
-        .run_async(pipe_stdin=True)
+        .run_async(pipe_stdin=True, quiet=True)
     )
 
     for im in imgs:
@@ -93,16 +92,15 @@ class HDRMaskTransform(Transform):
 
     # QUALITY MEASURES
     def quality(self, img):
-        gray = img.flip([i for i in range(0, len(img.size()))])
-        if len(img.size()) >= 3:
-            print(gray.shape)
+        gray = img.detach().clone()
+        if len(img.size()) <= 3:
             gray = Grayscale(num_output_channels=3)(gray)
 
         # use calculate second order deriviatives (laplacian) by autograd
         contrast = sum(list(torch.gradient(sum(list(torch.gradient(gray))))))
         saturation = torch.std(img)
         # exposure algorithm is how close exp is to 0.5 in Guass curve
-        exposure = torch.sqrt((torch.log(img)) * 2 * (SIGMA ** 2)) + 0.5
+        exposure = torch.exp(-((img - 0.5).pow(2) / 2 * (SIGMA ** 2)))
 
         return contrast * saturation * exposure
 
@@ -118,21 +116,14 @@ class HDRMaskTransform(Transform):
         return laplaces
 
     def meterns(self, imgs, dims):
-        # torch tensor needs to be flipped because it is flipped somewhere
-        # this causes transforms to raise an error that there are too many
-        # values to unpack this isn't true
-        ar_size = list(imgs.size()[1:])
-        ar_size.reverse()
-        imgs = imgs.reshape([imgs.size()[0], *ar_size])
-
         Guass = GaussianBlur(kernel_size=dims, sigma=(SIGMA, 0.5))
-        qs = [F.normalize(self.quality(img)) for img in imgs]
+        qs = [self.quality(img) for img in imgs]
 
         # compute blurs and laplace pyramid
         blurs = [Guass(qs)]
         for _ in range(dims - 1):
             blurs.append(Guass(blurs[-1]))
-        blurs = [x for xs in blurs for x in xs]
+        blurs = [F.normalize(x) for xs in blurs for x in xs]
 
         laplaces = self.laplace_pyramid(imgs, dims, Guass)
 
@@ -141,11 +132,12 @@ class HDRMaskTransform(Transform):
                     blur) in list(zip(laplaces, blurs))]
         partials.reverse()
 
-        image = None
-        for i in range(len(partials), 1):
-            image = partials[i] + partials[i - 1]
+        image = torch.empty_like(partials[0])
+        for i in range(1, len(partials)):
+            n = len(partials) - i
+            image += partials[n] + partials[n - 1]
 
-        return image
+        return F.normalize(image.sum(0))
 
     def __init__(self, spline, save_vid=False, names=[]):
         self.spline = spline
@@ -154,10 +146,10 @@ class HDRMaskTransform(Transform):
         super().__init__()
 
     # no params needed
-    def __call__(self, sample):
+    def transform(self, sample, _):
         # WE HAVE TO USE NUMPY HERE SO THAT TORCH DOES NOT FORK JAX
         mask_samples = self.spline(sample)
-        t_mask_samples = torch.tensor(mask_samples)
+        t_mask_samples = mask_samples.detach().clone()
 
         rep_shape = product(mask_samples.shape[:(
             len(mask_samples.shape) - len(sample.size()))])

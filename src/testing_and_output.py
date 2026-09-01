@@ -115,14 +115,14 @@ def reset_model_weights(layer):
 
 
 def model_create_equation(model, names, dataset, in_shape, test_rounds,
-                          root='./datasets'):
+                          root='./datasets', imagenet_ds=False):
     # check optional args
     # create prerequisites
-    base_transform = v2.Compose([v2.ToImage(),
+    base_transform = [v2.ToImage(),
                                 v2.ToDtype(torch.float32,
                                            scale=True),
                                 v2.Resize([in_shape, in_shape]),
-                                v2.RGB()])
+                                v2.RGB()]
 
     dataset_train = dataset(root)
     tests = []
@@ -161,13 +161,13 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
         bspline = make_spline(sols[-1])
         from src.meterns import HDRMaskTransform
         new_transforms = v2.Compose([
-                base_transform,
+                *base_transform,
                 HDRMaskTransform(bspline, save_vid=True, names=names)
                 ])
 
         dataset_exp = dataset('datasets/',
                               transform=new_transforms,
-                              target_transform=tr.ClassLabelWrapper)
+                              target_transform=tr.ClassLabelWrapper())
 
         for i in range(test_rounds):
             # should we wipe the model every i in TRAIN_SIZE or leave it?

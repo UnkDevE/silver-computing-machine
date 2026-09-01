@@ -29,6 +29,8 @@ import torch
 # torch for tensor LU
 from torch.utils.data import DataLoader
 import torch.linalg as t_linalg
+from torch.utils.data import random_split, default_collate
+
 import scipy.linalg as linalg
 
 import jax.scipy.linalg as j_linalg
@@ -37,12 +39,11 @@ import jax.numpy as jnp
 import numpy as np
 
 import src.cech_algorithm as ca
-import torch.nn.functional as F
-
 from src.model_extractor import BATCH_SIZE
-DL_WORKERS = 1
+DL_WORKERS = 8
 
 torch.compiler.set_stance("force_eager")
+
 
 def seed_worker(worker_id):
     worker_seed = torch.initial_seed() % 2**32
@@ -193,16 +194,14 @@ class ImagenetLabelWrapper(ClassLabelWrapper):
 
 
 def collate_fn(batch):
-    pairs = [(b[0], b[-1]) for b in batch if len(b) > 1]
-    return [torch.stack(t) for t in list(zip(*pairs))]
+    print(batch)
+    return default_collate(batch)
 
 
 # PYTORCH CODE ONLY
 def interpolate_model_train(model, train, step, names):
     print("STEP {}".format(step))
     # setup for training loop
-    # works for IMAGENET ONLY
-    from torch.utils.data import random_split
     # random split for training
     [train_s, test_s] = random_split(train, [0.7, 0.3], generator=ca.GENERATOR)
 
@@ -225,6 +224,8 @@ def interpolate_model_train(model, train, step, names):
 
 @torch.compile
 def product(xs):
+    if xs == []:
+        return xs
     y = xs[0]
     for x in xs[1:]:
         y *= x
@@ -245,22 +246,28 @@ class GPUSplineEvaluator:
 
     @torch.compile()
     def pointmatrix(self, x):
-        buckets = torch.bucketize(x, self.knots, right=True)
-        # needs to start as 1 for monoid
-        idx = np.arange(sum(x.shape), start=1) * buckets.flatten()
-        idx = idx - 1  # broadcasting should take away 1 from all elements
-        flat_coeffs = self.coeffs.flatten()
-        merge_points = flat_coeffs[idx]
-        return np.reshape(merge_points, x.shape)
+        buckets = torch.bucketize(x.contiguous(), self.knots, right=True)
+        coeffs_in_bins = self.coeffs.reshape(len(buckets), -1)
+        for itr, b in enumerate(buckets):
+            b = coeffs_in_bins[itr, b]
+
+        return buckets
 
     @torch.compile()
     def __call__(self, x):
-        ts = [x.pow(n) for n in range(0, self.degree)]
-        tms = [(1-x).pow(n) for n in range(0, self.degree)]
+        ts = torch.tensor(np.array(
+            [x.pow(n) for n in range(0, len(self.degree))]))
+        tms = torch.tensor(np.array(
+            [(1-x).pow(n) for n in range(0, len(self.degree))]))
         Pt = (ts * tms) * self.pointmatrix(x)
-        bcoeffs = linalg.pascal_tri(self.degree, kind="upper")[0]
-        parital_bspline = bcoeffs * Pt
-        return torch.sum(parital_bspline)
+        bcoeffs = torch.tensor(linalg.pascal(len(self.degree),
+                                             kind="upper").T[-1])
+
+        partial_bspline = torch.empty_like(Pt)
+        for i, mat in enumerate(Pt):
+            partial_bspline[i] = bcoeffs[i] * mat
+
+        return partial_bspline
 
 
 def make_spline(sols):
