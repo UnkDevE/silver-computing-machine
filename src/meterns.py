@@ -154,4 +154,6 @@ class HDRMaskTransform(Transform):
         # kernel has to be odd for guass to work
         hdr = self.meterns(imgs, next_odd_if_even(len(imgs.shape)))
         # no need for exposure times
+        isnan = torch.any(torch.isnan(hdr))
+        print("HDR NaN: {}".format(isnan))
         return hdr

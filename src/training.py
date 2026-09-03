@@ -83,7 +83,14 @@ def epoch(model, epochs, names, train, test):
             opt.zero_grad()
 
             # Make predictions for this batch
+            isnan = torch.any(torch.isnan(inputs))
+            print("IN NaN: {}".format(isnan))
+            if isnan:
+                breakpoint()
+
             outputs = model(inputs)
+            isnan = torch.any(torch.isnan(outputs))
+            print("OUT NaN: {}".format(isnan))
 
             # Compute the loss and its gradients
             loss = loss_fn(outputs, labels)
@@ -264,10 +271,12 @@ class GPUSplineEvaluator(Transform):
         bcoeffs = torch.tensor(linalg.pascal(len(self.degree),
                                              kind="upper").T[-1])
 
-        partial_bspline = torch.empty_like(Pt)
+        partial_bspline = torch.zeros_like(Pt)
         for i, mat in enumerate(Pt):
             partial_bspline[i] = bcoeffs[i] * mat
 
+        isnan = torch.any(torch.isnan(partial_bspline))
+        print("bspline NaN: {}".format(isnan))
         return partial_bspline
 
 
