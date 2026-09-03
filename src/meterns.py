@@ -98,11 +98,6 @@ class HDRMaskTransform(Transform):
         # exposure algorithm is how close exp is to 0.5 in Guass curve
         exposure = torch.exp(-((img - 0.5) / (SIGMA ** 2)))
 
-        isnan = torch.any(torch.isnan(exposure))
-        if isnan:
-            print("exposure NaN: {}".format(isnan))
-            breakpoint()
-
         return contrast * saturation * exposure
 
     def laplace_pyramid(self, imgs, dims, Guass):

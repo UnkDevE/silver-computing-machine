@@ -41,7 +41,7 @@ import numpy as np
 
 import src.cech_algorithm as ca
 from src.model_extractor import BATCH_SIZE
-DL_WORKERS = 0
+DL_WORKERS = 4
 
 torch.compiler.set_stance("force_eager")
 
@@ -273,10 +273,6 @@ class GPUSplineEvaluator(Transform):
         for i, mat in enumerate(Pt):
             partial_bspline[i] = bcoeffs[i] * mat
 
-        isnan = torch.any(torch.isnan(partial_bspline))
-        if isnan:
-            breakpoint()
-            print("bspline NaN: {}".format(isnan))
         return partial_bspline
 
 
