@@ -119,16 +119,16 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
     # check optional args
     # create prerequisites
     base_transform = [v2.ToImage(),
-                                v2.ToDtype(torch.float32,
-                                           scale=True),
-                                v2.Resize([in_shape, in_shape]),
-                                v2.RGB()]
+                      v2.ToDtype(torch.float32,
+                                 scale=True),
+                      v2.Resize([in_shape, in_shape]),
+                      v2.RGB()]
 
-    dataset_train = dataset(root, transform=base_transform)
+    dataset_train = dataset(root, transform=v2.Compose(base_transform),
+                            target_transform=tr.ClassLabelWrapper())
     tests = []
     if model is not None:
         # works for IMAGENET MODEL ONLY
-        dataset_train.target_transform = tr.ClassLabelWrapper()
 
         # calculate fft + shape
         layers = []
@@ -195,7 +195,7 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
 
             # onehots labels
             from torch.utils.data import DataLoader
-            test_loader = DataLoader(dataset_train, batch_size=me.BATCH_SIZE)
+            test_loader = DataLoader(dataset_train, generator=ca.GENERATOR)
 
             # safety code so no training happens
             model.eval()
@@ -204,7 +204,7 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
             if not imagenet_ds:
                 print("TESTING...")
                 accs = []
-                for [data, actual] in test_loader:
+                for data, actual in test_loader:
                     data = data.float().to(ca.TORCH_DEVICE, non_blocking=True)
                     actual = actual.float().cpu().numpy()
 
@@ -279,7 +279,7 @@ def model_test_batch(root, res, rounds, names, download=True, seed=0):
                                         root=root)
             test = {
                 'dataset': ds.__class__.__name__,
-                'ds_len': len(ds),
+                'ds_len': len(ds(root)),
                 'test_output': out}
             reset_model_weights(model)
 
