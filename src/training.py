@@ -30,6 +30,7 @@ import torch
 from torch.utils.data import DataLoader
 import torch.linalg as t_linalg
 from torch.utils.data import random_split, default_collate
+from torchvision.transforms.v2 import Transform
 
 import scipy.linalg as linalg
 
@@ -232,7 +233,7 @@ def product(xs):
 
 
 # have spline evaluation drop in
-class GPUSplineEvaluator:
+class GPUSplineEvaluator(Transform):
     # convert lot to torch tensor
     def __init__(self, spline, out_shape):
         tck = spline.tck
@@ -242,6 +243,7 @@ class GPUSplineEvaluator:
         self.knots = self.tck[0]
         self.degree = self.tck[2]
         self.target_size = torch.Tensor(out_shape)
+        super().__init__()
 
     @torch.compile()
     def pointmatrix(self, x):
@@ -253,7 +255,7 @@ class GPUSplineEvaluator:
         return buckets
 
     @torch.compile()
-    def __call__(self, x):
+    def transform(self, x, _):
         ts = torch.tensor(np.array(
             [x.pow(n) for n in range(0, len(self.degree))]))
         tms = torch.tensor(np.array(

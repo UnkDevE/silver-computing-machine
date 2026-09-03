@@ -158,11 +158,12 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
         # control = tester(model, shapes, sheaf, outward, sort_avg)
 
         from src.training import make_spline
-        bspline = make_spline(sols[-1])
+        bspline_evaluator = make_spline(sols[-1])
         from src.meterns import HDRMaskTransform
         new_transforms = v2.Compose([
                 *base_transform,
-                HDRMaskTransform(bspline, save_vid=False, names=names)
+                bspline_evaluator,
+                HDRMaskTransform(save_vid=False, names=names)
                 ])
 
         dataset_exp = dataset('datasets/',
@@ -210,7 +211,6 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
 
                     ctrl = model(data).cpu().detach().numpy()
                     test = test_model(data).cpu().detach().numpy()
-                    breakpoint()
 
                     # find mean over batch
                     ctrl_t = stats.ttest_ind(ctrl, actual)

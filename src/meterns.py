@@ -139,29 +139,13 @@ class HDRMaskTransform(Transform):
 
         return F.normalize(image.sum(0))
 
-    def __init__(self, spline, save_vid=False, names=[]):
-        self.spline = spline
+    def __init__(self, save_vid=False, names=[]):
         self.save_vid = save_vid
         self.names = names
         super().__init__()
 
     # no params needed
-    def transform(self, sample, _):
-        # WE HAVE TO USE NUMPY HERE SO THAT TORCH DOES NOT FORK JAX
-        mask_samples = self.spline(sample)
-        t_mask_samples = mask_samples.detach().clone()
-
-        rep_shape = product(mask_samples.shape[:(
-            len(mask_samples.shape) - len(sample.size()))])
-
-        solved_samples = torch.repeat_interleave(sample, rep_shape).reshape(
-                mask_samples.shape)
-
-        # we want in full colour but dunno how to do that
-        # check model, reshape inputs
-        mask = t_mask_samples.le(solved_samples)
-        imgs = torch.where(mask, solved_samples, 0)
-
+    def transform(self, imgs, _):
         if self.save_vid:
             _tovid(imgs, "{}_{}".format("".join(self.names),
                                         DS_COUNT),
