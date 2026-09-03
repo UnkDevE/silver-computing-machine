@@ -33,13 +33,9 @@ SIGMA = 0.2
 DS_COUNT = 0
 
 
-def round_up_to_odd(f):
-    return np.ceil(f) // 2 * 2 + 1
-
-
 def next_odd_if_even(x):
     if x % 2 == 0:
-        return round_up_to_odd(x)
+        return x + 1
     return x
 
 
@@ -102,6 +98,11 @@ class HDRMaskTransform(Transform):
         # exposure algorithm is how close exp is to 0.5 in Guass curve
         exposure = torch.exp(-((img - 0.5) / (SIGMA ** 2)))
 
+        isnan = torch.any(torch.isnan(exposure))
+        if isnan:
+            print("exposure NaN: {}".format(isnan))
+            breakpoint()
+
         return contrast * saturation * exposure
 
     def laplace_pyramid(self, imgs, dims, Guass):
@@ -132,7 +133,7 @@ class HDRMaskTransform(Transform):
                     blur) in list(zip(laplaces, blurs))]
         partials.reverse()
 
-        image = torch.empty_like(partials[0])
+        image = torch.zeros_like(partials[0])
         for i in range(1, len(partials)):
             n = len(partials) - i
             image += partials[n] * partials[n - 1]
@@ -155,5 +156,7 @@ class HDRMaskTransform(Transform):
         hdr = self.meterns(imgs, next_odd_if_even(len(imgs.shape)))
         # no need for exposure times
         isnan = torch.any(torch.isnan(hdr))
-        print("HDR NaN: {}".format(isnan))
+        if isnan:
+            print("HDR NaN: {}".format(isnan))
+            breakpoint()
         return hdr

@@ -41,7 +41,7 @@ import numpy as np
 
 import src.cech_algorithm as ca
 from src.model_extractor import BATCH_SIZE
-DL_WORKERS = 8
+DL_WORKERS = 0
 
 torch.compiler.set_stance("force_eager")
 
@@ -84,13 +84,11 @@ def epoch(model, epochs, names, train, test):
 
             # Make predictions for this batch
             isnan = torch.any(torch.isnan(inputs))
-            print("IN NaN: {}".format(isnan))
             if isnan:
+                print("IN NaN {}".format(isnan))
                 breakpoint()
 
             outputs = model(inputs)
-            isnan = torch.any(torch.isnan(outputs))
-            print("OUT NaN: {}".format(isnan))
 
             # Compute the loss and its gradients
             loss = loss_fn(outputs, labels)
@@ -215,11 +213,11 @@ def interpolate_model_train(model, train, step, names):
     # collate fn None raises errors so we use default collate to force
     # collation
     train_s = DataLoader(train_s,
-                         pin_memory=True, persistent_workers=True,
+                         pin_memory=True,  # persistent_workers=True,
                          batch_size=BATCH_SIZE, num_workers=DL_WORKERS,
                          worker_init_fn=seed_worker, collate_fn=collate_fn)
 
-    test_s = DataLoader(test_s, pin_memory=True, persistent_workers=True,
+    test_s = DataLoader(test_s, pin_memory=True,  # persistent_workers=True,
                         batch_size=BATCH_SIZE, num_workers=DL_WORKERS,
                         worker_init_fn=seed_worker, collate_fn=collate_fn)
 
@@ -276,7 +274,9 @@ class GPUSplineEvaluator(Transform):
             partial_bspline[i] = bcoeffs[i] * mat
 
         isnan = torch.any(torch.isnan(partial_bspline))
-        print("bspline NaN: {}".format(isnan))
+        if isnan:
+            breakpoint()
+            print("bspline NaN: {}".format(isnan))
         return partial_bspline
 
 
