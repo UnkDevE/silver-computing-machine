@@ -100,8 +100,7 @@ class HDRMaskTransform(Transform):
         contrast = sum(list(torch.gradient(sum(list(torch.gradient(gray))))))
         saturation = torch.std(img)
         # exposure algorithm is how close exp is to 0.5 in Guass curve
-        exposure = torch.exp(-((img - 0.5).pow(2) / 2 * (SIGMA ** 2)))
-        print(exposure)
+        exposure = torch.exp(-((img - 0.5) / (SIGMA ** 2)))
 
         return contrast * saturation * exposure
 

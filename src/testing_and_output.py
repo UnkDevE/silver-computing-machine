@@ -155,7 +155,7 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
             shapes,
             layers)
 
-        control = tester(model, shapes, sheaf, outward, sort_avg)
+        # control = tester(model, shapes, sheaf, outward, sort_avg)
 
         from src.training import make_spline
         bspline = make_spline(sols[-1])
@@ -210,6 +210,7 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
 
                     ctrl = model(data).cpu().detach().numpy()
                     test = test_model(data).cpu().detach().numpy()
+                    breakpoint()
 
                     # find mean over batch
                     ctrl_t = stats.ttest_ind(ctrl, actual)
