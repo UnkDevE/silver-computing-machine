@@ -76,8 +76,8 @@ def epoch(model, epochs, names, train, test):
                 continue
 
             inputs, labels = data
-            inputs = inputs.to(ca.TORCH_DEVICE)  # , non_blocking=True)
-            labels = labels.to(ca.TORCH_DEVICE)  # , non_blocking=True)
+            inputs = inputs.to(ca.TORCH_DEVICE, non_blocking=True)
+            labels = labels.to(ca.TORCH_DEVICE, non_blocking=True)
 
             # Zero your gradients for every batch!
             opt.zero_grad()
@@ -122,8 +122,8 @@ def epoch(model, epochs, names, train, test):
         with torch.no_grad():
             for i, vdata in enumerate(test):
                 vinputs, vlabels = vdata
-                vinputs = vinputs.to(ca.TORCH_DEVICE)  # , non_blocking=True)
-                vlabels = vlabels.to(ca.TORCH_DEVICE)  # , non_blocking=True)
+                vinputs = vinputs.to(ca.TORCH_DEVICE, non_blocking=True)
+                vlabels = vlabels.to(ca.TORCH_DEVICE, non_blocking=True)
                 voutputs = model(vinputs)
                 vloss = loss_fn(voutputs, vlabels)
                 running_vloss += vloss

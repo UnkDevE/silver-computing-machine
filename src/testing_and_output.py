@@ -171,7 +171,10 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
                               target_transform=tr.ClassLabelWrapper())
 
         for i in range(test_rounds):
-            # should we wipe the model every i in TRAIN_SIZE or leave it?
+            # should we wipe the model every i in TRAIN_SIZE or le
+            # plot_test(control, test, shapes[-1],
+            #           "{name}-out-epoch-{i}.png".format(name="".join(names),
+            #                                            i=i))
 
             from copy import deepcopy
             # MUST use deepcopy here otherwise model is used twice
@@ -183,17 +186,11 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
 
             # find variance in solved systems
 
-            test_model = tr.interpolate_model_train(
-                test_model,
-                dataset_exp, i,
-                names)
+            test_model = tr.interpolate_model_train(test_model, dataset_exp, i,
+                                                    names)
 
-            # and testing
-            test = tester(test_model, shapes, sheaf, outward, sort_avg)
-            # plot_test(control, test, shapes[-1],
-            #           "{name}-out-epoch-{i}.png".format(name="".join(names),
-            #                                            i=i))
-
+                # and testing
+            # test = tester(test_model, shapes, sheaf, outward, sort_avg)
             # onehots labels
             from torch.utils.data import DataLoader
             test_loader = DataLoader(dataset_train, generator=ca.GENERATOR)
@@ -213,6 +210,7 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
                     test = test_model(data).cpu().detach().numpy()
 
                     # find mean over batch
+                    breakpoint()
                     ctrl_t = stats.ttest_ind(ctrl, actual)
                     test_t = stats.ttest_ind(test, actual)
                     diff = stats.ttest_ind(test, ctrl)
