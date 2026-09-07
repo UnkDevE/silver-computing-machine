@@ -21,16 +21,15 @@
     pytorch module - HDR preprocessing of spline outputs
 """
 import torch
-import torch.nn.functional as F
-from torchvision.transforms.v2 import Grayscale, GaussianBlur, Transform
+from torchvision.transforms.v2 import Grayscale, GaussianBlur
+from torchvision.transforms.v2 import Transform, Normalize
+
 
 import numpy as np
 
 # defined from merge meterns paper
 # https://onlinelibrary.wiley.com/doi/abs/10.1111/j.1467-8659.2008.01171.x
 SIGMA = 0.2
-
-DS_COUNT = 0
 
 
 def next_odd_if_even(x):
@@ -79,6 +78,13 @@ def _tovid(imgs, name, w, h):
     vid_p.wait()
 
 
+def normalize(imgs):
+    mean = imgs.mean(dim=0)
+    std = imgs.std(dim=0)
+    breakpoint()
+    return Normalize(mean, std)(imgs)
+
+
 class HDRMaskTransform(Transform):
     """Hdr resample the splined solved sample
 
@@ -119,7 +125,7 @@ class HDRMaskTransform(Transform):
         blurs = [Guass(qs)]
         for _ in range(dims - 1):
             blurs.append(Guass(blurs[-1]))
-        blurs = [F.normalize(x) for xs in blurs for x in xs]
+        blurs = [normalize(x) for xs in blurs for x in xs]
 
         laplaces = self.laplace_pyramid(imgs, dims, Guass)
 
@@ -133,19 +139,21 @@ class HDRMaskTransform(Transform):
             n = len(partials) - i
             image += partials[n] * partials[n - 1]
 
-        return F.normalize(image.sum(0))
+        return normalize(image.sum(0))
 
     def __init__(self, save_vid=False, names=[]):
         self.save_vid = save_vid
         self.names = names
+        self.ds_count = 0
         super().__init__()
 
     # no params needed
     def transform(self, imgs, _):
         if self.save_vid:
             _tovid(imgs, "{}_{}".format("".join(self.names),
-                                        DS_COUNT),
+                                        self.ds_count),
                    imgs[0].shape[1], imgs[0].shape[2])
+            self.ds_count += 1
 
         # kernel has to be odd for guass to work
         hdr = self.meterns(imgs, next_odd_if_even(len(imgs.shape)))

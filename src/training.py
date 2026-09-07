@@ -41,7 +41,7 @@ import numpy as np
 
 import src.cech_algorithm as ca
 from src.model_extractor import BATCH_SIZE
-DL_WORKERS = 4
+DL_WORKERS = 0
 
 torch.compiler.set_stance("force_eager")
 
@@ -246,18 +246,27 @@ class GPUSplineEvaluator(Transform):
         self.tck = [torch.Tensor(x) for x in tck]
         self.coeffs = self.tck[1]
         self.knots = self.tck[0]
+        self.uniq_knots = self.knots.unique()
         self.degree = self.tck[2]
         self.target_size = torch.Tensor(out_shape)
         super().__init__()
 
     @torch.compile()
     def pointmatrix(self, x):
-        buckets = torch.bucketize(x.contiguous(), self.knots, right=True)
-        coeffs_in_bins = self.coeffs.reshape(len(buckets), -1)
-        for itr, b in enumerate(buckets):
-            b = coeffs_in_bins[itr, b]
+        buckets = torch.bucketize(x.contiguous(), self.uniq_knots,
+                                  right=True)
+        coeffs_in_bins = self.coeffs.reshape(len(self.uniq_knots), -1)
 
-        return buckets
+        x_cpy = x.detach().clone()
+        bucket_x = torch.stack([buckets, x_cpy], dim=1)
+        masks = torch.stack([torch.where(bucket_x[0] == i, 1, 0)
+                             for i in range(buckets.max())])
+
+        breakpoint()
+        for i, mask in enumerate(masks):
+            x_cpy[mask] = x_cpy[mask] @ coeffs_in_bins[i]
+
+        return x_cpy
 
     @torch.compile()
     def transform(self, x, _):
@@ -269,10 +278,8 @@ class GPUSplineEvaluator(Transform):
         bcoeffs = torch.tensor(linalg.pascal(len(self.degree),
                                              kind="upper").T[-1])
 
-        partial_bspline = torch.zeros_like(Pt)
-        for i, mat in enumerate(Pt):
-            partial_bspline[i] = bcoeffs[i] * mat
-
+        partial_bspline = bcoeffs * Pt
+        breakpoint()
         return partial_bspline
 
 

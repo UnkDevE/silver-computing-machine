@@ -30,7 +30,6 @@ import src.cech_algorithm as ca
 import src.model_extractor as me
 import src.training as tr
 
-from copy import copy
 import os
 import json
 
