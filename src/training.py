@@ -23,7 +23,7 @@
 
 import random
 import importlib
-
+import math
 import torch
 
 # torch for tensor LU
@@ -31,6 +31,7 @@ from torch.utils.data import DataLoader
 import torch.linalg as t_linalg
 from torch.utils.data import random_split, default_collate
 from torchvision.transforms.v2 import Transform
+import torch.nn.functional as F
 
 import scipy.linalg as linalg
 
@@ -257,16 +258,26 @@ class GPUSplineEvaluator(Transform):
                                   right=True)
         coeffs_in_bins = self.coeffs.reshape(len(self.uniq_knots), -1)
 
-        x_cpy = x.detach().clone()
-        bucket_x = torch.stack([buckets, x_cpy], dim=1)
-        masks = torch.stack([torch.where(bucket_x[0] == i, 1, 0)
-                             for i in range(buckets.max())])
+        n_buckets = len(self.uniq_knots)
+        masks = torch.stack([torch.where(buckets == i, 1., 0.)
+                             for i in range(buckets.max())]).to(torch.float32)
 
+        sq_shape = int(math.sqrt(product(coeffs_in_bins.shape[1:])))
+        coeffs_kernel = coeffs_in_bins.reshape((n_buckets,
+                                                sq_shape, sq_shape))
+        kernels_w_channels = coeffs_kernel.unsqueeze(1).expand(
+                [n_buckets, 3, sq_shape, sq_shape])
+
+        kernels = kernels_w_channels.unsqueeze(2)
+        nstride = int(math.sqrt(x.shape[1] / sq_shape))
         breakpoint()
-        for i, mask in enumerate(masks):
-            x_cpy[mask] = x_cpy[mask] @ coeffs_in_bins[i]
+        for i in range(n_buckets):
+            masks[i] = F.conv_transpose2d(x * masks[i],
+                                          kernels[i],
+                                          stride=[nstride], padding=[0],
+                                          dilation=[0], output_padding=[0])
 
-        return x_cpy
+        return masks.sum(dim=0)
 
     @torch.compile()
     def transform(self, x, _):
