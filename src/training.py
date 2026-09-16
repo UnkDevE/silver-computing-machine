@@ -245,38 +245,49 @@ class GPUSplineEvaluator(Transform):
         tck = spline.tck
         self.spline = spline
         self.tck = [torch.Tensor(x) for x in tck]
-        self.coeffs = self.tck[1]
         self.knots = self.tck[0]
+        self.coeffs = self.tck[1]
         self.uniq_knots = self.knots.unique()
         self.degree = self.tck[2]
         self.target_size = torch.Tensor(out_shape)
         super().__init__()
 
+    # assumes roll_shape is square
     @torch.compile()
-    def pointmatrix(self, x):
+    def roll_matrix(self, roll_shape):
+        # gives upper triangular remove diag in lower
+        grid = [(roll_shape[0] - i) * np.eye(*roll_shape, k=i, dtype=np.int32)
+
+                for i in range(roll_shape[0])]
+        # output symmetric grid
+        return torch.Tensor(sum(grid).T + sum(grid[1:]))
+
+    @torch.compile()
+    def pointmatrix(self, x, partial_spline):
         buckets = torch.bucketize(x.contiguous(), self.uniq_knots,
                                   right=True)
-        coeffs_in_bins = self.coeffs.reshape(len(self.uniq_knots), -1)
+        coeffs_in_bins = partial_spline.reshape(len(self.uniq_knots), -1)
 
         n_buckets = len(self.uniq_knots)
         masks = torch.stack([torch.where(buckets == i, 1., 0.)
-                             for i in range(buckets.max())]).to(torch.float32)
+                             for i in range(buckets.max())])
 
         sq_shape = int(math.sqrt(product(coeffs_in_bins.shape[1:])))
-        coeffs_kernel = coeffs_in_bins.reshape((n_buckets,
-                                                sq_shape, sq_shape))
-        kernels_w_channels = coeffs_kernel.unsqueeze(1).expand(
-                [n_buckets, 3, sq_shape, sq_shape])
+        kernels = coeffs_in_bins.reshape((n_buckets,
+                                          sq_shape, sq_shape))
 
-        kernels = kernels_w_channels.unsqueeze(2)
-        nstride = int(math.sqrt(x.shape[1] / sq_shape))
-        breakpoint()
-        for i in range(n_buckets):
-            masks[i] = F.conv_transpose2d(x * masks[i],
-                                          kernels[i],
-                                          stride=[nstride], padding=[0],
-                                          dilation=[0], output_padding=[0])
+        # roll kernels
+        ker_roll = self.roll_matrix(kernels.shape[1:])
+        ker_mask = torch.stack([torch.where(ker_roll == i, 1., 0.)
+                                for i in range(sq_shape)]).to(torch.int32)
 
+        divsor = x.shape[2] // sq_shape
+
+        # using torch repeat to tile
+        for nm in range(0, buckets.max()):
+            k_ma = sum([kernels[nm][ker_mask[n]] for n in range(sq_shape)])
+            masks[nm] = sum([masks[nm] * x * n.repeat([divsor, divsor])
+                             for n in k_ma])
         return masks.sum(dim=0)
 
     @torch.compile()
@@ -285,13 +296,16 @@ class GPUSplineEvaluator(Transform):
             [x.pow(n) for n in range(0, len(self.degree))]))
         tms = torch.tensor(np.array(
             [(1-x).pow(n) for n in range(0, len(self.degree))]))
-        Pt = (ts * tms) * self.pointmatrix(x)
         bcoeffs = torch.tensor(linalg.pascal(len(self.degree),
                                              kind="upper").T[-1])
 
-        partial_bspline = bcoeffs * Pt
-        breakpoint()
-        return partial_bspline
+        # torch transposing batched tensors is deprecated which causes this
+        # pita
+        Pt = ts * tms
+        Pt = torch.permute(Pt, [i for i in range(Pt.ndim - 1, -1, -1)])
+        Pt *= bcoeffs
+        Pt = torch.permute(Pt, [i for i in range(Pt.ndim - 1, -1, -1)])
+        return self.pointmatrix(x, self.coeffs) * Pt
 
 
 def make_spline(sols):

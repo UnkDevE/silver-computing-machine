@@ -20,4 +20,7 @@ then
 else 
     let im=0
 fi
-JAX_PLATFORM_NAME='cpu' PYTHON_GIL=0 HIP_VISIBLE_DEVICES=0 python main.py 225 1 resnet50 IMAGENET1K_V1 CrossEntropyLoss Adam $dl $seed $im 
+export ONEDNN_VERBOSE=all
+export SCIPY_ARRAY_API=1
+export HIP_VISIBLE_DEVICES=0 
+JAX_PLATFORM_NAME='cpu' PYTHON_GIL=0 python main.py 225 1 resnet50 IMAGENET1K_V1 CrossEntropyLoss Adam $dl $seed $im 

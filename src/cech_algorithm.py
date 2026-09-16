@@ -107,8 +107,8 @@ def _chec_diff(x, start):
 
     shape = jnp.roll(jnp.reshape(mesh, x.shape), start, axis=1)
     reshape = jnp.reshape(jnp.arange(product(shape.shape)), shape.shape)
-    pow = jnp.float_power(-jnp.ones_like(x), reshape)
-    s = x * pow
+    powe = jnp.float_power(-jnp.ones_like(x), reshape)
+    s = x * powe
     # memory leak here
     sums = jnp.cumsum(s)
     return jnp.reshape(sums, x.shape)

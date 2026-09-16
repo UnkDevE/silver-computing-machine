@@ -24,12 +24,18 @@ import torch
 from torchvision.transforms.v2 import Grayscale, GaussianBlur
 from torchvision.transforms.v2 import Transform, Normalize
 
+import torch.nn.functional as F
 
 import numpy as np
 
 # defined from merge meterns paper
 # https://onlinelibrary.wiley.com/doi/abs/10.1111/j.1467-8659.2008.01171.x
 SIGMA = 0.2
+
+LAP_KER = torch.Tensor(
+           [[0, 1, 0],
+            [1, -4, 1],
+            [0, 1, 0]])
 
 
 def next_odd_if_even(x):
@@ -81,8 +87,13 @@ def _tovid(imgs, name, w, h):
 def normalize(imgs):
     mean = imgs.mean(dim=0)
     std = imgs.std(dim=0)
-    breakpoint()
     return Normalize(mean, std)(imgs)
+
+
+def laplacian(img):
+    lap = torch.stack([LAP_KER for i in range(img.shape[0])])
+    return F.conv2d(img, lap, stride=(1, 1), padding=(1, 1), dialation=(1, 1),
+                    groups=1)
 
 
 class HDRMaskTransform(Transform):
@@ -99,11 +110,12 @@ class HDRMaskTransform(Transform):
             gray = Grayscale(num_output_channels=3)(gray)
 
         # use calculate second order deriviatives (laplacian) by autograd
-        contrast = sum(list(torch.gradient(sum(list(torch.gradient(gray))))))
+        contrast = laplacian(gray)
         saturation = torch.std(img)
         # exposure algorithm is how close exp is to 0.5 in Guass curve
         exposure = torch.exp(-((img - 0.5) / (SIGMA ** 2)))
 
+        breakpoint()
         return contrast * saturation * exposure
 
     def laplace_pyramid(self, imgs, dims, Guass):
