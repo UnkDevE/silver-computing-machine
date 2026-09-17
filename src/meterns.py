@@ -84,16 +84,16 @@ def _tovid(imgs, name, w, h):
     vid_p.wait()
 
 
+# 1 Channel normalization
 def normalize(imgs):
-    mean = imgs.mean(dim=0)
-    std = imgs.std(dim=0)
-    return Normalize(mean, std)(imgs)
+    return (imgs - imgs.mean(dim=0)) / imgs.std()
 
 
 def laplacian(img):
-    lap = torch.stack([LAP_KER for i in range(img.shape[0])])
-    return F.conv2d(img, lap, stride=(1, 1), padding=(1, 1), dialation=(1, 1),
-                    groups=1)
+    lap = torch.stack([LAP_KER for i in range(img.shape[0])]).unsqueeze(1)
+    return F.conv_transpose2d(img.squeeze(), lap, stride=[1],
+                              padding=[1],
+                              groups=1, dilation=[1], output_padding=[0])
 
 
 class HDRMaskTransform(Transform):
@@ -113,9 +113,7 @@ class HDRMaskTransform(Transform):
         contrast = laplacian(gray)
         saturation = torch.std(img)
         # exposure algorithm is how close exp is to 0.5 in Guass curve
-        exposure = torch.exp(-((img - 0.5) / (SIGMA ** 2)))
-
-        breakpoint()
+        exposure = torch.exp(-((img - 0.5) ** 2 / (SIGMA ** 2)))
         return contrast * saturation * exposure
 
     def laplace_pyramid(self, imgs, dims, Guass):
