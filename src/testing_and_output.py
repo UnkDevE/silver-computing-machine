@@ -200,54 +200,39 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
 
             if not imagenet_ds:
                 print("TESTING...")
-                accs = []
+                actual, ctrl, test = []
                 for data, actual in test_loader:
                     data = data.float().to(ca.TORCH_DEVICE, non_blocking=True)
-                    actual = actual.float().cpu().numpy()
+                    actual.append(actual.float().cpu().numpy())
+                    ctrl.append(model(data).cpu().detach().numpy())
+                    test.append(test_model(data).cpu().detach().numpy())
 
-                    ctrl = model(data).cpu().detach().numpy()
-                    test = test_model(data).cpu().detach().numpy()
-
-                    # find mean over batch
-                    ctrl_t = stats.ttest_rel(ctrl, actual)
-                    test_t = stats.ttest_rel(test, actual)
-                    diff = stats.ttest_rel(test, ctrl)
-
-                    accs.append([ctrl_t.pvalue, test_t.pvalue, diff.pvalue])
-
-                accs = np.array(accs).T
-                m1 = stats.combine_pvalues(accs[0]).pvalue
-                m2 = stats.combine_pvalues(accs[1]).pvalue
-                diff = 0.
-                if m1 is list and m2 is list:
-                    diff = m1[0] - m2[0]
-                elif m1 is list:
-                    diff = m1[0] - m2
-                elif m2 is list:
-                    diff = m1 - m2[0]
-                else:
-                    diff = m1 - m2
-
-                tvsctrl = stats.combine_pvalues(accs[2]).pvalue
+                # find mean over batch
+                ctrl_t = stats.ttest_rel(ctrl, actual)
+                test_t = stats.ttest_rel(test, actual)
+                tvsctrl = stats.ttest_rel(test, ctrl)
+                diff = ctrl_t.statistic - test_t.statistic
 
                 print("EVAL VS ACT PVALUE:")
-                print(m1)
+                print(ctrl_t)
                 print("TEST VS ACT PVALUE:")
-                print(m2)
+                print(test_t)
                 print("PVALUE DIFF:")
                 print(diff)
                 print("TTEST TEST VS CTRL DIFF:")
                 print(tvsctrl)
 
-                [m1, m2, diff, tvsctrl] = [np.ptp(x) if len(x) > 1
-                                           else x for
-                                           x in [m1, m2, diff, tvsctrl]
-                                           ]
-
-                tests.append({'eval': m1.tolist(),
-                              'test': m2.tolist(),
-                              'diff': diff.tolist(),
-                              'testvsctrl': tvsctrl.tolist(),
+                tests.append({'eval': str(ctrl_t.statistic),
+                              'eval_pval': str(ctrl_t.pvalue),
+                              'test': str(test_t.statistic),
+                              'test_pval': str(test_t.pvalue),
+                              'test_confidence': 'LO: {} HI: {}'.format(
+                                  *test_t.confidendce_interval()),
+                              'et_diff': str(diff),
+                              'testvsctrl': str(tvsctrl.statistic),
+                              'testvsctrl_pvalue': str(tvsctrl.pvalue),
+                              'tvsctrl_confidence': 'LO: {} HI: {}'.format(
+                                  *tvsctrl.confidendce_interval()),
                               'randomseed': int(torch.initial_seed())
                               })
             # clean up
@@ -320,13 +305,15 @@ def imagenet_test_batch(root, res, rounds, names, seed=0):
     out = model_create_equation(model, names, imagenet_train_ds, res, rounds)
 
     test = {
-        'dataset': imagenet_train_ds.__class__.__name__,
+        'dataset': type(imagenet_train_ds).__name__,
         'ds_len': len(imagenet_train_ds),
         'test_output': out
     }
     tests.append(test)
 
     with open("imagenet_test_output.json", "a+") as f:
-        json.dump({'ran_with_parameters': names}, f, indent=4)
+        dct = {'ran_with_parameters': names}
         if tests != []:
-            json.dump(tests, f, indent=4)
+            json.dump([dct, tests], f, indent=4)
+        else:
+            json.dump(dct, f, indent=4)
