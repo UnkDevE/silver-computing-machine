@@ -209,17 +209,9 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
                     test = test_model(data).cpu().detach().numpy()
 
                     # find mean over batch
-                    ctrl_t = 1.0
-                    if ctrl != actual:
-                        ctrl_t = stats.ttest_ind(ctrl, actual)
-
-                    test_t = 1.0
-                    if test != actual:
-                        test_t = stats.ttest_ind(test, actual)
-
-                    diff = 1.0
-                    if test != ctrl:
-                        diff = stats.ttest_ind(test, ctrl)
+                    ctrl_t = stats.ttest_rel(ctrl, actual)
+                    test_t = stats.ttest_rel(test, actual)
+                    diff = stats.ttest_rel(test, ctrl)
 
                     accs.append([ctrl_t.pvalue, test_t.pvalue, diff.pvalue])
 
