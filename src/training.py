@@ -31,7 +31,6 @@ from torch.utils.data import DataLoader
 import torch.linalg as t_linalg
 from torch.utils.data import random_split, default_collate
 from torchvision.transforms.v2 import Transform
-import torch.nn.functional as F
 
 import scipy.linalg as linalg
 
@@ -43,8 +42,6 @@ import numpy as np
 import src.cech_algorithm as ca
 from src.model_extractor import BATCH_SIZE
 DL_WORKERS = 0
-
-torch.compiler.set_stance("force_eager")
 
 
 def seed_worker(worker_id):

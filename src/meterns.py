@@ -22,7 +22,7 @@
 """
 import torch
 from torchvision.transforms.v2 import Grayscale, GaussianBlur
-from torchvision.transforms.v2 import Transform, Normalize
+from torchvision.transforms.v2 import Transform
 
 import torch.nn.functional as F
 
