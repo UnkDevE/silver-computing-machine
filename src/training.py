@@ -254,20 +254,22 @@ class GPUSplineEvaluator(Transform):
     def roll_matrix(self, roll_shape):
         # gives upper triangular remove diag in lower
         grid = [(roll_shape[0] - i) * np.eye(*roll_shape, k=i, dtype=np.int32)
-
                 for i in range(roll_shape[0])]
+
         # output symmetric grid
         return torch.Tensor(sum(grid).T + sum(grid[1:]))
 
     @torch.compile()
     def pointmatrix(self, x, partial_spline):
-        buckets = torch.bucketize(x.contiguous(), self.uniq_knots,
-                                  right=True)
+        xs = x.detach().clone()
+        buckets = torch.bucketize(xs.contiguous(),
+                                  self.uniq_knots,
+                                  right=True).detach().clone()
         coeffs_in_bins = partial_spline.reshape(len(self.uniq_knots), -1)
 
         n_buckets = len(self.uniq_knots)
         masks = torch.stack([torch.where(buckets == i, 1., 0.)
-                             for i in range(buckets.max())])
+                             for i in range(n_buckets - 1)])
 
         sq_shape = int(math.sqrt(product(coeffs_in_bins.shape[1:])))
         kernels = coeffs_in_bins.reshape((n_buckets,
@@ -278,21 +280,23 @@ class GPUSplineEvaluator(Transform):
         ker_mask = torch.stack([torch.where(ker_roll == i, 1., 0.)
                                 for i in range(sq_shape)]).to(torch.int32)
 
-        divsor = x.shape[2] // sq_shape
+        divsor = xs.shape[2] // sq_shape
 
         # using torch repeat to tile
-        for nm in range(0, buckets.max()):
+        out = []
+        for nm in range(n_buckets - 1):
             k_ma = sum([kernels[nm][ker_mask[n]] for n in range(sq_shape)])
-            masks[nm] = sum([masks[nm] * x * n.repeat([divsor, divsor])
-                             for n in k_ma])
-        return masks.sum(dim=0)
+            out.append(sum([masks[nm] * xs * n.repeat([divsor, divsor])
+                           for n in k_ma]))
+        return sum(out)
 
     @torch.compile()
     def transform(self, x, _):
+        xs = x.detach().clone()
         ts = torch.tensor(np.array(
-            [x.pow(n) for n in range(0, len(self.degree))]))
+            [xs.pow(n) for n in range(0, len(self.degree))]))
         tms = torch.tensor(np.array(
-            [(1-x).pow(n) for n in range(0, len(self.degree))]))
+            [(1-xs).pow(n) for n in range(0, len(self.degree))]))
         bcoeffs = torch.tensor(linalg.pascal(len(self.degree),
                                              kind="upper").T[-1])
 
@@ -302,7 +306,8 @@ class GPUSplineEvaluator(Transform):
         Pt = torch.permute(Pt, [i for i in range(Pt.ndim - 1, -1, -1)])
         Pt *= bcoeffs
         Pt = torch.permute(Pt, [i for i in range(Pt.ndim - 1, -1, -1)])
-        return self.pointmatrix(x, self.coeffs) * Pt
+        out = self.pointmatrix(xs, self.coeffs) * Pt
+        return out
 
 
 def make_spline(sols):
@@ -318,11 +323,11 @@ def make_spline(sols):
     # solve for the new std_basis
     new_basis = j_linalg.inv(std_basis)
     # create LU Decomposition towards new_basis
-    jaxt = ca.jax_to_tensor(jnp.outer(new_basis, ins))
+    jaxt = ca.jax_to_tensor(jnp.outer(new_basis, ins)).detach().clone()
 
     lu_decomp = t_linalg.lu_factor_ex(jaxt)
     # interpolate
-    lu_decomp = [decomp.detach().numpy() for decomp in lu_decomp]
+    lu_decomp = [decomp.detach().clone().numpy() for decomp in lu_decomp]
     # spline shaping err
     [spline, u] = make_splprep(lu_decomp[0].T, k=sum(interpol_shape) + 1)
 
