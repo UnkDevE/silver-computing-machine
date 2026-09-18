@@ -23,4 +23,5 @@ fi
 # export ONEDNN_VERBOSE=all # for debugging convolutions
 export SCIPY_ARRAY_API=1
 export HIP_VISIBLE_DEVICES=0 
+export TORCH_LOGS=not_implemented
 JAX_PLATFORM_NAME='cpu' PYTHON_GIL=0 python main.py 225 1 resnet50 IMAGENET1K_V1 CrossEntropyLoss Adam $dl $seed $im 

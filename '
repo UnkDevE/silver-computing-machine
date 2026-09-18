@@ -30,7 +30,7 @@ import torch
 from torch.utils.data import DataLoader
 import torch.linalg as t_linalg
 from torch.utils.data import random_split, default_collate
-from torchvision.transforms.v2 import Transform, Compose
+from torchvision.transforms.v2 import Transform
 
 import scipy.linalg as linalg
 
@@ -41,7 +41,6 @@ import numpy as np
 
 import src.cech_algorithm as ca
 from src.model_extractor import BATCH_SIZE
-from src.meterns import HDRMaskTransform
 DL_WORKERS = 0
 
 
@@ -56,13 +55,11 @@ def get_class(module, classname):
     return getattr(importlib.import_module(module), classname)
 
 
-def epoch(model, spline, epochs, names, train, test):
+def epoch(model, epochs, names, train, test):
     # init writer loss and opt
     loss_fn = get_class("torch.nn", names[2])()
     opt = get_class("torch.optim", names[3])(model.parameters())
     best_vloss = 1_000_000.
-    experiment = Compose([spline,
-                          HDRMaskTransform(save_vid=False)])
 
     def train_one_epoch(epoch_num):
         running_loss = 0.
@@ -79,12 +76,16 @@ def epoch(model, spline, epochs, names, train, test):
             inputs, labels = data
             inputs = inputs.to(ca.TORCH_DEVICE, non_blocking=True)
             labels = labels.to(ca.TORCH_DEVICE, non_blocking=True)
-            inputs = experiment(inputs)
 
             # Zero your gradients for every batch!
             opt.zero_grad()
 
             # Make predictions for this batch
+            isnan = torch.any(torch.isnan(inputs))
+            if isnan:
+                print("IN NaN {}".format(isnan))
+                breakpoint()
+
             outputs = model(inputs)
 
             # Compute the loss and its gradients
@@ -201,9 +202,7 @@ def collate_fn(batch):
 
 
 # PYTORCH CODE ONLY
-def interpolate_model_train(model, train, step, bspline, names,
-                            save_vid=False):
-
+def interpolate_model_train(model, train, step, names):
     print("STEP {}".format(step))
     # setup for training loop
     # random split for training
@@ -221,7 +220,7 @@ def interpolate_model_train(model, train, step, bspline, names,
                         worker_init_fn=seed_worker, collate_fn=collate_fn)
 
     # training loop
-    epoch(model, make_spline(bspline), 5, names, train_s, test_s)
+    epoch(model, 5, names, train_s, test_s)
 
     return model
 
@@ -295,15 +294,17 @@ class GPUSplineEvaluator(Transform):
 
     @torch.compile()
     def transform(self, x, _):
-        ts = torch.stack([x.pow(n) for n in range(0, len(self.degree))])
-        tms = torch.stack([(1-x).pow(n) for n in range(0, len(self.degree))])
+        xs = x.to(ca.TORCH_DEVICE)
+        ts = torch.stack([xs.pow(n) for n in range(0, len(self.degree))])
+        tms = torch.stack([(1-xs).pow(n) for n in range(0, len(self.degree))])
         # torch transposing batched tensors is deprecated which causes this
         # pita
         Pt = ts * tms
         Pt = torch.permute(Pt, [i for i in range(Pt.ndim - 1, -1, -1)])
         Pt = Pt * self.bcoeffs
         Pt = torch.permute(Pt, [i for i in range(Pt.ndim - 1, -1, -1)])
-        out = self.pointmatrix(x, self.coeffs) * Pt
+        out = self.pointmatrix(xs, self.coeffs) * Pt
+        out = out.to('cpu')
         return out
 
 

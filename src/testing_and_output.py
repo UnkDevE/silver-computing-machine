@@ -156,19 +156,6 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
 
         # control = tester(model, shapes, sheaf, outward, sort_avg)
 
-        from src.training import make_spline
-        bspline_evaluator = make_spline(sols[-1])
-        from src.meterns import HDRMaskTransform
-        new_transforms = v2.Compose([
-                *base_transform,
-                bspline_evaluator,
-                HDRMaskTransform(save_vid=False, names=names)
-                ])
-
-        dataset_exp = dataset('datasets/',
-                              transform=new_transforms,
-                              target_transform=tr.ClassLabelWrapper())
-
         for i in range(test_rounds):
             # should we wipe the model every i in TRAIN_SIZE or le
             # plot_test(control, test, shapes[-1],
@@ -185,10 +172,12 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
 
             # find variance in solved systems
 
-            test_model = tr.interpolate_model_train(test_model, dataset_exp, i,
-                                                    names)
+            test_model = tr.interpolate_model_train(test_model,
+                                                    dataset_train,
+                                                    i, sols[-1],
+                                                    names, save_vid=False)
 
-                # and testing
+            # and testing
             # test = tester(test_model, shapes, sheaf, outward, sort_avg)
             # onehots labels
             from torch.utils.data import DataLoader

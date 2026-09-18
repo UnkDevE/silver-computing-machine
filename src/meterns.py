@@ -28,6 +28,8 @@ import torch.nn.functional as F
 
 import numpy as np
 
+import src.cech_algorithm as ca
+
 # defined from merge meterns paper
 # https://onlinelibrary.wiley.com/doi/abs/10.1111/j.1467-8659.2008.01171.x
 SIGMA = 0.2
@@ -90,7 +92,8 @@ def normalize(imgs):
 
 
 def laplacian(img):
-    lap = torch.stack([LAP_KER for i in range(img.shape[0])]).unsqueeze(1)
+    lap = torch.stack([LAP_KER for i in range(img.shape[0])]).unsqueeze(1).to(
+            ca.TORCH_DEVICE)
     return F.conv_transpose2d(img.squeeze(), lap, stride=[1],
                               padding=[1],
                               groups=1, dilation=[1], output_padding=[0])
