@@ -182,7 +182,7 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
             # onehots labels
             from torch.utils.data import DataLoader
             test_loader = DataLoader(dataset_train, generator=ca.GENERATOR,
-                                     batch_size=512)
+                                     batch_size=64)
 
             # safety code so no training happens
             model.eval()
@@ -190,7 +190,7 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
 
             if not imagenet_ds:
                 print("TESTING...")
-                ctrl, test, diff, cvst = [[], [], [], []]
+                ctrls, tests, diffs, cvst = [[], [], [], []]
                 for data, actual in test_loader:
                     data = data.float().to(ca.TORCH_DEVICE, non_blocking=True)
                     # find mean over batch
@@ -204,14 +204,14 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
                     tvsctrl = stats.ttest_rel(test, ctrl)
                     diff = ctrl_t.statistic - test_t.statistic
 
-                    ctrl.append(ctrl_t)
-                    test.append(test_t)
-                    diff.append(diff)
-                    cvst.append(ctrl_t)
+                    ctrls.append(ctrl_t)
+                    tests.append(test_t)
+                    diffs.append(diff)
+                    cvst.append(tvsctrl)
 
-                ctrl_t = stats.combine_pvalues(ctrl)
-                test_t = stats.combine_pvalues(test)
-                diff = stats.combine_pvalues(diff)
+                ctrl_t = stats.combine_pvalues(ctrls)
+                test_t = stats.combine_pvalues(tests)
+                diff = stats.combine_pvalues(diffs)
                 tvsctrl = stats.combine_pvalues(cvst)
                 print("EVAL VS ACT PVALUE:")
                 print(ctrl_t)
