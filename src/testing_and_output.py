@@ -189,18 +189,25 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
 
             if not imagenet_ds:
                 print("TESTING...")
-                actual, ctrl, test = []
+                ctrl, test, diff, cvst = [[], [], [], []]
                 for data, actual in test_loader:
                     data = data.float().to(ca.TORCH_DEVICE, non_blocking=True)
-                    actual.append(actual.float().cpu().numpy())
-                    ctrl.append(model(data).cpu().detach().numpy())
-                    test.append(test_model(data).cpu().detach().numpy())
-
                 # find mean over batch
-                ctrl_t = stats.ttest_rel(ctrl, actual)
-                test_t = stats.ttest_rel(test, actual)
-                tvsctrl = stats.ttest_rel(test, ctrl)
-                diff = ctrl_t.statistic - test_t.statistic
+
+                    actual = actual.float().cpu().numpy()
+                    ctrl = model(data).cpu().detach().numpy()
+                    test = test_model(data).cpu().detach().numpy()
+
+                    ctrl_t = stats.ttest_rel(ctrl, actual)
+                    test_t = stats.ttest_rel(test, actual)
+                    tvsctrl = stats.ttest_rel(test, ctrl)
+                    diff = ctrl_t.statistic - test_t.statistic
+
+                    actuals.append(ctrl_t)
+                    test.append(test_t)
+                    diff.append(diff)
+
+
 
                 print("EVAL VS ACT PVALUE:")
                 print(ctrl_t)
@@ -216,7 +223,7 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
                               'test': str(test_t.statistic),
                               'test_pval': str(test_t.pvalue),
                               'test_confidence': 'LO: {} HI: {}'.format(
-                                  *test_t.confidendce_interval()),
+                                  *test_t.confidence_interval()),
                               'et_diff': str(diff),
                               'testvsctrl': str(tvsctrl.statistic),
                               'testvsctrl_pvalue': str(tvsctrl.pvalue),
@@ -238,10 +245,10 @@ def model_test_batch(root, res, rounds, names, download=True, seed=0):
     datasets = me.download_data(root, res, download=download)
     tests = []
 
-    for i, ds in enumerate(datasets):
+    for i, [ds_name, ds] in enumerate(datasets):
         print("DATASET {} of {} KEYINTERRUPT TO SKIP".format(i, len(datasets)))
         try:
-            print("USING {} DATASET, LEN {}".format(ds.__class__.__name__,
+            print("USING {} DATASET, LEN {}".format(ds_name,
                                                     len(ds(root))))
             model = get_model(names[0], weights=names[1])
             model.to(ca.TORCH_DEVICE)
@@ -250,7 +257,7 @@ def model_test_batch(root, res, rounds, names, download=True, seed=0):
             out = model_create_equation(model, names, ds, res, rounds,
                                         root=root)
             test = {
-                'dataset': ds.__class__.__name__,
+                'dataset': ds_name,
                 'ds_len': len(ds(root)),
                 'test_output': out}
             reset_model_weights(model)
@@ -294,7 +301,7 @@ def imagenet_test_batch(root, res, rounds, names, seed=0):
     out = model_create_equation(model, names, imagenet_train_ds, res, rounds)
 
     test = {
-        'dataset': type(imagenet_train_ds).__name__,
+        'dataset': "IMAGENET2012",
         'ds_len': len(imagenet_train_ds),
         'test_output': out
     }

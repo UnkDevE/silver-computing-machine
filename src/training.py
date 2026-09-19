@@ -254,7 +254,6 @@ class GPUSplineEvaluator(Transform):
         super().__init__()
 
     # assumes roll_shape is square
-    @torch.compile()
     def roll_matrix(self, roll_shape):
         # gives upper triangular remove diag in lower
         grid = [(roll_shape[0] - i) * np.eye(*roll_shape, k=i, dtype=np.int32)

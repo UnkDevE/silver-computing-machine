@@ -42,7 +42,7 @@ from matplotlib import pyplot as plt
 jax.config.update("jax_enable_x64", True)
 
 if torch.cuda.is_available():
-    device_str = 'cuda'
+    device_str = 'cuda:0'
 elif jax.default_backend() == 'cpu':
     pass
 else:

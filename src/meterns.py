@@ -21,7 +21,7 @@
     pytorch module - HDR preprocessing of spline outputs
 """
 import torch
-from torchvision.transforms.v2 import Grayscale, GaussianBlur
+from torchvision.transforms.v2 import GaussianBlur
 from torchvision.transforms.v2 import Transform
 
 import torch.nn.functional as F
@@ -92,11 +92,10 @@ def normalize(imgs):
 
 
 def laplacian(img):
-    lap = torch.stack([LAP_KER for i in range(img.shape[0])]).unsqueeze(1).to(
+    lap = torch.stack([LAP_KER for i in range(img.shape[1])]).unsqueeze(0).to(
             ca.TORCH_DEVICE)
-    return F.conv_transpose2d(img.squeeze(), lap, stride=[1],
-                              padding=[1],
-                              groups=1, dilation=[1], output_padding=[0])
+    return F.conv2d(img.squeeze(), lap, stride=(1), padding='same', groups=1,
+                    dilation=(1))
 
 
 class HDRMaskTransform(Transform):
@@ -108,12 +107,8 @@ class HDRMaskTransform(Transform):
 
     # QUALITY MEASURES
     def quality(self, img):
-        gray = img.detach().clone()
-        if len(img.size()) <= 3:
-            gray = Grayscale(num_output_channels=3)(gray)
-
         # use calculate second order deriviatives (laplacian) by autograd
-        contrast = laplacian(gray)
+        contrast = laplacian(img)
         saturation = torch.std(img)
         # exposure algorithm is how close exp is to 0.5 in Guass curve
         exposure = torch.exp(-((img - 0.5) ** 2 / (SIGMA ** 2)))

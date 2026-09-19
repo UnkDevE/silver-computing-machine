@@ -26,7 +26,7 @@ from torchvision import datasets
 import numpy as np
 
 # something sane here
-# 512 just over 24 GB of VRAM
+# 512 / DL_WORKERS just over 24 GB of VRAM
 BATCH_SIZE = 64
 
 
@@ -129,7 +129,7 @@ def download_data(dataset_root, res, download=True):
                     datasets.__dict__[ds_name](
                         dataset_root, download=download)
 
-                ds_list.append(datasets.__dict__[ds_name])
+                ds_list.append([ds_name, datasets.__dict__[ds_name]])
             except Exception as e:
                 print("dataset download did not work not appending...")
                 print("err: " + str(e))

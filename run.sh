@@ -14,7 +14,7 @@ echo "reproducable seed (set to 0 if new test)"
 read seed
 echo "train on imagenet dataset (Y only if you know what you're doing)"
 read imagenet
-if [$imagenet == "Y"]
+if [ $imagenet == "Y" ]
 then 
     let im=1 
 else 
@@ -24,4 +24,5 @@ fi
 export SCIPY_ARRAY_API=1
 export HIP_VISIBLE_DEVICES=0 
 export TORCH_LOGS=not_implemented
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 JAX_PLATFORM_NAME='cpu' PYTHON_GIL=0 python main.py 225 1 resnet50 IMAGENET1K_V1 CrossEntropyLoss Adam $dl $seed $im 
