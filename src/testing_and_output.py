@@ -181,7 +181,8 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
             # test = tester(test_model, shapes, sheaf, outward, sort_avg)
             # onehots labels
             from torch.utils.data import DataLoader
-            test_loader = DataLoader(dataset_train, generator=ca.GENERATOR)
+            test_loader = DataLoader(dataset_train, generator=ca.GENERATOR,
+                                     batch_size=512)
 
             # safety code so no training happens
             model.eval()
@@ -192,7 +193,7 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
                 ctrl, test, diff, cvst = [[], [], [], []]
                 for data, actual in test_loader:
                     data = data.float().to(ca.TORCH_DEVICE, non_blocking=True)
-                # find mean over batch
+                    # find mean over batch
 
                     actual = actual.float().cpu().numpy()
                     ctrl = model(data).cpu().detach().numpy()
@@ -203,12 +204,15 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
                     tvsctrl = stats.ttest_rel(test, ctrl)
                     diff = ctrl_t.statistic - test_t.statistic
 
-                    actuals.append(ctrl_t)
+                    ctrl.append(ctrl_t)
                     test.append(test_t)
                     diff.append(diff)
+                    cvst.append(ctrl_t)
 
-
-
+                ctrl_t = stats.combine_pvalues(ctrl)
+                test_t = stats.combine_pvalues(test)
+                diff = stats.combine_pvalues(diff)
+                tvsctrl = stats.combine_pvalues(cvst)
                 print("EVAL VS ACT PVALUE:")
                 print(ctrl_t)
                 print("TEST VS ACT PVALUE:")
