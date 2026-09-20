@@ -133,7 +133,7 @@ class HDRMaskTransform(Transform):
         blurs = [Guass(qs)]
         for _ in range(dims - 1):
             blurs.append(Guass(blurs[-1]))
-        blurs = [x for xs in blurs for x in xs]
+        blurs = [normalize(x) for xs in blurs for x in xs]
 
         laplaces = self.laplace_pyramid(imgs, dims, Guass)
 

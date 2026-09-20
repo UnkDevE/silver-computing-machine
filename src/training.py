@@ -44,7 +44,7 @@ from src.meterns import HDRMaskTransform
 
 # something sane here
 # 512 / DL_WORKERS just over 24 GB of VRAM
-BATCH_SIZE = 128
+BATCH_SIZE = 64
 DL_WORKERS = 4
 
 
