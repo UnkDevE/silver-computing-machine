@@ -200,9 +200,9 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
                     ctrl = model(data).cpu().detach().numpy()
                     test = test_model(data).cpu().detach().numpy()
 
-                    ctrl_t = stats.ttest_rel(ctrl, actual)
-                    test_t = stats.ttest_rel(test, actual)
-                    tvsctrl = stats.ttest_rel(test, ctrl)
+                    ctrl_t = stats.levene([ctrl, actual])
+                    test_t = stats.levene([test, actual])
+                    tvsctrl = stats.levene([test, ctrl])
                     diff = ctrl_t.statistic - test_t.statistic
 
                     ctrls.append(ctrl_t)
@@ -223,12 +223,12 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
                 print("TTEST TEST VS CTRL DIFF:")
                 print(tvsctrl)
 
-                tests.append({'eval': str(ctrl_t.statistic),
+                tests.append({'eval': str(list(ctrl_t.statistic)),
                               'eval_pval': str(ctrl_t.pvalue),
-                              'test': str(test_t.statistic),
+                              'test': str(list(test_t.statistic)),
                               'test_pval': str(test_t.pvalue),
                               'et_diff': str(diff),
-                              'testvsctrl': str(tvsctrl.statistic),
+                              'testvsctrl': str(list(tvsctrl.statistic)),
                               'testvsctrl_pvalue': str(tvsctrl.pvalue),
                               'randomseed': int(torch.initial_seed())
                               })
