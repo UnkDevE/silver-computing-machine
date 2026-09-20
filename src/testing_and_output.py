@@ -200,9 +200,9 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
                     ctrl = model(data).cpu().detach().numpy()
                     test = test_model(data).cpu().detach().numpy()
 
-                    ctrl_t = stats.levene(ctrl, actual)
-                    test_t = stats.levene(test, actual)
-                    tvsctrl = stats.levene(test, ctrl)
+                    ctrl_t = stats.fligner(ctrl, actual)
+                    test_t = stats.fligner(test, actual)
+                    tvsctrl = stats.fligner(test, ctrl)
                     diff = ctrl_t.statistic - test_t.statistic
 
                     ctrls.append(ctrl_t)
