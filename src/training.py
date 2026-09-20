@@ -40,9 +40,12 @@ import jax.numpy as jnp
 import numpy as np
 
 import src.cech_algorithm as ca
-from src.model_extractor import BATCH_SIZE
 from src.meterns import HDRMaskTransform
-DL_WORKERS = 0
+
+# something sane here
+# 512 / DL_WORKERS just over 24 GB of VRAM
+BATCH_SIZE = 128
+DL_WORKERS = 4
 
 
 def seed_worker(worker_id):

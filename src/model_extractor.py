@@ -25,10 +25,6 @@ from torchvision import datasets
 
 import numpy as np
 
-# something sane here
-# 512 / DL_WORKERS just over 24 GB of VRAM
-BATCH_SIZE = 64
-
 
 # looks up each activation from csv and then defines a function to it
 def activation_fn_lookup(activ_src, csv):

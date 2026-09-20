@@ -29,6 +29,7 @@ from scipy import stats
 import src.cech_algorithm as ca
 import src.model_extractor as me
 import src.training as tr
+from src.training import BATCH_SIZE
 
 import os
 import json
@@ -182,7 +183,7 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
             # onehots labels
             from torch.utils.data import DataLoader
             test_loader = DataLoader(dataset_train, generator=ca.GENERATOR,
-                                     batch_size=64)
+                                     batch_size=BATCH_SIZE)
 
             # safety code so no training happens
             model.eval()

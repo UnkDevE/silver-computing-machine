@@ -127,7 +127,7 @@ class HDRMaskTransform(Transform):
 
     def meterns(self, imgs, dims):
         Guass = GaussianBlur(kernel_size=dims, sigma=(SIGMA, 0.5))
-        qs = [self.quality(img) for img in imgs]
+        qs = [normalize(self.quality(img)) for img in imgs]
 
         # compute blurs and laplace pyramid
         blurs = [Guass(qs)]
