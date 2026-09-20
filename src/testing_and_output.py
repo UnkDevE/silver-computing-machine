@@ -227,13 +227,9 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
                               'eval_pval': str(ctrl_t.pvalue),
                               'test': str(test_t.statistic),
                               'test_pval': str(test_t.pvalue),
-                              'test_confidence': 'LO: {} HI: {}'.format(
-                                  *test_t.confidence_interval()),
                               'et_diff': str(diff),
                               'testvsctrl': str(tvsctrl.statistic),
                               'testvsctrl_pvalue': str(tvsctrl.pvalue),
-                              'tvsctrl_confidence': 'LO: {} HI: {}'.format(
-                                  *tvsctrl.confidendce_interval()),
                               'randomseed': int(torch.initial_seed())
                               })
             # clean up
