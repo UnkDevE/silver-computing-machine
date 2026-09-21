@@ -47,6 +47,8 @@ from src.meterns import HDRMaskTransform
 BATCH_SIZE = 64
 DL_WORKERS = 4
 
+torch.compiler.set_stance("force_eager")
+
 
 def seed_worker(worker_id):
     worker_seed = torch.initial_seed() % 2**32

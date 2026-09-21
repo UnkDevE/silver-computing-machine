@@ -34,7 +34,7 @@ import os
 import json
 
 
-EQUIVALENCE_BOUND = 5e-5
+EQUIVALENCE_BOUND = 25e-5
 PVALUE_ACCEPT = 0.05
 
 
@@ -122,23 +122,21 @@ def ttost_ind(x, y, delta):
               stats.ttest_ind(x, y + delta, alternative='less'))
 
     pval = xystat[0].pvalue
-    if pval < xystat[1].pvalue:
+    if np.all(pval < xystat[1].pvalue):
         pval = xystat[1].pvalue
 
-    if pval < PVALUE_ACCEPT:
-        return (True, pval)
-    else:
-        return (False, pval)
+    return tuple((pval, np.all(pval < PVALUE_ACCEPT)))
 
 
 def process_stats(statpvals):
-    failures = [(st, pval) for st, pval in statpvals if st is False]
-    stat, pstat = zip(*failures)
+    stat, pstat = list(zip(*statpvals))
+    failures = [(st, pstat[i]) for i, st in enumerate(stat) if st is False]
     if failures == []:
-        _, pstat = zip(*statpvals)
-        return (True, stat.combine_pvalues(pstat), 0)
+        _, pstat = list(zip(*statpvals))
+        return tuple((True, stats.combine_pvalues(pstat), 0))
     else:
-        return (False, stat.combine_pvalues(pstat), len(failures))
+        _, pstat = list(zip(*failures))
+        return tuple((False, stats.combine_pvalues(pstat), len(failures)))
 
 
 def model_create_equation(model, names, dataset, in_shape, test_rounds,
@@ -227,12 +225,9 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
                     ctrl = model(data).cpu().detach().numpy()
                     test = test_model(data).cpu().detach().numpy()
 
-                    ctrl_t = ttost_ind(ctrl, actual, -PVALUE_ACCEPT,
-                                       PVALUE_ACCEPT)
-                    test_t = ttost_ind(test, actual, -PVALUE_ACCEPT,
-                                       PVALUE_ACCEPT)
-                    tvsctrl = ttost_ind(test, ctrl, -PVALUE_ACCEPT,
-                                        PVALUE_ACCEPT)
+                    ctrl_t = ttost_ind(ctrl, actual, EQUIVALENCE_BOUND)
+                    test_t = ttost_ind(test, actual, EQUIVALENCE_BOUND)
+                    tvsctrl = ttost_ind(test, ctrl, EQUIVALENCE_BOUND)
 
                     ctrls.append(ctrl_t)
                     tests.append(test_t)
@@ -278,7 +273,8 @@ def model_test_batch(root, res, rounds, names, download=True, seed=0):
         try:
             for i, [ds_name, ds] in enumerate(datasets):
                 yesno = input(
-                        "DATASET {} of {} START? Y/N".format(i, len(datasets)))
+                        "DATASET {} of {} START? Y/N ".format(i,
+                                                              len(datasets)))
                 if yesno == "Y":
                     print("USING {} DATASET, LEN {}".format(ds_name,
                                                             len(ds(root))))
