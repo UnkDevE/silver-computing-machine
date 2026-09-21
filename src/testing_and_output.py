@@ -25,7 +25,6 @@ from torchvision.models import get_model
 from torchvision.transforms import v2
 
 from scipy import stats
-
 import src.cech_algorithm as ca
 import src.model_extractor as me
 import src.training as tr
@@ -33,6 +32,10 @@ from src.training import BATCH_SIZE
 
 import os
 import json
+
+
+EQUIVALENCE_BOUND = 5e-5
+PVALUE_ACCEPT = 0.05
 
 
 def bucketize(prelims):
@@ -114,6 +117,30 @@ def reset_model_weights(layer):
                 reset_model_weights(child)
 
 
+def ttost_ind(x, y, delta):
+    xystat = (stats.ttest_ind(x, y - delta, alternative='greater'),
+              stats.ttest_ind(x, y + delta, alternative='less'))
+
+    pval = xystat[0].pvalue
+    if pval < xystat[1].pvalue:
+        pval = xystat[1].pvalue
+
+    if pval < PVALUE_ACCEPT:
+        return (True, pval)
+    else:
+        return (False, pval)
+
+
+def process_stats(statpvals):
+    failures = [(st, pval) for st, pval in statpvals if st is False]
+    stat, pstat = zip(*failures)
+    if failures == []:
+        _, pstat = zip(*statpvals)
+        return (True, stat.combine_pvalues(pstat), 0)
+    else:
+        return (False, stat.combine_pvalues(pstat), len(failures))
+
+
 def model_create_equation(model, names, dataset, in_shape, test_rounds,
                           root='./datasets', imagenet_ds=False):
     # check optional args
@@ -191,7 +218,7 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
 
             if not imagenet_ds:
                 print("TESTING...")
-                ctrls, tests, diffs, cvst = [[], [], [], []]
+                ctrls, tests, cvst = [[], [], []]
                 for data, actual in test_loader:
                     data = data.float().to(ca.TORCH_DEVICE, non_blocking=True)
                     # find mean over batch
@@ -200,36 +227,36 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
                     ctrl = model(data).cpu().detach().numpy()
                     test = test_model(data).cpu().detach().numpy()
 
-                    ctrl_t = stats.fligner(ctrl, actual)
-                    test_t = stats.fligner(test, actual)
-                    tvsctrl = stats.fligner(test, ctrl)
-                    diff = ctrl_t.statistic - test_t.statistic
+                    ctrl_t = ttost_ind(ctrl, actual, -PVALUE_ACCEPT,
+                                       PVALUE_ACCEPT)
+                    test_t = ttost_ind(test, actual, -PVALUE_ACCEPT,
+                                       PVALUE_ACCEPT)
+                    tvsctrl = ttost_ind(test, ctrl, -PVALUE_ACCEPT,
+                                        PVALUE_ACCEPT)
 
                     ctrls.append(ctrl_t)
                     tests.append(test_t)
-                    diffs.append(diff)
                     cvst.append(tvsctrl)
 
-                ctrl_t = stats.combine_pvalues(ctrls)
-                test_t = stats.combine_pvalues(tests)
-                diff = stats.combine_pvalues(diffs)
-                tvsctrl = stats.combine_pvalues(cvst)
-                print("EVAL VS ACT PVALUE:")
-                print(ctrl_t)
-                print("TEST VS ACT PVALUE:")
-                print(test_t)
-                print("PVALUE DIFF:")
-                print(diff)
-                print("TTEST TEST VS CTRL DIFF:")
-                print(tvsctrl)
+                ctrl_t = process_stats(ctrls)
+                test_t = process_stats(tests)
+                tvsctrl = process_stats(tvsctrl)
+                print("EVAL VS ACT EQUIV:")
+                print('SUCCESS : {}, PVAL: {}, FAILS: {}'.format(*ctrl_t))
+                print("TEST VS ACT EQUIV:")
+                print('SUCCESS : {}, PVAL: {}, FAILS: {}'.format(*test_t))
+                print("TEST VS CTRL DIFF EQUIV:")
+                print('SUCCESS : {}, PVAL: {}, FAILS: {}'.format(*tvsctrl))
 
-                tests.append({'eval': str(list(ctrl_t.statistic)),
-                              'eval_pval': str(ctrl_t.pvalue),
-                              'test': str(list(test_t.statistic)),
-                              'test_pval': str(test_t.pvalue),
-                              'et_diff': str(diff),
-                              'testvsctrl': str(list(tvsctrl.statistic)),
-                              'testvsctrl_pvalue': str(tvsctrl.pvalue),
+                tests.append({'eval': str(ctrl_t[0]),
+                              'eval_pval': str(ctrl_t[1]),
+                              'eval_fails': str(ctrl_t[2]),
+                              'test': str(test_t[0]),
+                              'test_pval': str(test_t[1]),
+                              'test_fails': str(test_t[2]),
+                              'testvsctrl': str(tvsctrl[0]),
+                              'testvsctrl_pvalue': str(tvsctrl[1]),
+                              'testvsctrl_fails': str(tvsctrl[2]),
                               'randomseed': int(torch.initial_seed())
                               })
             # clean up
@@ -246,45 +273,50 @@ def model_test_batch(root, res, rounds, names, download=True, seed=0):
     datasets = me.download_data(root, res, download=download)
     tests = []
 
-    for i, [ds_name, ds] in enumerate(datasets):
-        print("DATASET {} of {} KEYINTERRUPT TO SKIP".format(i, len(datasets)))
-        try:
-            print("USING {} DATASET, LEN {}".format(ds_name,
-                                                    len(ds(root))))
-            model = get_model(names[0], weights=names[1])
-            model.to(ca.TORCH_DEVICE)
-            model.eval()
-            test = None
-            out = model_create_equation(model, names, ds, res, rounds,
-                                        root=root)
-            test = {
-                'dataset': ds_name,
-                'ds_len': len(ds(root)),
-                'test_output': out}
-            reset_model_weights(model)
-
-            import shutil
-            from pathlib import Path
-            # remove runs directory that contains caches of models
-            # as it affects model weight preformance and changes control
-            # file is in src so go up one to dir and remove runs
-            cache_path = Path(__file__).parent.resolve() / "runs"
-
-            if os.path.exists(cache_path):
-                shutil.rmtree(cache_path)
-
-            tests.append(test)
-            # just in case
-            # model = None
-
-        # handle checkpointing process times
-        except KeyboardInterrupt:
-            continue
-
     with open("test_output.json", "a+") as f:
         json.dump({'ran_with_parameters': names}, f, indent=4)
-        if tests != []:
-            json.dump(tests, f, indent=4)
+        try:
+            for i, [ds_name, ds] in enumerate(datasets):
+                yesno = input(
+                        "DATASET {} of {} START? Y/N".format(i, len(datasets)))
+                if yesno == "Y":
+                    print("USING {} DATASET, LEN {}".format(ds_name,
+                                                            len(ds(root))))
+                    model = get_model(names[0], weights=names[1])
+                    model.to(ca.TORCH_DEVICE)
+                    model.eval()
+                    test = None
+                    out = model_create_equation(model, names, ds, res, rounds,
+                                                root=root)
+                    test = {
+                        'dataset': ds_name,
+                        'ds_len': len(ds(root)),
+                        'test_output': out}
+                    reset_model_weights(model)
+
+                    import shutil
+                    from pathlib import Path
+                    # remove runs directory that contains caches of models
+                    # as it affects model weight performance and changes
+                    # control
+                    # file is in src so go up one to dir and remove runs
+                    cache_path = Path(__file__).parent.resolve() / "runs"
+
+                    if os.path.exists(cache_path):
+                        shutil.rmtree(cache_path)
+
+                    tests.append(test)
+                    # just in case
+                    # model = None
+                else:
+                    if tests != []:
+                        json.dump(tests, f, indent=4)
+                        tests.pop()
+
+        finally:
+            if tests != []:
+                json.dump(tests, f, indent=4)
+                tests.pop()
 
 
 def imagenet_test_batch(root, res, rounds, names, seed=0):
