@@ -118,25 +118,21 @@ def reset_model_weights(layer):
 
 
 def ttost_ind(x, y, delta):
-    xystat = (stats.ttest_ind(x, y - delta, alternative='greater'),
-              stats.ttest_ind(x, y + delta, alternative='less'))
+    xystat = (stats.ttest_ind(x, y - delta, alternative='greater', axis=None),
+              stats.ttest_ind(x, y + delta, alternative='less', axis=None))
 
     pval = xystat[0].pvalue
-    if np.all(pval < xystat[1].pvalue):
+    if pval.max() < xystat[1].pvalue.max():
         pval = xystat[1].pvalue
 
-    return tuple((pval, np.all(pval < PVALUE_ACCEPT)))
+    acceptance = bool(np.logical_and.reduce(np.all(pval < PVALUE_ACCEPT)))
+    return (stats.combine_pvalues(pval), acceptance)
 
 
 def process_stats(statpvals):
-    stat, pstat = list(zip(*statpvals))
-    failures = [(st, pstat[i]) for i, st in enumerate(stat) if st is False]
-    if failures == []:
-        _, pstat = list(zip(*statpvals))
-        return tuple((True, stats.combine_pvalues(pstat), 0))
-    else:
-        _, pstat = list(zip(*failures))
-        return tuple((False, stats.combine_pvalues(pstat), len(failures)))
+    pvals, stat = [list(st) for st in zip(*statpvals)]
+    return (np.logical_and.reduce(stat),
+            stats.combine_pvalues(pvals))
 
 
 def model_create_equation(model, names, dataset, in_shape, test_rounds,
@@ -219,8 +215,8 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
                 ctrls, tests, cvst = [[], [], []]
                 for data, actual in test_loader:
                     data = data.float().to(ca.TORCH_DEVICE, non_blocking=True)
-                    # find mean over batch
 
+                    # find mean over batch
                     actual = actual.float().cpu().numpy()
                     ctrl = model(data).cpu().detach().numpy()
                     test = test_model(data).cpu().detach().numpy()
@@ -245,13 +241,10 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
 
                 tests.append({'eval': str(ctrl_t[0]),
                               'eval_pval': str(ctrl_t[1]),
-                              'eval_fails': str(ctrl_t[2]),
                               'test': str(test_t[0]),
                               'test_pval': str(test_t[1]),
-                              'test_fails': str(test_t[2]),
                               'testvsctrl': str(tvsctrl[0]),
                               'testvsctrl_pvalue': str(tvsctrl[1]),
-                              'testvsctrl_fails': str(tvsctrl[2]),
                               'randomseed': int(torch.initial_seed())
                               })
             # clean up
