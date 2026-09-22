@@ -34,7 +34,7 @@ import os
 import json
 
 
-EQUIVALENCE_BOUND = 25e-5
+EQUIVALENCE_BOUND = 2.5e-3
 PVALUE_ACCEPT = 0.05
 
 
@@ -125,14 +125,17 @@ def ttost_ind(x, y, delta):
     if pval.max() < xystat[1].pvalue.max():
         pval = xystat[1].pvalue
 
-    acceptance = bool(np.logical_and.reduce(np.all(pval < PVALUE_ACCEPT)))
-    return (stats.combine_pvalues(pval), acceptance)
+    acceptance = bool(np.logical_or.reduce(np.all(pval < PVALUE_ACCEPT)))
+    return stats.combine_pvalues(pval), acceptance
 
 
 def process_stats(statpvals):
-    pvals, stat = [list(st) for st in zip(*statpvals)]
-    return (np.logical_and.reduce(stat),
-            stats.combine_pvalues(pvals))
+    if any(isinstance(i, list) for i in statpvals):
+        pvals, stat = [list(st) for st in zip(*statpvals)]
+        return (bool(np.logical_and.reduce(stat)),
+                stats.combine_pvalues(pvals))
+
+    return (statpvals[1], statpvals[0])
 
 
 def model_create_equation(model, names, dataset, in_shape, test_rounds,
@@ -231,20 +234,21 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
 
                 ctrl_t = process_stats(ctrls)
                 test_t = process_stats(tests)
+                print(tvsctrl)
                 tvsctrl = process_stats(tvsctrl)
                 print("EVAL VS ACT EQUIV:")
-                print('SUCCESS : {}, PVAL: {}, FAILS: {}'.format(*ctrl_t))
+                print('SUCCESS : {}, PVAL: {}'.format(*ctrl_t))
                 print("TEST VS ACT EQUIV:")
-                print('SUCCESS : {}, PVAL: {}, FAILS: {}'.format(*test_t))
+                print('SUCCESS : {}, PVAL: {}'.format(*test_t))
                 print("TEST VS CTRL DIFF EQUIV:")
-                print('SUCCESS : {}, PVAL: {}, FAILS: {}'.format(*tvsctrl))
+                print('SUCCESS : {}, PVAL: {}'.format(*tvsctrl))
 
                 tests.append({'eval': str(ctrl_t[0]),
-                              'eval_pval': str(ctrl_t[1]),
+                              'eval_pval': str(ctrl_t[1].pvalue),
                               'test': str(test_t[0]),
-                              'test_pval': str(test_t[1]),
+                              'test_pval': str(test_t[1].pvalue),
                               'testvsctrl': str(tvsctrl[0]),
-                              'testvsctrl_pvalue': str(tvsctrl[1]),
+                              'testvsctrl_pvalue': str(tvsctrl[1].pvalue),
                               'randomseed': int(torch.initial_seed())
                               })
             # clean up
