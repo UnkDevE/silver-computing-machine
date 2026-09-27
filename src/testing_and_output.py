@@ -125,14 +125,15 @@ def ttost_ind(x, y, delta):
     if pval.max() < xystat[1].pvalue.max():
         pval = xystat[1].pvalue
 
-    acceptance = bool(np.logical_or.reduce(np.all(pval < PVALUE_ACCEPT)))
+    acceptance = np.where((pval < PVALUE_ACCEPT), [1.0, 0.0]).mean(
+            dtype=np.float32)
     return stats.combine_pvalues(pval), acceptance
 
 
 def process_stats(statpvals):
     if any(isinstance(i, list) for i in statpvals):
-        pvals, stat = [list(st) for st in zip(*statpvals)]
-        return (bool(np.logical_and.reduce(stat)),
+        pvals, accpt = [list(st) for st in zip(*statpvals)]
+        return (accpt.mean(dtype=np.float32),
                 stats.combine_pvalues(pvals))
 
     return (statpvals[1], statpvals[0])
@@ -234,7 +235,6 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
 
                 ctrl_t = process_stats(ctrls)
                 test_t = process_stats(tests)
-                print(tvsctrl)
                 tvsctrl = process_stats(tvsctrl)
                 print("EVAL VS ACT EQUIV:")
                 print('SUCCESS : {}, PVAL: {}'.format(*ctrl_t))
