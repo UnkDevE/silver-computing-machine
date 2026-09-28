@@ -34,7 +34,7 @@ import os
 import json
 
 
-EQUIVALENCE_BOUND = 2.5e-2
+EQUIVALENCE_BOUND = 2.5e-3
 PVALUE_ACCEPT = 0.05
 
 
@@ -125,7 +125,7 @@ def ttost_ind(x, y, delta):
     if pval.max() < xystat[1].pvalue.max():
         pval = xystat[1].pvalue
 
-    acceptance = np.where((pval < PVALUE_ACCEPT), 1.0, 0.0).mean(
+    acceptance = np.where((pval < PVALUE_ACCEPT), [1.0, 0.0]).mean(
             dtype=np.float32)
     return stats.combine_pvalues(pval), acceptance
 
@@ -225,21 +225,17 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
                     ctrl = model(data).cpu().detach().numpy()
                     test = test_model(data).cpu().detach().numpy()
 
-                    # ctrl_t = ttost_ind(ctrl, actual, EQUIVALENCE_BOUND)
-                    # test_t = ttost_ind(test, actual, EQUIVALENCE_BOUND)
-                    # tvsctrl = ttost_ind(test, ctrl, EQUIVALENCE_BOUND)
-
-                    ctrl_t = stats.mannwhitneyu(ctrl, actual, axis=None)
-                    test_t = stats.mannwhitneyu(test, actual, axis=None)
-                    tvsctrl = stats.mannwhitneyu(test, ctrl, axis=None)
+                    ctrl_t = ttost_ind(ctrl, actual, EQUIVALENCE_BOUND)
+                    test_t = ttost_ind(test, actual, EQUIVALENCE_BOUND)
+                    tvsctrl = ttost_ind(test, ctrl, EQUIVALENCE_BOUND)
 
                     ctrls.append(ctrl_t)
                     tests.append(test_t)
                     cvst.append(tvsctrl)
 
-                ctrl_t = stats.combine_pvalues(ctrls)
-                test_t = stats.combine_pvalues(tests)
-                tvsctrl = stats.combine_pvalues(tvsctrl)
+                ctrl_t = process_stats(ctrls)
+                test_t = process_stats(tests)
+                tvsctrl = process_stats(tvsctrl)
                 print("EVAL VS ACT EQUIV:")
                 print('SUCCESS : {}, PVAL: {}'.format(*ctrl_t))
                 print("TEST VS ACT EQUIV:")
@@ -247,13 +243,12 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
                 print("TEST VS CTRL DIFF EQUIV:")
                 print('SUCCESS : {}, PVAL: {}'.format(*tvsctrl))
 
-                tests.append({'eval': str(float(ctrl_t[0])),
-                              'eval_pval': str(float(ctrl_t[1].pvalue)),
-                              'test': str(float(test_t[0])),
-                              'test_pval': str(float(test_t[1].pvalue)),
-                              'testvsctrl': str(float(tvsctrl[0])),
-                              'testvsctrl_pvalue': str(float(tvsctrl[1].
-                                                       pvalue)),
+                tests.append({'eval': str(ctrl_t[0]),
+                              'eval_pval': str(ctrl_t[1].pvalue),
+                              'test': str(test_t[0]),
+                              'test_pval': str(test_t[1].pvalue),
+                              'testvsctrl': str(tvsctrl[0]),
+                              'testvsctrl_pvalue': str(tvsctrl[1].pvalue),
                               'randomseed': int(torch.initial_seed())
                               })
             # clean up
