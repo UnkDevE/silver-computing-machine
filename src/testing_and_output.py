@@ -229,9 +229,9 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
                     # test_t = ttost_ind(test, actual, EQUIVALENCE_BOUND)
                     # tvsctrl = ttost_ind(test, ctrl, EQUIVALENCE_BOUND)
 
-                    ctrl_t = stats.mannwhitneyu(ctrl, actual, axis=None)
-                    test_t = stats.mannwhitneyu(test, actual, axis=None)
-                    tvsctrl = stats.mannwhitneyu(test, ctrl, axis=None)
+                    ctrl_t = stats.wilcoxon(ctrl, actual, axis=None)
+                    test_t = stats.wilcoxon(test, actual, axis=None)
+                    tvsctrl = stats.wilcoxon(test, ctrl, axis=None)
 
                     ctrls.append(ctrl_t)
                     tests.append(test_t)
@@ -337,7 +337,7 @@ def imagenet_test_batch(root, res, rounds, names, seed=0):
         'test_output': out
     }
     tests.append(test)
-
+f470944
     with open("imagenet_test_output.json", "a+") as f:
         dct = {'ran_with_parameters': names}
         if tests != []:
