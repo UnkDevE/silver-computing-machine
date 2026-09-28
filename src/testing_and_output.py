@@ -32,6 +32,7 @@ from src.training import BATCH_SIZE
 
 import os
 import json
+from functools import singledispatch
 
 
 EQUIVALENCE_BOUND = 2.5e-2
@@ -229,12 +230,9 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
                     # test_t = ttost_ind(test, actual, EQUIVALENCE_BOUND)
                     # tvsctrl = ttost_ind(test, ctrl, EQUIVALENCE_BOUND)
 
-                    ctrl_t = stats.wilcoxon(ctrl, actual, axis=None,
-                                            zero_method='zsplit')
-                    test_t = stats.wilcoxon(test, actual, axis=None,
-                                            zero_method='zsplit')
-                    tvsctrl = stats.wilcoxon(test, ctrl, axis=None,
-                                             zero_method='zsplit')
+                    ctrl_t = stats.mannwhitneyu(ctrl, actual, axis=None)
+                    test_t = stats.mannwhitneyu(test, actual, axis=None)
+                    tvsctrl = stats.mannwhitneyu(test, ctrl, axis=None)
 
                     ctrls.append(ctrl_t)
                     tests.append(test_t)
@@ -251,12 +249,11 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
                 print('SUCCESS : {}, PVAL: {}'.format(*tvsctrl))
 
                 tests.append({'eval': '{}'.format(ctrl_t[0]),
-                              'eval_pval': '{}'.format(ctrl_t[1].pvalue),
+                              'eval_pval': '{}'.format(ctrl_t[1]),
                               'test': '{}'.format(test_t[0]),
-                              'test_pval': '{}'.format(test_t[1].pvalue),
+                              'test_pval': '{}'.format(test_t[1]),
                               'testvsctrl': '{}'.format(tvsctrl[0]),
-                              'testvsctrl_pvalue': '{}'.format(tvsctrl[1].
-                                                               pvalue),
+                              'testvsctrl_pvalue': '{}'.format(tvsctrl[1]),
                               'randomseed': int(torch.initial_seed())
                               })
             # clean up
@@ -267,6 +264,12 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
             torch.cuda.empty_cache()
 
         return tests
+
+
+@singledispatch
+def to_serializable(val):
+    """Used by default."""
+    return str(val)
 
 
 def model_test_batch(root, res, rounds, names, download=True, seed=0):
@@ -311,12 +314,12 @@ def model_test_batch(root, res, rounds, names, download=True, seed=0):
                     # model = None
                 else:
                     if tests != []:
-                        json.dump(tests, f, indent=4)
+                        json.dump(tests, f, indent=4, default=to_serializable)
                         tests.pop()
 
         finally:
             if tests != []:
-                json.dump(tests, f, indent=4)
+                json.dump(tests, f, indent=4, default=to_serializable)
                 tests.pop()
 
 
