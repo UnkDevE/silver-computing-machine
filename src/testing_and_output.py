@@ -229,9 +229,12 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
                     # test_t = ttost_ind(test, actual, EQUIVALENCE_BOUND)
                     # tvsctrl = ttost_ind(test, ctrl, EQUIVALENCE_BOUND)
 
-                    ctrl_t = stats.wilcoxon(ctrl, actual, axis=None)
-                    test_t = stats.wilcoxon(test, actual, axis=None)
-                    tvsctrl = stats.wilcoxon(test, ctrl, axis=None)
+                    ctrl_t = stats.wilcoxon(ctrl, actual, axis=None,
+                                            zero_method='zsplit')
+                    test_t = stats.wilcoxon(test, actual, axis=None,
+                                            zero_method='zsplit')
+                    tvsctrl = stats.wilcoxon(test, ctrl, axis=None,
+                                             zero_method='zsplit')
 
                     ctrls.append(ctrl_t)
                     tests.append(test_t)
@@ -247,13 +250,13 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
                 print("TEST VS CTRL DIFF EQUIV:")
                 print('SUCCESS : {}, PVAL: {}'.format(*tvsctrl))
 
-                tests.append({'eval': str(float(ctrl_t[0])),
-                              'eval_pval': str(float(ctrl_t[1].pvalue)),
-                              'test': str(float(test_t[0])),
-                              'test_pval': str(float(test_t[1].pvalue)),
-                              'testvsctrl': str(float(tvsctrl[0])),
-                              'testvsctrl_pvalue': str(float(tvsctrl[1].
-                                                       pvalue)),
+                tests.append({'eval': '{}'.format(ctrl_t[0]),
+                              'eval_pval': '{}'.format(ctrl_t[1].pvalue),
+                              'test': '{}'.format(test_t[0]),
+                              'test_pval': '{}'.format(test_t[1].pvalue),
+                              'testvsctrl': '{}'.format(tvsctrl[0]),
+                              'testvsctrl_pvalue': '{}'.format(tvsctrl[1].
+                                                               pvalue),
                               'randomseed': int(torch.initial_seed())
                               })
             # clean up
@@ -337,7 +340,6 @@ def imagenet_test_batch(root, res, rounds, names, seed=0):
         'test_output': out
     }
     tests.append(test)
-f470944
     with open("imagenet_test_output.json", "a+") as f:
         dct = {'ran_with_parameters': names}
         if tests != []:
