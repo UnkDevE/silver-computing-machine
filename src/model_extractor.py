@@ -23,8 +23,6 @@
 
 from torchvision import datasets
 
-import numpy as np
-
 
 # looks up each activation from csv and then defines a function to it
 def activation_fn_lookup(activ_src, csv):
@@ -35,62 +33,6 @@ def activation_fn_lookup(activ_src, csv):
         if acc == sourcefnc:
             return (csv['function'][i])
     return csv['function']['linear']
-
-
-def label_extract(label_extract, features):
-    labels = []
-    for feature in features:
-        for label in label_extract:
-            if hasattr(label[feature], 'numpy') and callable(getattr(
-                    label[feature], 'numpy')):
-                labels.append(label[feature].numpy())
-    return labels
-
-
-def bucketize_features(model, dataset):
-    # get label and value
-    features = dataset.classes
-    # filter through to find duplicates
-    values_removed = dataset.unique()
-
-    # call unique on features
-    need_extract = values_removed.unique()
-
-    labels = label_extract(need_extract, features)
-
-    # have to update cardinality each time
-    # remember labels is a list due to extract
-
-    def condense(v):
-        b = True
-        for i in v:
-            if not i:
-                b = False
-        return b
-
-    # condense doesn't work as complains about python bool
-
-    # bucketize each feature in each label, return complete datapoints
-    # bucketizing is failing at the moment because the labels are consumed
-    sets = [dataset.filter(lambda i:
-            condense([i[feature] == label for feature in features]))
-            for label in labels]
-
-    # numpy array of predictions
-    inputimages = []
-    tensors = []
-    for dataset in sets:
-        # get the images
-        batch = dataset.padded_batch(BATCH_SIZE, drop_remainder=True)
-        # samples not normalized
-        for sample in batch:
-            inputimages.append(sample)
-            prediction = model.predict(sample)
-            # divide by 10 because output is in form n instead of 1\n
-            tensors.append(np.sum(prediction,
-                                  axis=0) / prediction.shape[0] / 10)
-
-    return list(zip(labels, zip(inputimages, tensors)))
 
 
 def get_labels(names):
@@ -109,6 +51,7 @@ def download_data(dataset_root, res, download=True):
     # multiple filters have to be done in seq because and is not short
     # circuiting
     ds_list = []
+    download_ds = download
     for ds_name in datasets_names:
         ds = datasets.__dict__[ds_name]
         sig = inspect.signature(ds.__init__)
@@ -117,17 +60,27 @@ def download_data(dataset_root, res, download=True):
         args_ds = [p for p in sig.parameters.keys() if p not in kwargs_ds]
 
         if sig.parameters.get("download") is not None:
+            if download:
+                yesno = input("DOWNLOADING {} Y/N/STOP: ".format(ds_name))
+                if yesno == "N":
+                    download_ds = False
+                elif yesno == "STOP":
+                    download = False
+                    download_ds = False
+
             try:
                 if "download" in args_ds:
                     datasets.__dict__[ds_name](
-                        dataset_root, download)
+                        dataset_root, download_ds)
                 elif "download" in kwargs_ds:
                     datasets.__dict__[ds_name](
-                        dataset_root, download=download)
+                        dataset_root, download=download_ds)
 
                 ds_list.append([ds_name, datasets.__dict__[ds_name]])
             except Exception as e:
-                print("dataset download did not work not appending...")
-                print("err: " + str(e))
+                if download:
+                    print("DATASET: {} download err {}".format(ds_name, e))
+                else:
+                    pass  # do not throw for not downloaded datasets
 
     return ds_list

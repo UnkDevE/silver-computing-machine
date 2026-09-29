@@ -130,18 +130,7 @@ def ttost_ind(x, y, delta):
     if pval.max() < xystat[1].pvalue.max():
         pval = xystat[1].pvalue
 
-    acceptance = np.where((pval < PVALUE_ACCEPT), 1.0, 0.0).mean(
-            dtype=np.float32)
-    return stats.combine_pvalues(pval), acceptance
-
-
-def process_stats(statpvals):
-    if any(isinstance(i, list) for i in statpvals):
-        pvals, accpt = [list(st) for st in zip(*statpvals)]
-        return (accpt.mean(dtype=np.float32),
-                stats.combine_pvalues(pvals))
-
-    return (statpvals[1], statpvals[0])
+    return stats.combine_pvalues(pval)
 
 
 def model_create_equation(model, names, dataset, in_shape, test_rounds,
@@ -283,10 +272,15 @@ def model_test_batch(root, res, rounds, names, download=True, seed=0):
     with open("test_output.json", "a+") as f:
         json.dump({'ran_with_parameters': names}, f, indent=4)
         try:
+            ALLflag = False
             for i, [ds_name, ds] in enumerate(datasets):
-                yesno = input(
-                        "DATASET {} of {} START? Y/N/STOP".format(i,
-                                                              len(datasets)))
+                yesno = "Y"
+                if not ALLflag:
+                    yesno = input(
+                            "DATASET {} of {} START? ALL/Y/N/STOP: "
+                            .format(i, len(datasets)))
+                    if yesno == "ALL":
+                        ALLflag = True
                 if yesno == "Y":
                     print("USING {} DATASET, LEN {}".format(ds_name,
                                                             len(ds(root))))
