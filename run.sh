@@ -21,5 +21,6 @@ else
     let im=0
 fi
 # export ONEDNN_VERBOSE=all # for debugging convolutions
+export PYTORCH_NO_CUDA_MEMORY_CACHING=1
 export HIP_VISIBLE_DEVICES=0 
 JAX_PLATFORM_NAME='cpu' PYTHON_GIL=0 python main.py 225 1 resnet50 IMAGENET1K_V1 CrossEntropyLoss Adam $dl $seed $im 

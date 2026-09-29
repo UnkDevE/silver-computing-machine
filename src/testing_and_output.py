@@ -210,7 +210,7 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
 
             if not imagenet_ds:
                 print("TESTING...")
-                ctrls, tests, cvst = [[], [], []]
+                ctrls, t_tests, cvst = [[], [], []]
                 for data, actual in test_loader:
                     data = data.float().to(ca.TORCH_DEVICE, non_blocking=True)
 
@@ -230,7 +230,7 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
                         tvsctrl = ttost_ind(test, ctrl, EQUIVALENCE_BOUND)
 
                     ctrls.append(ctrl_t)
-                    tests.append(test_t)
+                    t_tests.append(test_t)
                     cvst.append(tvsctrl)
 
                 ctrl_t = stats.combine_pvalues(ctrls)
@@ -259,10 +259,16 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
         return tests
 
 
-@singledispatch
-def to_serializable(val):
-    """Used by default."""
-    return str(val)
+class numpyencoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        else:
+            return super(numpyencoder, self).default(obj)
 
 
 def model_test_batch(root, res, rounds, names, download=True, seed=0):
@@ -313,9 +319,12 @@ def model_test_batch(root, res, rounds, names, download=True, seed=0):
                 elif yesno == "STOP":
                     break
 
+                if tests != []:
+                    json.dump(tests, f, indent=4, cls=numpyencoder)
+                    tests.pop()
         finally:
             if tests != []:
-                json.dump(tests, f, indent=4, default=to_serializable)
+                json.dump(tests, f, indent=4, cls=numpyencoder)
                 tests.pop()
 
 
