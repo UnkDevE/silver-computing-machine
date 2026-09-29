@@ -34,9 +34,13 @@ import os
 import json
 from functools import singledispatch
 
+PVALUE_SMALL = 0.005
+PVALUE_MID = 0.01
+PVALUE_LARGE = 0.05
 
-EQUIVALENCE_BOUND = 2.5e-2
-PVALUE_ACCEPT = 0.05
+PVALUE_ACCEPT = PVALUE_SMALL
+
+EQUIVALENCE_BOUND = PVALUE_LARGE
 
 
 def bucketize(prelims):
@@ -226,13 +230,15 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
                     ctrl = model(data).cpu().detach().numpy()
                     test = test_model(data).cpu().detach().numpy()
 
-                    # ctrl_t = ttost_ind(ctrl, actual, EQUIVALENCE_BOUND)
-                    # test_t = ttost_ind(test, actual, EQUIVALENCE_BOUND)
-                    # tvsctrl = ttost_ind(test, ctrl, EQUIVALENCE_BOUND)
-
-                    ctrl_t = stats.mannwhitneyu(ctrl, actual, axis=None)
-                    test_t = stats.mannwhitneyu(test, actual, axis=None)
-                    tvsctrl = stats.mannwhitneyu(test, ctrl, axis=None)
+                    ctrl_t, test_t, tvsctrl = [None, None, None]
+                    if stats.kstest(test, ctrl).pvalue > PVALUE_SMALL:
+                        ctrl_t = stats.mannwhitneyu(ctrl, actual, axis=None)
+                        test_t = stats.mannwhitneyu(test, actual, axis=None)
+                        tvsctrl = stats.mannwhitneyu(test, ctrl, axis=None)
+                    else:
+                        ctrl_t = ttost_ind(ctrl, actual, EQUIVALENCE_BOUND)
+                        test_t = ttost_ind(test, actual, EQUIVALENCE_BOUND)
+                        tvsctrl = ttost_ind(test, ctrl, EQUIVALENCE_BOUND)
 
                     ctrls.append(ctrl_t)
                     tests.append(test_t)
@@ -248,11 +254,9 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
                 print("TEST VS CTRL DIFF EQUIV:")
                 print('SUCCESS : {}, PVAL: {}'.format(*tvsctrl))
 
-                tests.append({'eval': '{}'.format(ctrl_t[0]),
+                tests.append({
                               'eval_pval': '{}'.format(ctrl_t[1]),
-                              'test': '{}'.format(test_t[0]),
                               'test_pval': '{}'.format(test_t[1]),
-                              'testvsctrl': '{}'.format(tvsctrl[0]),
                               'testvsctrl_pvalue': '{}'.format(tvsctrl[1]),
                               'randomseed': int(torch.initial_seed())
                               })
@@ -281,7 +285,7 @@ def model_test_batch(root, res, rounds, names, download=True, seed=0):
         try:
             for i, [ds_name, ds] in enumerate(datasets):
                 yesno = input(
-                        "DATASET {} of {} START? Y/N ".format(i,
+                        "DATASET {} of {} START? Y/N/STOP".format(i,
                                                               len(datasets)))
                 if yesno == "Y":
                     print("USING {} DATASET, LEN {}".format(ds_name,
@@ -311,11 +315,9 @@ def model_test_batch(root, res, rounds, names, download=True, seed=0):
 
                     tests.append(test)
                     # just in case
-                    # model = None
-                else:
-                    if tests != []:
-                        json.dump(tests, f, indent=4, default=to_serializable)
-                        tests.pop()
+                    model = None
+                elif yesno == "STOP":
+                    break
 
         finally:
             if tests != []:
