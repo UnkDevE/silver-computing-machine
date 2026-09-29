@@ -220,7 +220,7 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
                     test = test_model(data).cpu().detach().numpy()
 
                     ctrl_t, test_t, tvsctrl = [None, None, None]
-                    if stats.kstest(test, ctrl).pvalue > PVALUE_SMALL:
+                    if np.any(stats.kstest(test, ctrl).pvalue > PVALUE_SMALL):
                         ctrl_t = stats.mannwhitneyu(ctrl, actual, axis=None)
                         test_t = stats.mannwhitneyu(test, actual, axis=None)
                         tvsctrl = stats.mannwhitneyu(test, ctrl, axis=None)
