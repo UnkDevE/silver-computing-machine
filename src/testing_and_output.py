@@ -23,8 +23,9 @@ import matplotlib.pyplot as plt
 import torch
 from torchvision.models import get_model
 from torchvision.transforms import v2
-
+from torch.utils.data import DataLoader
 from scipy import stats
+
 import src.cech_algorithm as ca
 import src.model_extractor as me
 import src.training as tr
@@ -32,75 +33,11 @@ from src.training import BATCH_SIZE
 
 import os
 import json
-from functools import singledispatch
 
 PVALUE_SMALL = 0.005
 PVALUE_MID = 0.01
 PVALUE_LARGE = 0.05
-
-PVALUE_ACCEPT = PVALUE_SMALL
-
-EQUIVALENCE_BOUND = PVALUE_LARGE
-
-
-def bucketize(prelims):
-    arr = []
-    for ps in prelims:
-        for i, p in enumerate(ps):
-            if len(arr) <= i:
-                arr.append([])
-            arr[i].append(p)
-    return np.array(arr)
-
-
-def tester(model, shapes, sheafout, sheafs, sort_avg):
-    model_shape = list(shapes[0])  # in shape from pytorch
-    out = np.reshape(sheafout, [-1, *model_shape])
-    out = out[np.newaxis, :]
-
-    # needs batching
-    torch_out = ca.jax_to_tensor(out)
-    torch_out = torch_out.to(ca.TORCH_DEVICE)
-
-    model.eval()
-    final_test = model(torch_out)
-
-    # print(sort_avg)
-    return [sort_avg, final_test.cpu().detach().numpy()]
-
-
-def plot_test(starttest, endtest, outshape, name):
-    tests = [starttest, endtest]
-    plt.xlabel("features")
-    plt.ylabel("activation")
-
-    colours = ["ro--", "bo--"]
-
-    for i, [avg_outs, final_test] in enumerate(tests):
-        template = np.reshape(avg_outs,
-                              [ca.product(list(avg_outs.shape[1:])),
-                               avg_outs.shape[0]])
-        # plot our test
-        plt.violinplot(template, showmeans=True)
-
-        # interpolate spline with nearest round up power of two
-        p2_shape = 1
-        while p2_shape < final_test.shape[-1]:
-            p2_shape *= 2
-
-        from scipy.interpolate import make_interp_spline
-        final_test = np.reshape(final_test, final_test.shape[-1])
-        interp = make_interp_spline(np.linspace(0.0, 1.0, final_test.shape[0]),
-                                    final_test)
-
-        yaxis = interp(np.linspace(0, p2_shape))
-
-        plt.plot(yaxis.T, colours[i])
-
-    plt.savefig(name)
-    # clear figures and axes
-    plt.cla()
-    plt.clf()
+EQUIVALENCE_BOUND = 0.05
 
 
 def get_activations(model):
@@ -131,6 +68,55 @@ def ttost_ind(x, y, delta):
         pval = xystat[1].pvalue
 
     return stats.combine_pvalues(pval)
+
+
+def plot_test_spline(bspline, dataset, percent_samples, name, fast=False):
+    fast_evaluator = bspline['gpu']
+    slow_evaluator = bspline['scipy']
+    no_classes = len(dataset.classes)
+    ds_len = len(dataset)
+
+    from torch.utils.data import WeightedRandomSampler
+    import torch.nn.functional as F
+
+    class_outs = []
+    tests = []
+    for i in range(no_classes):
+        sampler = WeightedRandomSampler(F.one_hot(i, no_classes),
+                                        ds_len // percent_samples,
+                                        replacement=False,
+                                        generator=ca.GENERATOR)
+        loader = DataLoader(dataset, sampler=sampler)
+
+        outs = []
+        if not fast:
+            for img, k in loader:
+                fast = fast_evaluator(img)
+                slow = slow_evaluator(img.detach().clone().to("cpu").numpy())
+                test = None
+                if np.any(stats.kstest(fast, slow).pvalue > PVALUE_SMALL):
+                    test = stats.mannwhitneyu(fast, slow, axis=None)
+                else:
+                    test = ttost_ind(fast, slow, EQUIVALENCE_BOUND)
+
+                tests.append(test)
+                outs.append((img, k, fast))
+        else:
+            fast = fast_evaluator(img)
+            outs.append((img, k, fast))
+
+        class_outs.append((i, outs))
+
+    if tests != [] and not fast:
+        pval = stats.combine_pvalues(tests)
+        with open("spline_acc.json") as spf:
+            json.dump(pval, spf, cls=numpyencoder)
+    # TODO: plot the data
+
+    plt.savefig(name)
+    # clear figures and axes
+    plt.cla()
+    plt.clf()
 
 
 def model_create_equation(model, names, dataset, in_shape, test_rounds,
@@ -174,7 +160,19 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
             shapes,
             layers)
 
-        # control = tester(model, shapes, sheaf, outward, sort_avg)
+        bspline = tr.make_spline(sols[-1])
+        print("MAKING VISUAL AND CORRELATION MATRIX")
+        spline_acc = "Y" != input("TEST SPLINE ACC Y/N:")
+        plot_test_spline(bspline, dataset_train, 5,
+                         '{}.png'.format(''.join(*names)), fast=spline_acc)
+
+        vidout_yn = "Y" == input("VIDEO OUTPUT OF DS PRE-MERTENS Y/N:")
+
+        edit_yn = input("EDIT Y/N")
+        if edit_yn == "Y":
+            print("GENERATING FEATURE SET")
+
+            pass
 
         for i in range(test_rounds):
             # should we wipe the model every i in TRAIN_SIZE or le
@@ -191,16 +189,14 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
             # nets e.g. 784,10 for mnist
 
             # find variance in solved systems
-
+            # keep bspline in scope to allow for editing
             test_model = tr.interpolate_model_train(test_model,
                                                     dataset_train,
-                                                    i, sols[-1],
-                                                    names, save_vid=False)
+                                                    i, bspline['gpu'],
+                                                    names, save_vid=vidout_yn)
 
             # and testing
-            # test = tester(test_model, shapes, sheaf, outward, sort_avg)
             # onehots labels
-            from torch.utils.data import DataLoader
             test_loader = DataLoader(dataset_train, generator=ca.GENERATOR,
                                      batch_size=BATCH_SIZE)
 
@@ -294,6 +290,7 @@ def model_test_batch(root, res, rounds, names, download=True, seed=0):
                     model.to(ca.TORCH_DEVICE)
                     model.eval()
                     test = None
+                    names.append(ds_name)
                     out = model_create_equation(model, names, ds, res, rounds,
                                                 root=root)
                     test = {
@@ -313,6 +310,7 @@ def model_test_batch(root, res, rounds, names, download=True, seed=0):
                     if os.path.exists(cache_path):
                         shutil.rmtree(cache_path)
 
+                    names.pop()
                     tests.append(test)
                     # just in case
                     model = None
@@ -351,6 +349,6 @@ def imagenet_test_batch(root, res, rounds, names, seed=0):
     with open("imagenet_test_output.json", "a+") as f:
         dct = {'ran_with_parameters': names}
         if tests != []:
-            json.dump([dct, tests], f, indent=4)
+            json.dump([dct, tests], f, indent=4, cls=numpyencoder)
         else:
-            json.dump(dct, f, indent=4)
+            json.dump(dct, f, indent=4, cls=numpyencoder)

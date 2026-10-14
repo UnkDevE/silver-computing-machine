@@ -226,7 +226,7 @@ def interpolate_model_train(model, train, step, bspline, names,
                         worker_init_fn=seed_worker, collate_fn=collate_fn)
 
     # training loop
-    epoch(model, make_spline(bspline), 5, names, train_s, test_s)
+    epoch(model, bspline, 5, names, train_s, test_s)
 
     return model
 
@@ -333,4 +333,4 @@ def make_spline(sols):
     [spline, u] = make_splprep(lu_decomp[0].T, k=sum(interpol_shape) + 1)
 
     # don't use ins here as is jax array, please use numpy
-    return GPUSplineEvaluator(spline, interpol_shape)
+    return {'scipy': spline, 'gpu': GPUSplineEvaluator(spline, interpol_shape)}
