@@ -111,8 +111,22 @@ def plot_test_spline(bspline, dataset, percent_samples, name, fast=False):
         pval = stats.combine_pvalues(tests)
         with open("spline_acc.json") as spf:
             json.dump(pval, spf, cls=numpyencoder)
-    # TODO: plot the data
 
+    # TODO: plot the data
+    ctrl_x = bspline['scipy'].c[:, 0]
+    ctrl_y = bspline['scipy'].c[:, 1]
+
+    plt.plot(ctrl_x, ctrl_y,
+             'k--', label='Control Points', marker='o', markerfacecolor='red')
+    linspace = np.linspace(0, 1, (max(len(ctrl_x)*2, 70)), endpoint=True)
+
+    shape = bspline['scipy'](linspace)
+    plt.plot(shape[0], shape[1], 'b', linewidth=2.0, label='B-spline curve')
+
+    for cl, out in class_outs:
+        plt.contour(out[0], out[1], cl // no_classes, levels=no_classes)
+
+    plt.axis([min(ctrl_x)-1, max(ctrl_x)+1, min(ctrl_y)-1, max(ctrl_y)+1])
     plt.savefig(name)
     # clear figures and axes
     plt.cla()
