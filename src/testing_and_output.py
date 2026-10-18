@@ -73,26 +73,30 @@ def ttost_ind(x, y, delta):
 def plot_test_spline(bspline, dataset, percent_samples, name, fast=False):
     fast_evaluator = bspline['gpu']
     slow_evaluator = bspline['scipy']
-    no_classes = len(dataset.classes)
+    # cheat to get class_to_idx as there is no standard of getting labels
+    _, labels = dataset[0]
+    no_classes = len(labels.unsqueeze(0))
     ds_len = len(dataset)
-
-    from torch.utils.data import WeightedRandomSampler
-    import torch.nn.functional as F
 
     class_outs = []
     tests = []
+    zero_weight = np.zeros_like(labels)
+    from torch.utils.data import WeightedRandomSampler
     for i in range(no_classes):
-        sampler = WeightedRandomSampler(F.one_hot(i, no_classes),
+        class_weight = zero_weight
+        class_weight[i] = 1.
+        sampler = WeightedRandomSampler(class_weight,
                                         ds_len // percent_samples,
-                                        replacement=False,
+                                        replacement=True,
                                         generator=ca.GENERATOR)
         loader = DataLoader(dataset, sampler=sampler)
 
         outs = []
         if not fast:
             for img, k in loader:
-                fast = fast_evaluator(img)
-                slow = slow_evaluator(img.detach().clone().to("cpu").numpy())
+                gpu_img = img.to(ca.TORCH_DEVICE, non_blocking=True)
+                fast = fast_evaluator(gpu_img).cpu().numpy()
+                slow = slow_evaluator(img.numpy())
                 test = None
                 if np.any(stats.kstest(fast, slow).pvalue > PVALUE_SMALL):
                     test = stats.mannwhitneyu(fast, slow, axis=None)
@@ -134,7 +138,8 @@ def plot_test_spline(bspline, dataset, percent_samples, name, fast=False):
 
 
 def model_create_equation(model, names, dataset, in_shape, test_rounds,
-                          root='./datasets', imagenet_ds=False):
+                          root='./datasets', imagenet_ds=False,
+                          alldefault=False):
     # check optional args
     # create prerequisites
     base_transform = [v2.ToImage(),
@@ -174,19 +179,23 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
             shapes,
             layers)
 
-        bspline = tr.make_spline(sols[-1])
-        print("MAKING VISUAL AND CORRELATION MATRIX")
-        spline_acc = "Y" != input("TEST SPLINE ACC Y/N:")
-        plot_test_spline(bspline, dataset_train, 5,
-                         '{}.png'.format(''.join(*names)), fast=spline_acc)
+        if not alldefault:
+            bspline = tr.make_spline(sols[-1])
+            print("MAKING VISUAL AND CORRELATION MATRIX")
+            spline_acc = "Y" != input("TEST SPLINE ACC Y/N:")
+            plot_test_spline(bspline, dataset_train, 5,
+                             '{}.png'.format(''.join(names)), fast=spline_acc)
 
-        vidout_yn = "Y" == input("VIDEO OUTPUT OF DS PRE-MERTENS Y/N:")
+            vidout_yn = "Y" == input("VIDEO OUTPUT OF DS PRE-MERTENS Y/N:")
 
-        edit_yn = input("EDIT Y/N")
-        if edit_yn == "Y":
-            print("GENERATING FEATURE SET")
-
-            pass
+            edit_yn = input("EDIT Y/N")
+            if edit_yn == "Y":
+                print("GENERATING FEATURE SET")
+                pass
+        else:
+            bspline = tr.make_spline(sols[-1])
+            plot_test_spline(bspline, dataset_train, 5,
+                             '{}.png'.format(''.join(names)), fast=True)
 
         for i in range(test_rounds):
             # should we wipe the model every i in TRAIN_SIZE or le
@@ -306,7 +315,7 @@ def model_test_batch(root, res, rounds, names, download=True, seed=0):
                     test = None
                     names.append(ds_name)
                     out = model_create_equation(model, names, ds, res, rounds,
-                                                root=root)
+                                                root=root, alldefault=ALLflag)
                     test = {
                         'dataset': ds_name,
                         'ds_len': len(ds(root)),
