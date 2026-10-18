@@ -111,7 +111,7 @@ def plot_test_spline(bspline, dataset, percent_samples, name, fast=False):
 
         class_outs.append((i, outs))
 
-    if tests != [] and not fast:
+    if tests != []:
         pval = stats.combine_pvalues(tests)
         with open("spline_acc.json") as spf:
             json.dump(pval, spf, cls=numpyencoder)
