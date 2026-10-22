@@ -2,7 +2,7 @@
 """
     SILVER-COMPUTING-MACHINE converts Nerual nets into human readable code
     or maths
-    Copyright (C) 2024-2025 Ethan Riley
+    Copyright (C) 2024-202666666n Riley
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by

@@ -2,7 +2,7 @@
 """
     SILVER-COMPUTING-MACHINE converts Nerual nets into human readable code
     or maths
-    Copyright (C) 2024-2025 Ethan Riley
+    Copyright (C) 2024-2026 Ethan Riley
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -70,11 +70,19 @@ def ttost_ind(x, y, delta):
     return stats.combine_pvalues(pval)
 
 
+# rolls a 1D array
+def shifts(x, start):
+    y = np.zeros([x.shape[0], *x.shape])
+    for i in range(-start, x.shape[0] - start):
+        y[i] = np.roll(x, i)
+    return np.array(y)
+
+
 def plot_test_spline(bspline, dataset, percent_samples, name, fast=False):
     fast_evaluator = bspline['gpu']
     slow_evaluator = bspline['scipy']
     # cheat to get class_to_idx as there is no standard of getting labels
-    _, labels = dataset[0]
+    f_img, labels = dataset[0]
     no_classes = len(labels.unsqueeze(0))
     ds_len = len(dataset)
 
@@ -89,7 +97,7 @@ def plot_test_spline(bspline, dataset, percent_samples, name, fast=False):
                                         ds_len // percent_samples,
                                         replacement=True,
                                         generator=ca.GENERATOR)
-        loader = DataLoader(dataset, sampler=sampler)
+        loader = DataLoader(dataset, batch_size=BATCH_SIZE, sampler=sampler)
 
         outs = []
         if not fast:
@@ -104,16 +112,18 @@ def plot_test_spline(bspline, dataset, percent_samples, name, fast=False):
                     test = ttost_ind(fast, slow, EQUIVALENCE_BOUND)
 
                 tests.append(test)
-                outs.append((img, k, fast))
+                outs.append(fast)
         else:
-            fast = fast_evaluator(img)
-            outs.append((img, k, fast))
+            for img, k in loader:
+                gpu_img = img.to(ca.TORCH_DEVICE, non_blocking=True)
+                fast = fast_evaluator(gpu_img).cpu().numpy()
+                outs.append(fast)
 
         class_outs.append((i, outs))
 
     if tests != []:
         pval = stats.combine_pvalues(tests)
-        with open("spline_acc.json") as spf:
+        with open("spline_acc.json", "a+") as spf:
             json.dump(pval, spf, cls=numpyencoder)
 
     # TODO: plot the data
@@ -122,13 +132,33 @@ def plot_test_spline(bspline, dataset, percent_samples, name, fast=False):
 
     plt.plot(ctrl_x, ctrl_y,
              'k--', label='Control Points', marker='o', markerfacecolor='red')
-    linspace = np.linspace(0, 1, (max(len(ctrl_x)*2, 70)), endpoint=True)
+    # linear space per pixel
+    linspace = np.linspace(0, 1, num=ca.product(f_img.shape)
+                           ).reshape(f_img.shape)
+    # find permutations of linspace
+    lp_space = shifts(linspace, start=0)
 
-    shape = bspline['scipy'](linspace)
-    plt.plot(shape[0], shape[1], 'b', linewidth=2.0, label='B-spline curve')
+    shape = bspline['scipy'](lp_space)
+    plot_shape = bspline['scipy'](
+            np.linspace(0, 1, num=ca.product(
+                f_img.shape[1:])).reshape(*f_img.shape[1:]))
+    plt.plot(plot_shape[0], plot_shape[1], 'b', linewidth=2.0,
+             label='B-spline curve')
 
-    for cl, out in class_outs:
-        plt.contour(out[0], out[1], cl // no_classes, levels=no_classes)
+    for cl, outs in class_outs:
+        # move batch to iter access
+        for batch in outs:
+            # move batch from to first position instead of piecewise
+            batch = np.moveaxis(batch, 1, 0)
+            for outpiecewise in batch:
+                for out in outpiecewise:
+                    shape = np.moveaxis(shape, 0, 1)
+                    for sp in shape:
+                        distance = np.linalg.norm(out - sp)
+                        breakpoint()
+                        avgs = np.average(distance, axis=(0, 1))
+                        plt.contour(avgs,
+                                    cl // no_classes, levels=no_classes)
 
     plt.axis([min(ctrl_x)-1, max(ctrl_x)+1, min(ctrl_y)-1, max(ctrl_y)+1])
     plt.savefig(name)
