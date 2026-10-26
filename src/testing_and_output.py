@@ -138,27 +138,27 @@ def plot_test_spline(bspline, dataset, percent_samples, name, fast=False):
     # find permutations of linspace
     lp_space = shifts(linspace, start=0)
 
-    shape = bspline['scipy'](lp_space)
+    shapes = bspline['scipy'](lp_space)
     plot_shape = bspline['scipy'](
             np.linspace(0, 1, num=ca.product(
                 f_img.shape[1:])).reshape(*f_img.shape[1:]))
     plt.plot(plot_shape[0], plot_shape[1], 'b', linewidth=2.0,
              label='B-spline curve')
 
+    # too many fors!
     for cl, outs in class_outs:
         # move batch to iter access
         for batch in outs:
             # move batch from to first position instead of piecewise
             batch = np.moveaxis(batch, 1, 0)
-            for outpiecewise in batch:
+            for outpiecewise, shape in zip(batch, shapes):
                 for out in outpiecewise:
-                    shape = np.moveaxis(shape, 0, 1)
+                    distance = []
                     for sp in shape:
-                        distance = np.linalg.norm(out - sp)
-                        breakpoint()
-                        avgs = np.average(distance, axis=(0, 1))
-                        plt.contour(avgs,
-                                    cl // no_classes, levels=no_classes)
+                        # norm comes out 1d dunno why
+                        distance.append(np.linalg.norm(out - sp))
+                    avgs = np.average(distance, axis=(0, 1))
+                    plt.contour(avgs, cl // no_classes, levels=no_classes)
 
     plt.axis([min(ctrl_x)-1, max(ctrl_x)+1, min(ctrl_y)-1, max(ctrl_y)+1])
     plt.savefig(name)
