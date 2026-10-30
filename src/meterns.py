@@ -77,6 +77,7 @@ def _tovid(imgs, name, w, h):
         .run_async(pipe_stdin=True, quiet=True)
     )
 
+    imgs = imgs.cpu()
     for im in imgs:
         img = im.numpy()
         img = img.astype(np.uint8)
@@ -158,8 +159,8 @@ class HDRMaskTransform(Transform):
     # no params needed
     def transform(self, imgs, _):
         if self.save_vid:
-            _tovid(imgs, "{}_{}".format("".join(self.names),
-                                        self.ds_count),
+            _tovid(imgs.detach().clone(),
+                   "{}_{}".format("".join(self.names), self.ds_count),
                    imgs[0].shape[1], imgs[0].shape[2])
             self.ds_count += 1
 

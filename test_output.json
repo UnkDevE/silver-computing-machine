@@ -436,4 +436,141 @@
         "CrossEntropyLoss",
         "Adam"
     ]
-}
+}{
+    "ran_with_parameters": [
+        "resnet50",
+        "IMAGENET1K_V1",
+        "CrossEntropyLoss",
+        "Adam"
+    ]
+}{
+    "ran_with_parameters": [
+        "resnet50",
+        "IMAGENET1K_V1",
+        "CrossEntropyLoss",
+        "Adam"
+    ]
+}{
+    "ran_with_parameters": [
+        "resnet50",
+        "IMAGENET1K_V1",
+        "CrossEntropyLoss",
+        "Adam"
+    ]
+}{
+    "ran_with_parameters": [
+        "resnet50",
+        "IMAGENET1K_V1",
+        "CrossEntropyLoss",
+        "Adam"
+    ]
+}{
+    "ran_with_parameters": [
+        "resnet50",
+        "IMAGENET1K_V1",
+        "CrossEntropyLoss",
+        "Adam"
+    ]
+}{
+    "ran_with_parameters": [
+        "resnet50",
+        "IMAGENET1K_V1",
+        "CrossEntropyLoss",
+        "Adam"
+    ]
+}{
+    "ran_with_parameters": [
+        "resnet50",
+        "IMAGENET1K_V1",
+        "CrossEntropyLoss",
+        "Adam"
+    ]
+}[
+    {
+        "dataset": "Caltech101",
+        "ds_len": 8677,
+        "test_output": [
+            {
+                "eval_pval": "[nan  0.]",
+                "test_pval": "nan",
+                "testvsctrl_pvalue": "0.0",
+                "randomseed": 8338235908387149680
+            }
+        ]
+    }
+]{
+    "ran_with_parameters": [
+        "resnet50",
+        "IMAGENET1K_V1",
+        "CrossEntropyLoss",
+        "Adam"
+    ]
+}[
+    {
+        "dataset": "Caltech101",
+        "ds_len": 8677,
+        "test_output": [
+            {
+                "eval_pval": "[nan  0.]",
+                "test_pval": "nan",
+                "testvsctrl_pvalue": "0.0",
+                "randomseed": 6213513279731194540
+            }
+        ]
+    }
+]{
+    "ran_with_parameters": [
+        "resnet50",
+        "IMAGENET1K_V1",
+        "CrossEntropyLoss",
+        "Adam"
+    ]
+}{
+    "ran_with_parameters": [
+        "resnet50",
+        "IMAGENET1K_V1",
+        "CrossEntropyLoss",
+        "Adam"
+    ]
+}{
+    "ran_with_parameters": [
+        "resnet50",
+        "IMAGENET1K_V1",
+        "CrossEntropyLoss",
+        "Adam"
+    ]
+}{
+    "ran_with_parameters": [
+        "resnet50",
+        "IMAGENET1K_V1",
+        "CrossEntropyLoss",
+        "Adam"
+    ]
+}{
+    "ran_with_parameters": [
+        "resnet50",
+        "IMAGENET1K_V1",
+        "CrossEntropyLoss",
+        "Adam"
+    ]
+}{
+    "ran_with_parameters": [
+        "resnet50",
+        "IMAGENET1K_V1",
+        "CrossEntropyLoss",
+        "Adam"
+    ]
+}[
+    {
+        "dataset": "Caltech101",
+        "ds_len": 8677,
+        "test_output": [
+            {
+                "eval_pval": "[nan  0.]",
+                "test_pval": "nan",
+                "testvsctrl_pvalue": "0.0",
+                "randomseed": 1803739868780567203
+            }
+        ]
+    }
+]

@@ -61,13 +61,13 @@ def get_class(module, classname):
     return getattr(importlib.import_module(module), classname)
 
 
-def epoch(model, spline, epochs, names, train, test):
+def epoch(model, spline, epochs, names, train, test, save_vid=False):
     # init writer loss and opt
     loss_fn = get_class("torch.nn", names[2])()
     opt = get_class("torch.optim", names[3])(model.parameters())
     best_vloss = 1_000_000.
     experiment = Compose([spline,
-                          HDRMaskTransform(save_vid=False)])
+                          HDRMaskTransform(save_vid=save_vid)])
 
     def train_one_epoch(epoch_num):
         running_loss = 0.
@@ -226,7 +226,7 @@ def interpolate_model_train(model, train, step, bspline, names,
                         worker_init_fn=seed_worker, collate_fn=collate_fn)
 
     # training loop
-    epoch(model, bspline, 5, names, train_s, test_s)
+    epoch(model, bspline, 5, names, train_s, test_s, save_vid)
 
     return model
 

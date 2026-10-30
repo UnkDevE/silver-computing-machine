@@ -145,22 +145,31 @@ def plot_test_spline(bspline, dataset, percent_samples, name, fast=False):
     plt.plot(plot_shape[0], plot_shape[1], 'b', linewidth=2.0,
              label='B-spline curve')
 
-    # too many fors!
+    plt.savefig("space_"+name)
+    # clear figures and axes
+    plt.cla()
+    plt.clf()
+
+    cl_avg = []
     for cl, outs in class_outs:
         # move batch to iter access
         for batch in outs:
             # move batch from to first position instead of piecewise
+            avg = []
             batch = np.moveaxis(batch, 1, 0)
             for outpiecewise, shape in zip(batch, shapes):
                 for out in outpiecewise:
                     distance = []
                     for sp in shape:
-                        # norm comes out 1d dunno why
-                        distance.append(np.linalg.norm(out - sp))
-                    avgs = np.average(distance, axis=(0, 1))
-                    plt.contour(avgs, cl // no_classes, levels=no_classes)
+                        # norm comes out 1d
+                        distance.append((np.linalg.norm(out - sp),
+                                         cl // no_classes))
+                    avg.append(np.average(distance, axis=0))
+        cl_avg += avg
 
-    plt.axis([min(ctrl_x)-1, max(ctrl_x)+1, min(ctrl_y)-1, max(ctrl_y)+1])
+    zipcl = list(zip(*cl_avg))
+    plt.scatter(zipcl[0], zipcl[1])
+
     plt.savefig(name)
     # clear figures and axes
     plt.cla()
@@ -218,7 +227,7 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
 
             vidout_yn = "Y" == input("VIDEO OUTPUT OF DS PRE-MERTENS Y/N:")
 
-            edit_yn = input("EDIT Y/N")
+            edit_yn = input("EDIT Y/N:")
             if edit_yn == "Y":
                 print("GENERATING FEATURE SET")
                 pass
