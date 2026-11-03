@@ -165,10 +165,9 @@ def plot_test_spline(bspline, dataset, percent_samples, name, fast=False):
                         distance.append((np.linalg.norm(out - sp),
                                          cl // no_classes))
                     avg.append(np.average(distance, axis=0))
-        cl_avg += avg
+        cl_avg.append(np.average(avg))
 
-    zipcl = list(zip(*cl_avg))
-    plt.scatter(zipcl[0], zipcl[1])
+    plt.violinplot(cl_avg)
 
     plt.savefig(name)
     # clear figures and axes
