@@ -276,14 +276,13 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
             _, class_out = test_spline(bspline, dataset_train, 5,
                                        fast=spline_acc)
 
-            draw_spline('{}.png'.format(''.join(names)), bspline, dataset,
-                        class_out)
-            vidout_yn = "Y" == input("VIDEO OUTPUT OF DS PRE-MERTENS Y/N:")
-
+            draw_spline('{}.png'.format(''.join(names)), bspline,
+                        dataset_train, class_out)
+            vidout_yn = ("Y" == input("VIDEO OUTPUT OF DS PRE-MERTENS Y/N:"))
             edit_yn = input("EDIT Y/N:")
             if edit_yn == "Y":
                 print("GENERATING FEATURE SET")
-                pred, _ = spline_features(dataset, bspline)
+                pred, _ = spline_features(dataset_train, bspline)
                 ft_label = int(input("ENTER NTH LABEL WEIGHT EDIT: "))
                 label_eqvtest_ignore = ft_label
                 ft_cluster = pred.predict(class_out[ft_label][1])
