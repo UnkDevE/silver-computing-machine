@@ -17,7 +17,8 @@ dependencies = [
     "gdown",
     "scalene",
     "oct2py",
-    "ffmpeg-python"
+    "ffmpeg-python",
+    "scikit-learn"
 ]
 
 
