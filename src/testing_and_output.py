@@ -181,10 +181,17 @@ def draw_spline(name, bspline, dataset, class_outs):
     plt.clf()
 
 
+def product(xs):
+    out = 1
+    for x in xs:
+        out *= x
+    return out
+
+
 def spline_features(dataset, bspline):
     # we want class_outs here as output to use for feature extraction
-    _, class_outs = test_spline(bspline, dataset, 80, fast=True)
-    _, class_test = test_spline(bspline, dataset, 20, fast=True)
+    _, class_outs = test_spline(bspline, dataset, 20, fast=True)
+    _, class_test = test_spline(bspline, dataset, 5, fast=True)
 
     from sklearn.cluster import MiniBatchKMeans
     kmeans = MiniBatchKMeans(n_clusters=len(class_outs))
@@ -196,7 +203,12 @@ def spline_features(dataset, bspline):
             # inverse the spline function using point matrix as
             # a masked transform
             from src.training import pointmatrix
-            breakpoint()
+            # remove last from stack as has changed shape
+            sp_out_last = spline_out[-1].reshape(-1, *spline_out[-1].shape[2:])
+            spline_out = np.stack(spline_out[:-1])
+            spline_out = spline_out.reshape(product(spline_out.shape[:3]),
+                                            *spline_out.shape[3:])
+            spline_out = np.vstack([spline_out, sp_out_last])
             out = torch.Tensor(np.array(spline_out))
             # work on CPU for this one
             out_pMxs = pointmatrix(
