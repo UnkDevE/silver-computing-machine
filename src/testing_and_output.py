@@ -78,7 +78,7 @@ def shifts(x, start):
     return np.array(y)
 
 
-def plot_test_spline(bspline, dataset, percent_samples, name, fast=False):
+def test_spline(bspline, dataset, percent_samples, fast=False):
     fast_evaluator = bspline['gpu']
     slow_evaluator = bspline['scipy']
     # cheat to get class_to_idx as there is no standard of getting labels
@@ -94,7 +94,7 @@ def plot_test_spline(bspline, dataset, percent_samples, name, fast=False):
         class_weight = zero_weight
         class_weight[i] = 1.
         sampler = WeightedRandomSampler(class_weight,
-                                        ds_len // percent_samples,
+                                        (ds_len // 100) * percent_samples,
                                         replacement=True,
                                         generator=ca.GENERATOR)
         loader = DataLoader(dataset, batch_size=BATCH_SIZE, sampler=sampler)
@@ -126,7 +126,13 @@ def plot_test_spline(bspline, dataset, percent_samples, name, fast=False):
         with open("spline_acc.json", "a+") as spf:
             json.dump(pval, spf, cls=numpyencoder)
 
-    # TODO: plot the data
+    return tests, class_outs
+
+
+def draw_spline(name, bspline, dataset, class_outs):
+    f_img, labels = dataset[0]
+    no_classes = len(torch.unique(labels))
+
     ctrl_x = bspline['scipy'].c[:, 0]
     ctrl_y = bspline['scipy'].c[:, 1]
 
@@ -175,9 +181,52 @@ def plot_test_spline(bspline, dataset, percent_samples, name, fast=False):
     plt.clf()
 
 
+def spline_features(dataset, bspline):
+    # we want class_outs here as output to use for feature extraction
+    _, class_outs = test_spline(bspline, dataset, 80, fast=True)
+    _, class_test = test_spline(bspline, dataset, 20, fast=True)
+
+    from sklearn.cluster import MiniBatchKMeans
+    kmeans = MiniBatchKMeans(n_clusters=len(class_outs))
+    bikmeans = MiniBatchKMeans(n_clusters=len(class_outs))
+    tests = []
+
+    def testtrain(test=False):
+        for feature, spline_out in class_outs:
+            # inverse the spline function using point matrix as
+            # a masked transform
+            out_pMxs = bspline['gpu'].point_matrix(
+                spline_out.to(ca.TORCH_DEVICE)).cpu().numpy()
+            # must start at 1 as we are using multiplication as the
+            # coherent bicluster
+            fit = (feature + 1) * out_pMxs
+            # in fact lets try it without this and test with the bicluster
+            if not test:
+                kmeans.partial_fit(out_pMxs)
+                bikmeans.parital_fit(fit)
+            else:
+                test = kmeans.predict(out_pMxs)
+                ctrl = kmeans.predict(fit)
+                ctrl = ctrl // (feature + 1)  # reverse feature bicluster
+                if np.any(stats.kstest(test, ctrl).pvalue > PVALUE_SMALL):
+                    tests.append(stats.mannwhitneyu(test, ctrl, axis=None))
+                else:
+                    tests.append(ttost_ind(test, ctrl, EQUIVALENCE_BOUND))
+
+    testtrain()
+    kmeans.partial_fit()
+    bikmeans.partial_fit()
+    testtrain(test=True)
+
+    # save for inspection purposes
+    with open("featureset_test_kmeans.json", "a+") as f:
+        json.dump(tests, f, indent=4, cls=numpyencoder)
+
+    return kmeans, tests
+
+
 def model_create_equation(model, names, dataset, in_shape, test_rounds,
-                          root='./datasets', imagenet_ds=False,
-                          alldefault=False):
+                          root='./datasets', alldefault=False):
     # check optional args
     # create prerequisites
     base_transform = [v2.ToImage(),
@@ -217,23 +266,31 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
             shapes,
             layers)
 
+        # set a label for equiv testing to ignore if edits go through
+        label_eqvtest_ignore = -1
+
         if not alldefault:
             bspline = tr.make_spline(sols[-1])
             print("MAKING VISUAL AND CORRELATION MATRIX")
             spline_acc = "Y" != input("TEST SPLINE ACC Y/N:")
-            plot_test_spline(bspline, dataset_train, 5,
-                             '{}.png'.format(''.join(names)), fast=spline_acc)
+            _, class_out = test_spline(bspline, dataset_train, 5,
+                                       fast=spline_acc)
 
+            draw_spline('{}.png'.format(''.join(names)), bspline, dataset,
+                        class_out)
             vidout_yn = "Y" == input("VIDEO OUTPUT OF DS PRE-MERTENS Y/N:")
 
             edit_yn = input("EDIT Y/N:")
             if edit_yn == "Y":
                 print("GENERATING FEATURE SET")
-                pass
+                pred, _ = spline_features(dataset, bspline)
+                ft_label = int(input("ENTER NTH LABEL WEIGHT EDIT: "))
+                label_eqvtest_ignore = ft_label
+                ft_cluster = pred.predict(class_out[ft_label][1])
+                redist = float(input("REDISTRIBUTION WEIGHT FLOAT: "))
+                bspline.coeffs = ft_cluster[bspline.coeffs] * redist
         else:
             bspline = tr.make_spline(sols[-1])
-            plot_test_spline(bspline, dataset_train, 5,
-                             '{}.png'.format(''.join(names)), fast=True)
 
         for i in range(test_rounds):
             # should we wipe the model every i in TRAIN_SIZE or le
@@ -265,47 +322,75 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
             model.eval()
             test_model.eval()
 
-            if not imagenet_ds:
-                print("TESTING...")
-                ctrls, t_tests, cvst = [[], [], []]
-                for data, actual in test_loader:
-                    data = data.float().to(ca.TORCH_DEVICE, non_blocking=True)
+            print("TESTING...")
+            ctrls, t_tests, cvst = [[], [], []]
+            ectrls, et_tests, ecvst = [[], [], []]
+            for data, actual in test_loader:
+                data = data.float().to(ca.TORCH_DEVICE, non_blocking=True)
 
-                    # find mean over batch
-                    actual = actual.float().cpu().numpy()
-                    ctrl = model(data).cpu().detach().numpy()
-                    test = test_model(data).cpu().detach().numpy()
+                # find mean over batch
+                actual = actual.float().cpu().numpy()
+                ctrl = model(data).cpu().detach().numpy()
+                test = test_model(data).cpu().detach().numpy()
 
-                    ctrl_t, test_t, tvsctrl = [None, None, None]
-                    if np.any(stats.kstest(test, ctrl).pvalue > PVALUE_SMALL):
-                        ctrl_t = stats.mannwhitneyu(ctrl, actual, axis=None)
-                        test_t = stats.mannwhitneyu(test, actual, axis=None)
-                        tvsctrl = stats.mannwhitneyu(test, ctrl, axis=None)
-                    else:
-                        ctrl_t = ttost_ind(ctrl, actual, EQUIVALENCE_BOUND)
-                        test_t = ttost_ind(test, actual, EQUIVALENCE_BOUND)
-                        tvsctrl = ttost_ind(test, ctrl, EQUIVALENCE_BOUND)
+                ctrl_t, test_t, tvsctrl = [None, None, None]
+                if np.any(stats.kstest(test, ctrl).pvalue > PVALUE_SMALL):
+                    ctrl_t = stats.mannwhitneyu(ctrl, actual, axis=None)
+                    test_t = stats.mannwhitneyu(test, actual, axis=None)
+                    tvsctrl = stats.mannwhitneyu(test, ctrl, axis=None)
+                else:
+                    ctrl_t = ttost_ind(ctrl, actual, EQUIVALENCE_BOUND)
+                    test_t = ttost_ind(test, actual, EQUIVALENCE_BOUND)
+                    tvsctrl = ttost_ind(test, ctrl, EQUIVALENCE_BOUND)
 
+                if np.squeeze(actual) != label_eqvtest_ignore:
                     ctrls.append(ctrl_t)
                     t_tests.append(test_t)
                     cvst.append(tvsctrl)
+                else:
+                    ectrls.append(ctrl_t)
+                    et_tests.append(test_t)
+                    ecvst.append(tvsctrl)
 
-                ctrl_t = stats.combine_pvalues(ctrls)
-                test_t = stats.combine_pvalues(tests)
-                tvsctrl = stats.combine_pvalues(tvsctrl)
-                print("EVAL VS ACT EQUIV:")
-                print('SUCCESS : {}, PVAL: {}'.format(*ctrl_t))
-                print("TEST VS ACT EQUIV:")
-                print('SUCCESS : {}, PVAL: {}'.format(*test_t))
-                print("TEST VS CTRL DIFF EQUIV:")
-                print('SUCCESS : {}, PVAL: {}'.format(*tvsctrl))
+            ctrl_t = stats.combine_pvalues(ctrls)
+            test_t = stats.combine_pvalues(t_tests)
+            tvsctrl = stats.combine_pvalues(cvst)
 
-                tests.append({
-                              'eval_pval': '{}'.format(ctrl_t[1]),
-                              'test_pval': '{}'.format(test_t[1]),
-                              'testvsctrl_pvalue': '{}'.format(tvsctrl[1]),
-                              'randomseed': int(torch.initial_seed())
-                              })
+            print("EVAL VS ACT EQUIV:")
+            print('{}'.format(ctrl_t))
+            print("TEST VS ACT EQUIV:")
+            print('{}'.format(test_t))
+            print("TEST VS CTRL DIFF EQUIV:")
+            print('{}'.format(tvsctrl))
+
+            test_dict = {
+                        'eval_pval': '{}'.format(ctrl_t[1]),
+                        'test_pval': '{}'.format(test_t[1]),
+                        'testvsctrl_pvalue': '{}'.format(tvsctrl[1]),
+                        'randomseed': int(torch.initial_seed())
+                }
+
+            if label_eqvtest_ignore != -1:
+                ectrl_t = stats.combine_pvalues(ectrls)
+                etest_t = stats.combine_pvalues(et_tests)
+                etvsctrl = stats.combine_pvalues(ecvst)
+
+                diff_ct = abs(ectrl_t.pvalue - ctrl_t.pvalue)
+                diff_et = abs(etest_t.pvalue - test_t.pvalue)
+                diff_tve = abs(etvsctrl.pvalue - tvsctrl.pvalue)
+
+                print("EDIT EVAL VS ACT EQUIV DIFF:")
+                print('{}'.format(diff_ct))
+                print("EDIT TEST VS ACT EQUIV DIFF:")
+                print('{}'.format(diff_et))
+                print("EDIT TEST VS CTRL DIFF EQUIV DIFF:")
+                print('{}'.format(diff_tve))
+
+                test_dict['diff_control_avg_vs_actual_diff'] = diff_ct
+                test_dict['diff_test_vs_edit_diff'] = diff_ct
+                test_dict['diff_ctrl_avg_vs_edit_diff'] = diff_ct
+
+            tests.append(test_dict)
             # clean up
             model.to('cpu')
             del model
