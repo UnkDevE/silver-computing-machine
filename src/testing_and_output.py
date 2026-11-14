@@ -195,9 +195,15 @@ def spline_features(dataset, bspline):
         for feature, spline_out in class_outs:
             # inverse the spline function using point matrix as
             # a masked transform
-            out_pMxs = bspline['gpu'].pointmatrix(
-                torch.tensor(np.array(spline_out)).to(
-                    ca.TORCH_DEVICE)).cpu().numpy()
+            from src.training import pointmatrix
+            breakpoint()
+            out = torch.Tensor(np.array(spline_out))
+            # work on CPU for this one
+            out_pMxs = pointmatrix(
+                    bspline['gpu'].uniq_knots.clone().detach().cpu(),
+                    out,
+                    bspline['gpu'].coeffs.clone().detach().cpu())
+
             # must start at 1 as we are using multiplication as the
             # coherent bicluster
             fit = (feature + 1) * out_pMxs

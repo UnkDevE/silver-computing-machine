@@ -241,6 +241,47 @@ def product(xs):
     return y
 
 
+# assumes roll_shape is square
+def roll_matrix(roll_shape):
+    # gives upper triangular remove diag in lower
+    grid = [(roll_shape[0] - i) * np.eye(*roll_shape, k=i, dtype=np.int32)
+            for i in range(roll_shape[0])]
+
+    # output symmetric grid
+    return torch.Tensor(sum(grid).T + sum(grid[1:])).to(ca.TORCH_DEVICE)
+
+
+@torch.compile()
+def pointmatrix(uniq_knots, x, partial_spline):
+    buckets = torch.bucketize(x.contiguous(),
+                              uniq_knots,
+                              right=True)
+    coeffs_in_bins = partial_spline.reshape(len(uniq_knots), -1)
+
+    n_buckets = len(uniq_knots)
+    masks = torch.stack([torch.where(buckets == i, 1., 0.)
+                         for i in range(n_buckets - 1)])
+
+    sq_shape = int(math.sqrt(product(coeffs_in_bins.shape[1:])))
+    kernels = coeffs_in_bins.reshape((n_buckets,
+                                      sq_shape, sq_shape))
+
+    # roll kernels
+    ker_roll = roll_matrix(kernels.shape[1:])
+    ker_mask = torch.stack([torch.where(ker_roll == i, 1., 0.)
+                            for i in range(sq_shape)]).to(torch.int32)
+
+    divsor = x.shape[2] // sq_shape
+
+    # using torch repeat to tile
+    out = []
+    for nm in range(n_buckets - 1):
+        k_ma = sum([kernels[nm][ker_mask[n]] for n in range(sq_shape)])
+        out.append(sum([masks[nm] * x * n.repeat([divsor, divsor])
+                       for n in k_ma]))
+    return sum(out)
+
+
 # have spline evaluation drop in
 class GPUSplineEvaluator(Transform):
     # convert lot to torch tensor
@@ -258,45 +299,6 @@ class GPUSplineEvaluator(Transform):
                                     ca.TORCH_DEVICE)
         super().__init__()
 
-    # assumes roll_shape is square
-    def roll_matrix(self, roll_shape):
-        # gives upper triangular remove diag in lower
-        grid = [(roll_shape[0] - i) * np.eye(*roll_shape, k=i, dtype=np.int32)
-                for i in range(roll_shape[0])]
-
-        # output symmetric grid
-        return torch.Tensor(sum(grid).T + sum(grid[1:])).to(ca.TORCH_DEVICE)
-
-    @torch.compile()
-    def pointmatrix(self, x, partial_spline):
-        buckets = torch.bucketize(x.contiguous(),
-                                  self.uniq_knots,
-                                  right=True)
-        coeffs_in_bins = partial_spline.reshape(len(self.uniq_knots), -1)
-
-        n_buckets = len(self.uniq_knots)
-        masks = torch.stack([torch.where(buckets == i, 1., 0.)
-                             for i in range(n_buckets - 1)])
-
-        sq_shape = int(math.sqrt(product(coeffs_in_bins.shape[1:])))
-        kernels = coeffs_in_bins.reshape((n_buckets,
-                                          sq_shape, sq_shape))
-
-        # roll kernels
-        ker_roll = self.roll_matrix(kernels.shape[1:])
-        ker_mask = torch.stack([torch.where(ker_roll == i, 1., 0.)
-                                for i in range(sq_shape)]).to(torch.int32)
-
-        divsor = x.shape[2] // sq_shape
-
-        # using torch repeat to tile
-        out = []
-        for nm in range(n_buckets - 1):
-            k_ma = sum([kernels[nm][ker_mask[n]] for n in range(sq_shape)])
-            out.append(sum([masks[nm] * x * n.repeat([divsor, divsor])
-                           for n in k_ma]))
-        return sum(out)
-
     @torch.compile()
     def transform(self, x, _):
         ts = torch.stack([x.pow(n) for n in range(0, len(self.degree))])
@@ -307,7 +309,7 @@ class GPUSplineEvaluator(Transform):
         Pt = torch.permute(Pt, [i for i in range(Pt.ndim - 1, -1, -1)])
         Pt = Pt * self.bcoeffs
         Pt = torch.permute(Pt, [i for i in range(Pt.ndim - 1, -1, -1)])
-        out = self.pointmatrix(x, self.coeffs) * Pt
+        out = pointmatrix(self.uniq_knots, x, self.coeffs) * Pt
         return out
 
 
