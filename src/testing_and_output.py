@@ -191,7 +191,6 @@ def product(xs):
 def spline_features(dataset, bspline):
     # we want class_outs here as output to use for feature extraction
     _, class_outs = test_spline(bspline, dataset, 20, fast=True)
-    _, class_test = test_spline(bspline, dataset, 5, fast=True)
 
     from sklearn.cluster import MiniBatchKMeans
     kmeans = MiniBatchKMeans(n_clusters=len(class_outs))
@@ -210,31 +209,47 @@ def spline_features(dataset, bspline):
                                             *spline_out.shape[3:])
             spline_out = np.vstack([spline_out, sp_out_last])
             out = torch.Tensor(np.array(spline_out))
-            # work on CPU for this one
-            out_pMxs = pointmatrix(
-                    bspline['gpu'].uniq_knots.clone().detach().cpu(),
-                    out,
-                    bspline['gpu'].coeffs.clone().detach().cpu())
+            uk_cpu = bspline['gpu'].uniq_knots.clone().detach().cpu()
+            coef_cpu = bspline['gpu'].coeffs.clone().detach().cpu()
+            # batch up outs
+            from torch.utils.data import TensorDataset
 
-            # must start at 1 as we are using multiplication as the
-            # coherent bicluster
-            fit = (feature + 1) * out_pMxs
-            # in fact lets try it without this and test with the bicluster
-            if not test:
-                kmeans.partial_fit(out_pMxs)
-                bikmeans.parital_fit(fit)
-            else:
-                test = kmeans.predict(out_pMxs)
-                ctrl = kmeans.predict(fit)
-                ctrl = ctrl // (feature + 1)  # reverse feature bicluster
-                if np.any(stats.kstest(test, ctrl).pvalue > PVALUE_SMALL):
-                    tests.append(stats.mannwhitneyu(test, ctrl, axis=None))
-                else:
-                    tests.append(ttost_ind(test, ctrl, EQUIVALENCE_BOUND))
+            outs = TensorDataset(out)
+            out_loader = DataLoader(outs, batch_size=BATCH_SIZE)
+
+            out_pMxs = []
+            # work on CPU for this one
+            for [xout] in out_loader:
+                out_pMxs = pointmatrix(
+                        uk_cpu,
+                        xout,
+                        coef_cpu, cpu=True).numpy()
+
+                # stack batched output
+
+                # must start at 1 as we are using multiplication as the
+                # coherent bicluster
+                # in fact lets try it without this and test with the bicluster
+                x = out_pMxs.reshape(-1, *out_pMxs.shape[-2:])
+                fit = (feature + 1) * x
+                for i in range(x.shape[0]):
+                    if not test:
+                        kmeans.partial_fit(x[i])
+                        bikmeans.partial_fit(fit[i])
+                    else:
+                        testa = kmeans.predict(x[i])
+                        ctrl = kmeans.predict(fit[i])
+                        # reverse feature bicluster
+                        ctrl = ctrl // (feature + 1)
+                        if np.any(stats.kstest(testa,
+                                               ctrl).pvalue > PVALUE_SMALL):
+                            tests.append(stats.mannwhitneyu(testa, ctrl,
+                                                            axis=None))
+                        else:
+                            tests.append(ttost_ind(testa, ctrl,
+                                                   EQUIVALENCE_BOUND))
 
     testtrain()
-    kmeans.partial_fit()
-    bikmeans.partial_fit()
     testtrain(test=True)
 
     # save for inspection purposes

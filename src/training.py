@@ -242,17 +242,18 @@ def product(xs):
 
 
 # assumes roll_shape is square
-def roll_matrix(roll_shape):
+def roll_matrix(roll_shape, cpu=False):
     # gives upper triangular remove diag in lower
     grid = [(roll_shape[0] - i) * np.eye(*roll_shape, k=i, dtype=np.int32)
             for i in range(roll_shape[0])]
 
     # output symmetric grid
-    return torch.Tensor(sum(grid).T + sum(grid[1:])).to(ca.TORCH_DEVICE)
+    device = ca.TORCH_DEVICE if not cpu else 'cpu'
+    return torch.Tensor(sum(grid).T + sum(grid[1:])).to(device)
 
 
 @torch.compile()
-def pointmatrix(uniq_knots, x, partial_spline):
+def pointmatrix(uniq_knots, x, partial_spline, cpu=False):
     buckets = torch.bucketize(x.contiguous(),
                               uniq_knots,
                               right=True)
@@ -267,7 +268,7 @@ def pointmatrix(uniq_knots, x, partial_spline):
                                       sq_shape, sq_shape))
 
     # roll kernels
-    ker_roll = roll_matrix(kernels.shape[1:])
+    ker_roll = roll_matrix(kernels.shape[1:], cpu=cpu)
     ker_mask = torch.stack([torch.where(ker_roll == i, 1., 0.)
                             for i in range(sq_shape)]).to(torch.int32)
 
