@@ -319,6 +319,7 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
                 pred, _ = spline_features(dataset_train, bspline)
                 ft_label = int(input("ENTER NTH LABEL WEIGHT EDIT: "))
                 label_eqvtest_ignore = ft_label
+                breakpoint()
                 ft_cluster = pred.predict(class_out[ft_label][1])
                 redist = float(input("REDISTRIBUTION WEIGHT FLOAT: "))
                 bspline.coeffs = ft_cluster[bspline.coeffs] * redist
