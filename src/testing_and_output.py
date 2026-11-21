@@ -83,7 +83,7 @@ def test_spline(bspline, dataset, percent_samples, fast=False):
     slow_evaluator = bspline['scipy']
     # cheat to get class_to_idx as there is no standard of getting labels
     f_img, labels = dataset[0]
-    no_classes = len(labels.unsqueeze(0))
+    no_classes = len(labels)
     ds_len = len(dataset)
 
     class_outs = []
@@ -188,7 +188,7 @@ def product(xs):
     return out
 
 
-def spline_features(dataset, bspline):
+def spline_features(dataset, bspline, test=False):
     # we want class_outs here as output to use for feature extraction
     _, class_outs = test_spline(bspline, dataset, 20, fast=True)
 
@@ -250,11 +250,12 @@ def spline_features(dataset, bspline):
                                                    EQUIVALENCE_BOUND))
 
     testtrain()
-    testtrain(test=True)
+    if test:
+        testtrain(test=test)
 
-    # save for inspection purposes
-    with open("featureset_test_kmeans.json", "a+") as f:
-        json.dump(tests, f, indent=4, cls=numpyencoder)
+        # save for inspection purposes
+        with open("featureset_test_kmeans.json", "a+") as f:
+            json.dump(tests, f, indent=4, cls=numpyencoder)
 
     return kmeans, tests
 
@@ -315,12 +316,16 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
             vidout_yn = ("Y" == input("VIDEO OUTPUT OF DS PRE-MERTENS Y/N:"))
             edit_yn = input("EDIT Y/N:")
             if edit_yn == "Y":
-                print("GENERATING FEATURE SET")
-                pred, _ = spline_features(dataset_train, bspline)
+                testacc_yn = ("Y" == input(
+                    "GENERATING FEATURE SET, TEST ACC Y/N:"))
+                pred, _ = spline_features(dataset_train, bspline,
+                                          test=testacc_yn)
+                print("FEATURES NO: {}".format(len(class_out)))
                 ft_label = int(input("ENTER NTH LABEL WEIGHT EDIT: "))
-                label_eqvtest_ignore = ft_label
+                spline_out = class_out[ft_label][1]
+                spline_out = spline_out.reshape(-1, spline_out.shape[-1:])
                 breakpoint()
-                ft_cluster = pred.predict(class_out[ft_label][1])
+                ft_cluster = pred.predict(spline_out)
                 redist = float(input("REDISTRIBUTION WEIGHT FLOAT: "))
                 bspline.coeffs = ft_cluster[bspline.coeffs] * redist
         else:
