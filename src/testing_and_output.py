@@ -86,9 +86,12 @@ def test_pval(control, predict):
     return test
 
 
-def test_spline(bspline, dataset, percent_samples,
+@torch.compile()
+def test_spline(bspline, dataset, samples_percent,
                 check_spline=False):
-    fast_evaluator = bspline['gpu']
+
+    ds_len = len(dataset)
+    fast_evaluator = bspline['cpu']
     slow_evaluator = None
     if check_spline:
         slow_evaluator = bspline['scipy']
@@ -96,44 +99,48 @@ def test_spline(bspline, dataset, percent_samples,
     # cheat to get class_to_idx as there is no standard of getting labels
     f_img, labels = dataset[0]
     no_classes = len(labels)
-    ds_len = len(dataset)
 
     class_outs = []
     tests = []
     zero_weight = np.zeros_like(labels)
-    from torch.utils.data import WeightedRandomSampler
 
+    from torch.utils.data import WeightedRandomSampler, RandomSampler
+    if check_spline:
+        sampler = RandomSampler(dataset,
+                                num_samples=(ds_len // 100) * samples_percent,
+                                generator=ca.GENERATOR)
+        loader = DataLoader(dataset, batch_size=BATCH_SIZE, sampler=sampler
+                            )
+        for img, k in loader:
+            fast = fast_evaluator(img)
+            slow = slow_evaluator(img.numpy())
+            tests.append(test_pval(slow, fast))
+
+        if tests != []:
+            pval = stats.combine_pvalues(tests)
+            with open("spline_acc.json", "a+") as spf:
+                json.dump(pval, spf, cls=numpyencoder)
+
+    fast_evaluator = bspline['gpu']
     for i in range(no_classes):
         class_weight = zero_weight
         class_weight[i] = 1.
         sampler = WeightedRandomSampler(class_weight,
-                                        (ds_len // 100) * percent_samples,
-                                        replacement=True,
+                                        samples_percent,
+                                        replacement=False,
                                         generator=ca.GENERATOR
                                         )
-        loader = DataLoader(dataset, batch_size=BATCH_SIZE, sampler=sampler
-                            )
+        loader = DataLoader(dataset, batch_size=samples_percent,
+                            sampler=sampler)
 
         outs = []
-        if check_spline:
-            for img, k in loader:
-                gpu_img = img.to(ca.TORCH_DEVICE)
-                fast = fast_evaluator(gpu_img).cpu().numpy()
-                slow = slow_evaluator(img.numpy())
-                tests.append(test_pval(slow, fast))
-                outs.append(fast)
-        else:
-            for img, k in loader:
-                gpu_img = img.to(ca.TORCH_DEVICE, non_blocking=True)
-                fast = fast_evaluator(gpu_img).cpu().numpy()
-                outs.append(fast)
+        for img, k in loader:
+            img_gpu = img.to(ca.TORCH_DEVICE, non_blocking=True)
+            fast = fast_evaluator(img_gpu)
+            outs.append(fast)
 
-        class_outs.append((i, outs))
-
-    if tests != []:
-        pval = stats.combine_pvalues(tests)
-        with open("spline_acc.json", "a+") as spf:
-            json.dump(pval, spf, cls=numpyencoder)
+        outs_cpu = [o.cpu() for o in outs]
+        class_outs.append((i, outs_cpu))
 
     return tests, class_outs
 
@@ -322,8 +329,8 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
             _, class_out = test_spline(bspline, dataset_train, 5,
                                        check_spline=check_spl)
 
-            draw_spline('{}.png'.format(''.join(names)), bspline,
-                        dataset_train, class_out)
+            # draw_spline('{}.png'.format(''.join(names)), bspline,
+            #            dataset_train, class_out)
             vidout_yn = ("Y" == input("VIDEO OUTPUT OF DS PRE-MERTENS Y/N:"))
             edit_yn = input("EDIT Y/N:")
             if edit_yn == "Y":

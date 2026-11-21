@@ -242,18 +242,17 @@ def product(xs):
 
 
 # assumes roll_shape is square
-def roll_matrix(roll_shape, cpu=False):
+def roll_matrix(roll_shape, device=ca.TORCH_DEVICE):
     # gives upper triangular remove diag in lower
     grid = [(roll_shape[0] - i) * np.eye(*roll_shape, k=i, dtype=np.int32)
             for i in range(roll_shape[0])]
 
     # output symmetric grid
-    device = ca.TORCH_DEVICE if not cpu else 'cpu'
     return torch.Tensor(sum(grid).T + sum(grid[1:])).to(device)
 
 
 @torch.compile()
-def pointmatrix(uniq_knots, x, partial_spline, cpu=False):
+def pointmatrix(uniq_knots, x, partial_spline, device=ca.TORCH_DEVICE):
     buckets = torch.bucketize(x.contiguous(),
                               uniq_knots,
                               right=True)
@@ -268,7 +267,7 @@ def pointmatrix(uniq_knots, x, partial_spline, cpu=False):
                                       sq_shape, sq_shape))
 
     # roll kernels
-    ker_roll = roll_matrix(kernels.shape[1:], cpu=cpu)
+    ker_roll = roll_matrix(kernels.shape[1:], device=device)
     ker_mask = torch.stack([torch.where(ker_roll == i, 1., 0.)
                             for i in range(sq_shape)]).to(torch.int32)
 
@@ -284,12 +283,13 @@ def pointmatrix(uniq_knots, x, partial_spline, cpu=False):
 
 
 # have spline evaluation drop in
-class GPUSplineEvaluator(Transform):
+class FastSplineEvaluator(Transform):
     # convert lot to torch tensor
-    def __init__(self, spline, out_shape):
+    def __init__(self, spline, out_shape, device=ca.TORCH_DEVICE):
         tck = spline.tck
+        self.device = device
         self.spline = spline
-        self.tck = [torch.Tensor(x).to(ca.TORCH_DEVICE) for x in tck]
+        self.tck = [torch.Tensor(x).to(device) for x in tck]
         self.knots = self.tck[0]
         self.coeffs = self.tck[1]
         self.uniq_knots = self.knots.unique()
@@ -297,7 +297,7 @@ class GPUSplineEvaluator(Transform):
         self.target_size = torch.Tensor(out_shape)
         self.bcoeffs = torch.tensor(linalg.pascal(len(self.degree),
                                     kind="upper").T[-1]).to(
-                                    ca.TORCH_DEVICE)
+                                    device)
         super().__init__()
 
     @torch.compile()
@@ -310,7 +310,8 @@ class GPUSplineEvaluator(Transform):
         Pt = torch.permute(Pt, [i for i in range(Pt.ndim - 1, -1, -1)])
         Pt = Pt * self.bcoeffs
         Pt = torch.permute(Pt, [i for i in range(Pt.ndim - 1, -1, -1)])
-        out = pointmatrix(self.uniq_knots, x, self.coeffs) * Pt
+        out = pointmatrix(self.uniq_knots, x, self.coeffs,
+                          device=self.device) * Pt
         return out
 
 
@@ -336,4 +337,6 @@ def make_spline(sols):
     [spline, u] = make_splprep(lu_decomp[0].T, k=sum(interpol_shape) + 1)
 
     # don't use ins here as is jax array, please use numpy
-    return {'scipy': spline, 'gpu': GPUSplineEvaluator(spline, interpol_shape)}
+    return {'scipy': spline,
+            'cpu': FastSplineEvaluator(spline, interpol_shape, device='cpu'),
+            'gpu': FastSplineEvaluator(spline, interpol_shape)}
