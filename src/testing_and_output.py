@@ -204,7 +204,7 @@ def product(xs):
     return out
 
 
-def spline_features(dataset, bspline, model, test=False):
+def spline_features(dataset, bspline, test=False):
     # we want class_outs here as output to use for feature extraction
     _, class_outs = test_spline(bspline, dataset, 20, check_spline=False)
 
@@ -219,8 +219,11 @@ def spline_features(dataset, bspline, model, test=False):
             # a masked transform
             from src.training import pointmatrix
             # remove last from stack as has changed shape
+            if len(spline_out) != 1:
+                spline_out = np.stack(spline_out[:-1])
+
             sp_out_last = spline_out[-1].reshape(-1, *spline_out[-1].shape[2:])
-            spline_out = np.stack(spline_out[:-1])
+            breakpoint()
             spline_out = spline_out.reshape(product(spline_out.shape[:3]),
                                             *spline_out.shape[3:])
             spline_out = np.vstack([spline_out, sp_out_last])
