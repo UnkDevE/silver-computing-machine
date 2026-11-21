@@ -3,7 +3,6 @@
     SILVER-COMPUTING-MACHINE converts Nerual nets into human readable code
     or maths
     Copyright (C) 2024-2026 Ethan Riley
-
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
@@ -78,9 +77,22 @@ def shifts(x, start):
     return np.array(y)
 
 
-def test_spline(bspline, dataset, percent_samples, fast=False):
+def test_pval(control, predict):
+    if np.any(stats.kstest(control, predict).pvalue > PVALUE_SMALL):
+        test = stats.mannwhitneyu(control, predict, axis=None)
+    else:
+        test = ttost_ind(control, predict, EQUIVALENCE_BOUND)
+
+    return test
+
+
+def test_spline(bspline, dataset, percent_samples,
+                check_spline=False):
     fast_evaluator = bspline['gpu']
-    slow_evaluator = bspline['scipy']
+    slow_evaluator = None
+    if check_spline:
+        slow_evaluator = bspline['scipy']
+
     # cheat to get class_to_idx as there is no standard of getting labels
     f_img, labels = dataset[0]
     no_classes = len(labels)
@@ -90,28 +102,25 @@ def test_spline(bspline, dataset, percent_samples, fast=False):
     tests = []
     zero_weight = np.zeros_like(labels)
     from torch.utils.data import WeightedRandomSampler
+
     for i in range(no_classes):
         class_weight = zero_weight
         class_weight[i] = 1.
         sampler = WeightedRandomSampler(class_weight,
                                         (ds_len // 100) * percent_samples,
                                         replacement=True,
-                                        generator=ca.GENERATOR)
-        loader = DataLoader(dataset, batch_size=BATCH_SIZE, sampler=sampler)
+                                        generator=ca.GENERATOR
+                                        )
+        loader = DataLoader(dataset, batch_size=BATCH_SIZE, sampler=sampler
+                            )
 
         outs = []
-        if not fast:
+        if check_spline:
             for img, k in loader:
-                gpu_img = img.to(ca.TORCH_DEVICE, non_blocking=True)
+                gpu_img = img.to(ca.TORCH_DEVICE)
                 fast = fast_evaluator(gpu_img).cpu().numpy()
                 slow = slow_evaluator(img.numpy())
-                test = None
-                if np.any(stats.kstest(fast, slow).pvalue > PVALUE_SMALL):
-                    test = stats.mannwhitneyu(fast, slow, axis=None)
-                else:
-                    test = ttost_ind(fast, slow, EQUIVALENCE_BOUND)
-
-                tests.append(test)
+                tests.append(test_pval(slow, fast))
                 outs.append(fast)
         else:
             for img, k in loader:
@@ -188,9 +197,9 @@ def product(xs):
     return out
 
 
-def spline_features(dataset, bspline, test=False):
+def spline_features(dataset, bspline, model, test=False):
     # we want class_outs here as output to use for feature extraction
-    _, class_outs = test_spline(bspline, dataset, 20, fast=True)
+    _, class_outs = test_spline(bspline, dataset, 20, check_spline=False)
 
     from sklearn.cluster import MiniBatchKMeans
     kmeans = MiniBatchKMeans(n_clusters=len(class_outs))
@@ -307,9 +316,11 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
         if not alldefault:
             bspline = tr.make_spline(sols[-1])
             print("MAKING VISUAL AND CORRELATION MATRIX")
-            spline_acc = "Y" != input("TEST SPLINE ACC Y/N:")
+            check_spl = True if "Y" == input(
+                    "TEST SPLINE2SPLINE ACC (V.SLOW) Y/N:") else False
+
             _, class_out = test_spline(bspline, dataset_train, 5,
-                                       fast=spline_acc)
+                                       check_spline=check_spl)
 
             draw_spline('{}.png'.format(''.join(names)), bspline,
                         dataset_train, class_out)
