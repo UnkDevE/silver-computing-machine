@@ -221,9 +221,10 @@ def spline_features(dataset, bspline, test=False):
             # remove last from stack as has changed shape
             if len(spline_out) != 1:
                 spline_out = np.stack(spline_out[:-1])
+            else:
+                spline_out = spline_out[0]
 
             sp_out_last = spline_out[-1].reshape(-1, *spline_out[-1].shape[2:])
-            breakpoint()
             spline_out = spline_out.reshape(product(spline_out.shape[:3]),
                                             *spline_out.shape[3:])
             spline_out = np.vstack([spline_out, sp_out_last])
@@ -242,7 +243,7 @@ def spline_features(dataset, bspline, test=False):
                 out_pMxs = pointmatrix(
                         uk_cpu,
                         xout,
-                        coef_cpu, cpu=True).numpy()
+                        coef_cpu, device='cpu').numpy()
 
                 # stack batched output
 
@@ -251,26 +252,25 @@ def spline_features(dataset, bspline, test=False):
                 # in fact lets try it without this and test with the bicluster
                 x = out_pMxs.reshape(-1, *out_pMxs.shape[-2:])
                 fit = (feature + 1) * x
-                for i in range(x.shape[0]):
-                    if not test:
-                        kmeans.partial_fit(x[i])
-                        bikmeans.partial_fit(fit[i])
+                if not test:
+                    kmeans.partial_fit(x)
+                    bikmeans.partial_fit(fit)
+                else:
+                    testa = kmeans.predict(x)
+                    ctrl = kmeans.predict(fit)
+                    # reverse feature bicluster
+                    ctrl = ctrl // (feature + 1)
+                    if np.any(stats.kstest(testa,
+                                           ctrl).pvalue > PVALUE_SMALL):
+                        tests.append(stats.mannwhitneyu(testa, ctrl,
+                                                        axis=None))
                     else:
-                        testa = kmeans.predict(x[i])
-                        ctrl = kmeans.predict(fit[i])
-                        # reverse feature bicluster
-                        ctrl = ctrl // (feature + 1)
-                        if np.any(stats.kstest(testa,
-                                               ctrl).pvalue > PVALUE_SMALL):
-                            tests.append(stats.mannwhitneyu(testa, ctrl,
-                                                            axis=None))
-                        else:
-                            tests.append(ttost_ind(testa, ctrl,
-                                                   EQUIVALENCE_BOUND))
+                        tests.append(ttost_ind(testa, ctrl,
+                                               EQUIVALENCE_BOUND))
 
-    testtrain()
-    if test:
-        testtrain(test=test)
+        testtrain()
+        if test:
+            testtrain(test=test)
 
         # save for inspection purposes
         with open("featureset_test_kmeans.json", "a+") as f:
@@ -343,8 +343,9 @@ def model_create_equation(model, names, dataset, in_shape, test_rounds,
                                           test=testacc_yn)
                 print("FEATURES NO: {}".format(len(class_out)))
                 ft_label = int(input("ENTER NTH LABEL WEIGHT EDIT: "))
-                spline_out = class_out[ft_label][1]
-                spline_out = spline_out.reshape(-1, spline_out.shape[-1:])
+                spline_out = class_out[ft_label][1][0].numpy()
+                breakpoint()
+                spline_out = spline_out.reshape(-1, spline_out.shape[-2:])
                 breakpoint()
                 ft_cluster = pred.predict(spline_out)
                 redist = float(input("REDISTRIBUTION WEIGHT FLOAT: "))
